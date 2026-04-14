@@ -1,0 +1,20 @@
+# Project TODO
+
+- [x] Definir a arquitetura integrada entre frontend tRPC/Express e o pipeline existente em `cdf_realtime_api.py` sem substituí-lo
+- [x] Modelar persistência para jobs, eventos de progresso, artefatos exportáveis e resumos interpretativos por LLM
+- [x] Implementar backend para upload de pacotes 7z com validação de formato e criação de jobs parametrizados por função de interesse
+- [x] Integrar o backend web com a API existente do pipeline para disparo de análises e consumo de eventos de progresso
+- [x] Implementar acompanhamento em tempo real dos jobs com status, etapas, logs progressivos e percentual de progresso
+- [x] Implementar histórico de jobs com filtros por nome da amostra, função analisada e data
+- [x] Implementar visualização interativa do fluxo de correlação e tabela de correlações por job
+- [x] Implementar exportação de artefatos em JSON, Markdown e DOCX diretamente pela interface
+- [x] Implementar resumo interpretativo via LLM a partir do JSON de correlação ao final de cada job
+- [x] Implementar notificação automática ao proprietário com nome da amostra, função analisada e link direto para resultados
+- [x] Implementar commit automático dos artefatos gerados no repositório GitHub do usuário após jobs concluídos com sucesso
+- [x] Construir uma interface visual elegante e sofisticada para upload, monitoramento em tempo real, histórico e resultados
+- [x] Escrever testes de backend e frontend para fluxos críticos da plataforma
+- [x] Atualizar README e documentação operacional da aplicação web
+- [ ] Validar a aplicação ponta a ponta e versionar tudo no GitHub
+- [x] Adicionar validação no backend web para rejeitar uploads não-.7z, base64 inválido e arquivos acima do limite esperado antes de submeter ao pipeline
+- [x] Integrar leitura, persistência e exposição de logs progressivos via stdout/stderr do pipeline durante o polling
+- [x] Escrever testes de frontend para submissão, histórico e detalhamento de jobs
