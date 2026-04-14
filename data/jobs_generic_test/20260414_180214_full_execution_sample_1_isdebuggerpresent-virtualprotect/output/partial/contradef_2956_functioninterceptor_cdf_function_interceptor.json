@@ -1,0 +1,108 @@
+{
+  "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+  "total_blocks": 147,
+  "focus_blocks": [
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 83,
+      "line_end": 91,
+      "header": "[+] IsDebuggerPresent...",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] IsDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48bfb6c0\n    Valor de retorno: 0\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 122,
+      "line_end": 138,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 0\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff744289000\n        dwSize: 11146 bytes\n        flNewProtect: 4\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 2\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 139,
+      "line_end": 155,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "1",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 1\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff74434a000\n        dwSize: 17388 bytes\n        flNewProtect: 64\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 32\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 156,
+      "line_end": 172,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "2",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 2\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff744289000\n        dwSize: 11146 bytes\n        flNewProtect: 2\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 4\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 173,
+      "line_end": 189,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "3",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 3\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff74434a000\n        dwSize: 17388 bytes\n        flNewProtect: 32\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 64\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 981,
+      "line_end": 997,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "4",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 4\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff74428ced0\n        dwSize: 761553 bytes\n        flNewProtect: 64\n        lpflOldProtect (Endereço): 4ff840\n    Endereço da função chamante: 7ff74428111f\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699977126175\n    Proteção antiga: 4\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "line_start": 1039,
+      "line_end": 1047,
+      "header": "[+] IsDebuggerPresent...",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ],
+      "module_name": "",
+      "thread": "1",
+      "call_id": "1",
+      "caller_address": "",
+      "content": "[+] IsDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 1\n    Id de chamada: 1\n    EndereÃ§o da rotina: 7ffb48bfb6c0\n    Valor de retorno: 0\n[*] ConcluÃ­do\n\n"
+    }
+  ],
+  "term_counts": {
+    "IsDebuggerPresent": 2,
+    "VirtualProtect": 5
+  }
+}

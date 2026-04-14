@@ -1,0 +1,29 @@
+{
+  "job_dir": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb",
+  "focus_terms": [
+    "IsDebuggerPresent",
+    "VirtualProtect"
+  ],
+  "input_source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/input/Full-Execution-Sample-1.7z",
+  "discovered_file_count": 6,
+  "classified_counts": {
+    "function_interceptor": 1,
+    "trace_disassembly": 1,
+    "trace_fcn_call_m1": 1,
+    "trace_fcn_call_m2": 1,
+    "trace_instructions": 1,
+    "trace_memory": 1
+  },
+  "outputs": {
+    "dataset_manifest": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/manifests/dataset_manifest.json",
+    "focus_config": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/manifests/focus_config.json",
+    "compression_manifest": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/manifests/compression_manifest.json",
+    "function_interceptor_focus": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/derived/function_interceptor_focus.csv",
+    "tracefcn_focus": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/derived/tracefcn_focus.csv",
+    "generic_matches": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/filtered/generic_focus_matches.json",
+    "generic_chunk_summaries": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/derived/generic_chunk_summaries.json",
+    "generic_disassembly_windows": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/filtered/generic_disassembly_windows.json",
+    "generic_correlation": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/correlation/generic_focus_correlation.json",
+    "generic_mermaid": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/figures/generic_focus_correlation.mmd"
+  }
+}

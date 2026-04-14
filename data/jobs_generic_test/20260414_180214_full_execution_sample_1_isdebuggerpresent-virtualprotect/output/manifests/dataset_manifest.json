@@ -1,0 +1,50 @@
+[
+  {
+    "name": "contradef.2956.FunctionInterceptor.cdf",
+    "path": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+    "relative_path": "Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+    "size_bytes": 63044,
+    "sha256": "156d70a36ca15143157034c159fdfef02f66233ad69489ec9455a9858ca7b527",
+    "file_type": "function_interceptor"
+  },
+  {
+    "name": "contradef.2956.TraceDisassembly.cdf",
+    "path": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceDisassembly.cdf",
+    "relative_path": "Full-Execution-Sample-1/contradef.2956.TraceDisassembly.cdf",
+    "size_bytes": 167388,
+    "sha256": "075462e6ca8f43592be4872135f740ecff267d9240082b888a23d5f2690fe40c",
+    "file_type": "trace_disassembly"
+  },
+  {
+    "name": "contradef.2956.TraceFcnCall.M1.cdf",
+    "path": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+    "relative_path": "Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+    "size_bytes": 19880,
+    "sha256": "134ddcce52094b80b0b2fc10edd7ff0c0515bf1be81a72c866c97fc8e79c4bec",
+    "file_type": "trace_fcn_call_m1"
+  },
+  {
+    "name": "contradef.2956.TraceFcnCall.M2.cdf",
+    "path": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+    "relative_path": "Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+    "size_bytes": 37657,
+    "sha256": "9eb72ed62fe208d1852e561b125ce87c4018632e88cd926a2bdda1f7781668ea",
+    "file_type": "trace_fcn_call_m2"
+  },
+  {
+    "name": "contradef.2956.TraceInstructions.cdf",
+    "path": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+    "relative_path": "Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+    "size_bytes": 4214246529,
+    "sha256": "499136c7c1c747c54cef69bfc874f279db8d6ea703d8f3247fb58422c0263924",
+    "file_type": "trace_instructions"
+  },
+  {
+    "name": "contradef.2956.TraceMemory.cdf",
+    "path": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf",
+    "relative_path": "Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf",
+    "size_bytes": 882376705,
+    "sha256": "a7bf533f8efaf6ee2159eb11394850887b0b72ec124e6071c45614cf6f831b17",
+    "file_type": "trace_memory"
+  }
+]

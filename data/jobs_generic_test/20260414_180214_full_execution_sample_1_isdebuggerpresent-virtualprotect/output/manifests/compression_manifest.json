@@ -1,0 +1,61 @@
+{
+  "file_count": 6,
+  "total_original_size": 5096911203,
+  "total_compressed_size": 197261750,
+  "artifacts": [
+    {
+      "source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "compressed": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/compressed_full/contradef.2956.FunctionInterceptor.cdf.gz",
+      "original_size": 63044,
+      "compressed_size": 5330,
+      "compression_level": 7,
+      "source_sha256": "156d70a36ca15143157034c159fdfef02f66233ad69489ec9455a9858ca7b527",
+      "compressed_sha256": "5c059bb4107bed2b49333f7043821c99c0d1d88a5189e6f05cb77afeed269f6a"
+    },
+    {
+      "source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceDisassembly.cdf",
+      "compressed": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/compressed_full/contradef.2956.TraceDisassembly.cdf.gz",
+      "original_size": 167388,
+      "compressed_size": 31025,
+      "compression_level": 7,
+      "source_sha256": "075462e6ca8f43592be4872135f740ecff267d9240082b888a23d5f2690fe40c",
+      "compressed_sha256": "c508990d5c4172ae230bc273f70cb3e89cafe8ea186cad7d884a827bfe8cde5e"
+    },
+    {
+      "source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "compressed": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/compressed_full/contradef.2956.TraceFcnCall.M1.cdf.gz",
+      "original_size": 19880,
+      "compressed_size": 1026,
+      "compression_level": 7,
+      "source_sha256": "134ddcce52094b80b0b2fc10edd7ff0c0515bf1be81a72c866c97fc8e79c4bec",
+      "compressed_sha256": "98569838731336918e8f35cc8c7faf0c5276cd3408f68407a0cbbd6a902074f8"
+    },
+    {
+      "source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+      "compressed": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/compressed_full/contradef.2956.TraceFcnCall.M2.cdf.gz",
+      "original_size": 37657,
+      "compressed_size": 1522,
+      "compression_level": 7,
+      "source_sha256": "9eb72ed62fe208d1852e561b125ce87c4018632e88cd926a2bdda1f7781668ea",
+      "compressed_sha256": "4d7cb9b57e2ec98f2df64f3808b34c5878769b7f134014e3a004de9013d4a407"
+    },
+    {
+      "source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+      "compressed": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/compressed_full/contradef.2956.TraceInstructions.cdf.gz",
+      "original_size": 4214246529,
+      "compressed_size": 175592788,
+      "compression_level": 3,
+      "source_sha256": "499136c7c1c747c54cef69bfc874f279db8d6ea703d8f3247fb58422c0263924",
+      "compressed_sha256": "e02555ae14b2976ccd5bd6f7a27b7db38eebf398c3f21c9eb307b03619189b17"
+    },
+    {
+      "source": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf",
+      "compressed": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/compressed_full/contradef.2956.TraceMemory.cdf.gz",
+      "original_size": 882376705,
+      "compressed_size": 21630059,
+      "compression_level": 5,
+      "source_sha256": "a7bf533f8efaf6ee2159eb11394850887b0b72ec124e6071c45614cf6f831b17",
+      "compressed_sha256": "0d24b0b75b0b7eb55ef91b7352bb23d8a0527634ecefbb771aaf1b4a41a75824"
+    }
+  ]
+}

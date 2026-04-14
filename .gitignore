@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+
+# Logs temporários
+*.log
+api_stdout.log
+api_stderr.log
+
+# Arquivos compactados genéricos
+*.7z
+*.zip
+*.tar
+*.gz
+*.bz2
+*.xz
+
+# Jobs: manter somente status, eventos e saídas derivadas
+/data/jobs_*/*/input/
+/data/jobs_*/*/extracted/
+/data/jobs_*/*/compressed_full/
+/data/jobs_*/*/workspace/
+/data/jobs_*/*/tmp/
+!/data/jobs_*/*/status.json
+!/data/jobs_*/*/events.jsonl
+!/data/jobs_*/*/output/
+!/data/jobs_*/*/output/**
+
+# Artefatos legados pesados comprimidos
+/legacy_artifacts/**/compressed/

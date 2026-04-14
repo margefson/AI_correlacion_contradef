@@ -1,0 +1,257 @@
+{
+  "focus_queries": [
+    "IsDebuggerPresent",
+    "VirtualProtect"
+  ],
+  "node_count": 6,
+  "edge_count": 5,
+  "nodes": [
+    {
+      "id": "isdebuggerpresent",
+      "label": "IsDebuggerPresent",
+      "is_focus": true,
+      "counts": {
+        "function_interceptor": 2,
+        "trace_fcn_call": 6,
+        "trace_textual": 33
+      },
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf"
+      ],
+      "threads": [
+        "0",
+        "1"
+      ],
+      "matched_queries": [
+        "IsDebuggerPresent"
+      ],
+      "sample_evidence": [
+        "[+] IsDebuggerPresent...",
+        "[+] IsDebuggerPresent...",
+        "IsDebuggerPresent",
+        "IsDebuggerPresent",
+        "IsDebuggerPresent"
+      ]
+    },
+    {
+      "id": "virtualprotect",
+      "label": "VirtualProtect",
+      "is_focus": true,
+      "counts": {
+        "function_interceptor": 5,
+        "trace_fcn_call": 15,
+        "trace_textual": 220
+      },
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf"
+      ],
+      "threads": [
+        "0"
+      ],
+      "matched_queries": [
+        "VirtualProtect"
+      ],
+      "sample_evidence": [
+        "[+] VirtualProtect...",
+        "[+] VirtualProtect...",
+        "[+] VirtualProtect...",
+        "[+] VirtualProtect...",
+        "[+] VirtualProtect..."
+      ]
+    },
+    {
+      "id": "text",
+      "label": ".text",
+      "is_focus": false,
+      "counts": {
+        "function_interceptor": 0,
+        "trace_fcn_call": 0,
+        "trace_textual": 0
+      },
+      "files": [],
+      "threads": [],
+      "matched_queries": [],
+      "sample_evidence": []
+    },
+    {
+      "id": "ntprotectvirtualmemory",
+      "label": "NtProtectVirtualMemory",
+      "is_focus": false,
+      "counts": {
+        "function_interceptor": 0,
+        "trace_fcn_call": 0,
+        "trace_textual": 0
+      },
+      "files": [],
+      "threads": [],
+      "matched_queries": [],
+      "sample_evidence": []
+    },
+    {
+      "id": "tlsgetvalue",
+      "label": "TlsGetValue",
+      "is_focus": false,
+      "counts": {
+        "function_interceptor": 0,
+        "trace_fcn_call": 0,
+        "trace_textual": 0
+      },
+      "files": [],
+      "threads": [],
+      "matched_queries": [],
+      "sample_evidence": []
+    },
+    {
+      "id": "unnamedimageentrypoint",
+      "label": "unnamedImageEntryPoint",
+      "is_focus": false,
+      "counts": {
+        "function_interceptor": 0,
+        "trace_fcn_call": 0,
+        "trace_textual": 0
+      },
+      "files": [],
+      "threads": [],
+      "matched_queries": [],
+      "sample_evidence": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "virtualprotect",
+      "to": "ntprotectvirtualmemory",
+      "from_label": "VirtualProtect",
+      "to_label": "NtProtectVirtualMemory",
+      "relation": "direct_call",
+      "count": 5,
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf"
+      ],
+      "threads": [
+        "0"
+      ],
+      "matched_queries": [
+        "VirtualProtect"
+      ],
+      "samples": [
+        "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4feeb8, 0x4feeb0, 0x4, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)",
+        "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4feeb8, 0x4feeb0, 0x40, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)",
+        "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4fee58, 0x4fee50, 0x2, 0x4ff870, 0, 0x4fee70, ...)",
+        "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4fee58, 0x4fee50, 0x20, 0x4ff870, 0, 0x4fee70, ...)",
+        "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4ff818, 0x4ff810, 0x40, 0x4ff840, 0x7ff744281106, 0x7ff744280000, ...)"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "from": "virtualprotect",
+      "to": "tlsgetvalue",
+      "from_label": "VirtualProtect",
+      "to_label": "TlsGetValue",
+      "relation": "direct_call",
+      "count": 5,
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf"
+      ],
+      "threads": [
+        "0"
+      ],
+      "matched_queries": [
+        "VirtualProtect"
+      ],
+      "samples": [
+        "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)",
+        "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)",
+        "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0, 0x4fee70, ...)",
+        "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0, 0x4fee70, ...)",
+        "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff840, 0x7ff744281106, 0x7ff744280000, ...)"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "from": "unnamedimageentrypoint",
+      "to": "virtualprotect",
+      "from_label": "unnamedImageEntryPoint",
+      "to_label": "VirtualProtect",
+      "relation": "direct_call",
+      "count": 4,
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf"
+      ],
+      "threads": [
+        "0"
+      ],
+      "matched_queries": [
+        "VirtualProtect"
+      ],
+      "samples": [
+        "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff744289000, 0x2b8a, 0x4, 0x4ff870, 0x7ff744",
+        "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff74434a000, 0x43ec, 0x40, 0x4ff870, 0x29c00",
+        "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff744289000, 0x2b8a, 0x2, 0x4ff870, 0, 0x7ff",
+        "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff74434a000, 0x43ec, 0x20, 0x4ff870, 0, 0x17"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "from": "text",
+      "to": "virtualprotect",
+      "from_label": ".text",
+      "to_label": "VirtualProtect",
+      "relation": "direct_call",
+      "count": 1,
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf"
+      ],
+      "threads": [
+        "0"
+      ],
+      "matched_queries": [
+        "VirtualProtect"
+      ],
+      "samples": [
+        "| | | Call 0x00007ff74428111d 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x00000000011d -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (140699977174736, 761553, 64, 5240896, 1, 340141064, 140699977121"
+      ],
+      "confidence": 0.5
+    },
+    {
+      "from": "unnamedimageentrypoint",
+      "to": "isdebuggerpresent",
+      "from_label": "unnamedImageEntryPoint",
+      "to_label": "IsDebuggerPresent",
+      "relation": "direct_call",
+      "count": 1,
+      "files": [
+        "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf"
+      ],
+      "threads": [
+        "0"
+      ],
+      "matched_queries": [
+        "IsDebuggerPresent"
+      ],
+      "samples": [
+        "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a4204f0 KERNEL32.DLL:IsDebuggerPresent [T0] (0, 0, 0xffffffff, 0x1, 0x7ff74435b202, 0x4ff"
+      ],
+      "confidence": 0.5
+    }
+  ],
+  "support": {
+    "function_interceptor_term_counts": {
+      "IsDebuggerPresent": 2,
+      "VirtualProtect": 5
+    },
+    "tracefcn_term_counts": {},
+    "text_trace_term_counts": {
+      "VirtualProtect": 205,
+      "IsDebuggerPresent": 32
+    },
+    "disassembly_windows_count": 0
+  }
+}

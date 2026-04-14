@@ -1,0 +1,13 @@
+flowchart TD
+    isdebuggerpresent["IsDebuggerPresent\nFI:2 FC:6 TXT:33"]:::focus
+    virtualprotect["VirtualProtect\nFI:5 FC:15 TXT:220"]:::focus
+    text[".text\nFI:0 FC:0 TXT:0"]
+    ntprotectvirtualmemory["NtProtectVirtualMemory\nFI:0 FC:0 TXT:0"]
+    tlsgetvalue["TlsGetValue\nFI:0 FC:0 TXT:0"]
+    unnamedimageentrypoint["unnamedImageEntryPoint\nFI:0 FC:0 TXT:0"]
+    virtualprotect -->|direct_call (5)| ntprotectvirtualmemory
+    virtualprotect -->|direct_call (5)| tlsgetvalue
+    unnamedimageentrypoint -->|direct_call (4)| virtualprotect
+    text -->|direct_call (1)| virtualprotect
+    unnamedimageentrypoint -->|direct_call (1)| isdebuggerpresent
+    classDef focus fill:#ffe8a3,stroke:#8a6d1d,stroke-width:2px;

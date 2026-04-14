@@ -1,0 +1,14 @@
+{
+  "archive": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/input/Full-Execution-Sample-1.7z",
+  "extract_dir": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted",
+  "file_count": 6,
+  "files": [
+    "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+    "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceDisassembly.cdf",
+    "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+    "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+    "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+    "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/extracted/Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf"
+  ],
+  "stdout_tail": "\nScanning the drive for archives:\n1 file, 39428418 bytes (38 MiB)\n\nExtracting archive: /home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/input/Full-Execution-Sample-1.7z\n--\nPath = /home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/input/Full-Execution-Sample-1.7z\nType = 7z\nPhysical Size = 39428418\nHeaders Size = 359\nMethod = LZMA2:25\nSolid = +\nBlocks = 1\n\nEverything is Ok\n\nFolders: 1\nFiles: 6\nSize:       5096911203\nCompressed: 39428418"
+}

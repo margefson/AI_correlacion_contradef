@@ -1,0 +1,180 @@
+{
+  "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+  "method": "M1",
+  "total_rows": 284,
+  "focus_rows": [
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 3,
+      "method": "M1",
+      "target_address": "0x7ffb4a4204f0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsDebuggerPresent",
+      "display_symbol": "IsDebuggerPresent",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ]
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 7,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "display_symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 8,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "display_symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 10,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "display_symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 11,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "display_symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 160,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "display_symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "line_number": 163,
+      "method": "M1",
+      "target_address": "0x7ffb4a4204f0",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsDebuggerPresent",
+      "display_symbol": "IsDebuggerPresent",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ]
+    }
+  ],
+  "symbol_counts_top20": [
+    [
+      "GetProcAddress",
+      110
+    ],
+    [
+      "RtlAllocateHeap",
+      43
+    ],
+    [
+      "RtlEncodePointer",
+      15
+    ],
+    [
+      "InitializeCriticalSectionAndSpinCount",
+      15
+    ],
+    [
+      "GetLastError",
+      7
+    ],
+    [
+      "FlsGetValue",
+      7
+    ],
+    [
+      "SetLastError",
+      7
+    ],
+    [
+      "RtlMoveMemory",
+      7
+    ],
+    [
+      "LoadLibraryA",
+      6
+    ],
+    [
+      "MultiByteToWideChar",
+      6
+    ],
+    [
+      "VirtualProtect",
+      5
+    ],
+    [
+      "RtlEnterCriticalSection",
+      5
+    ],
+    [
+      "RtlLeaveCriticalSection",
+      5
+    ],
+    [
+      "LCMapStringW",
+      4
+    ],
+    [
+      "GetStdHandle",
+      3
+    ],
+    [
+      "IsDebuggerPresent",
+      2
+    ],
+    [
+      "GetCurrentThreadId",
+      2
+    ],
+    [
+      "GetStartupInfoW",
+      2
+    ],
+    [
+      "GetCPInfo",
+      2
+    ],
+    [
+      "WideCharToMultiByte",
+      2
+    ]
+  ]
+}

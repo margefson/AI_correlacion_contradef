@@ -1,0 +1,14 @@
+{
+  "state": "completed",
+  "progress": 1.0,
+  "stage": "completed",
+  "message": "Análise genérica concluída.",
+  "updated_at": "2026-04-14T22:05:12Z",
+  "output_dir": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/output",
+  "discovered_file_count": 6,
+  "focus_terms": [
+    "IsDebuggerPresent",
+    "VirtualProtect"
+  ],
+  "correlation_file": "/home/ubuntu/repos/AI_correlacion_contradef/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/output/correlation/generic_focus_correlation.json"
+}

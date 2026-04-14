@@ -1,0 +1,11 @@
+{
+  "focus_terms": [
+    "IsDebuggerPresent",
+    "VirtualProtect"
+  ],
+  "focus_regexes": [],
+  "compiled_labels": [
+    "IsDebuggerPresent",
+    "VirtualProtect"
+  ]
+}
