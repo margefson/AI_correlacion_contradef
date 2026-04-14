@@ -1,0 +1,17 @@
+line_start,line_end,header,matched_terms,module_name,thread,call_id,caller_address
+61,71,[+] LoadLibraryA...,LoadLibraryA,,0,0,
+72,82,[+] LoadLibraryA...,LoadLibraryA,,0,1,
+83,91,[+] IsDebuggerPresent...,IsDebuggerPresent,,0,0,
+92,103,[+] CheckRemoteDebuggerPresent...,CheckRemoteDebuggerPresent,,0,0,
+104,121,[+] NtQueryInformationProcess...,ZwQueryInformationProcess,,0,0,
+122,138,[+] VirtualProtect...,VirtualProtect,,0,0,
+139,155,[+] VirtualProtect...,VirtualProtect,,0,1,
+156,172,[+] VirtualProtect...,VirtualProtect,,0,2,
+173,189,[+] VirtualProtect...,VirtualProtect,,0,3,
+190,198,[+] GetTickCount...,GetTickCount,,0,0,
+199,214,[+] RtlQueryPerformanceCounter...,QueryPerformanceCounter,,0,0,0x7ff744282cb5
+981,997,[+] VirtualProtect...,VirtualProtect,,0,4,
+1039,1047,[+] IsDebuggerPresent...,IsDebuggerPresent,,1,1,
+1048,1058,[+] LoadLibraryA...,LoadLibraryA,,1,2,
+1076,1086,[+] LoadLibraryA...,LoadLibraryA,,1,3,
+2287,2296,[+] LoadLibraryA...,LoadLibraryA,,1,4,

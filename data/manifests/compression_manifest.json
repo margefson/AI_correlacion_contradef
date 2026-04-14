@@ -1,0 +1,62 @@
+{
+  "dataset_directory": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1",
+  "file_count": 6,
+  "total_original_size": 5096911203,
+  "total_compressed_size": 197261750,
+  "artifacts": [
+    {
+      "source": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.FunctionInterceptor.cdf",
+      "compressed": "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.FunctionInterceptor.cdf.gz",
+      "original_size": 63044,
+      "compressed_size": 5330,
+      "compression_level": 7,
+      "source_sha256": "156d70a36ca15143157034c159fdfef02f66233ad69489ec9455a9858ca7b527",
+      "compressed_sha256": "9e9cf1132447c978f1768436919e357ce92bd7fcdc23f10a01d9896fe2dbf192"
+    },
+    {
+      "source": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.TraceDisassembly.cdf",
+      "compressed": "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.TraceDisassembly.cdf.gz",
+      "original_size": 167388,
+      "compressed_size": 31025,
+      "compression_level": 7,
+      "source_sha256": "075462e6ca8f43592be4872135f740ecff267d9240082b888a23d5f2690fe40c",
+      "compressed_sha256": "0adb35226445050e5e0604cc028a33829247eb814bcf347e70bb02a8e9788ca9"
+    },
+    {
+      "source": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M1.cdf",
+      "compressed": "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.TraceFcnCall.M1.cdf.gz",
+      "original_size": 19880,
+      "compressed_size": 1026,
+      "compression_level": 7,
+      "source_sha256": "134ddcce52094b80b0b2fc10edd7ff0c0515bf1be81a72c866c97fc8e79c4bec",
+      "compressed_sha256": "adeb29f250482546a4d7dc10dc1e632156c3fa491fd78cde7978589a5053abcc"
+    },
+    {
+      "source": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.TraceFcnCall.M2.cdf",
+      "compressed": "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.TraceFcnCall.M2.cdf.gz",
+      "original_size": 37657,
+      "compressed_size": 1522,
+      "compression_level": 7,
+      "source_sha256": "9eb72ed62fe208d1852e561b125ce87c4018632e88cd926a2bdda1f7781668ea",
+      "compressed_sha256": "662e9968a5a7d4c42978e33ed7616f0eaff94eba1a31819567476d5cb1234290"
+    },
+    {
+      "source": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+      "compressed": "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.TraceInstructions.cdf.gz",
+      "original_size": 4214246529,
+      "compressed_size": 175592788,
+      "compression_level": 3,
+      "source_sha256": "499136c7c1c747c54cef69bfc874f279db8d6ea703d8f3247fb58422c0263924",
+      "compressed_sha256": "062f336c0f357caed2e323091923b4b7ac8892d3d3fe71349bbb0ccb4fc435db"
+    },
+    {
+      "source": "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.TraceMemory.cdf",
+      "compressed": "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.TraceMemory.cdf.gz",
+      "original_size": 882376705,
+      "compressed_size": 21630059,
+      "compression_level": 5,
+      "source_sha256": "a7bf533f8efaf6ee2159eb11394850887b0b72ec124e6071c45614cf6f831b17",
+      "compressed_sha256": "e08a8f70832797c6e13624a7036c563731b6abecf921bea42e4b0cc81ae24354"
+    }
+  ]
+}

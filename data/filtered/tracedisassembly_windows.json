@@ -1,0 +1,80 @@
+{
+  "total_lines": 4899,
+  "matched_windows": [
+    {
+      "address": "0x7ff744282cb5",
+      "start_line": 2008,
+      "end_line": 2024,
+      "lines": [
+        {
+          "line_number": 2008,
+          "text": "0x7ff744282c92 | call qword ptr [rip+0x6428]"
+        },
+        {
+          "line_number": 2009,
+          "text": "0x7ff744282c98 | mov r11d, eax"
+        },
+        {
+          "line_number": 2010,
+          "text": "0x7ff744282c9b | xor rbx, r11"
+        },
+        {
+          "line_number": 2011,
+          "text": "0x7ff744282c9e | call qword ptr [rip+0x6464]"
+        },
+        {
+          "line_number": 2012,
+          "text": "0x7ff744282ca4 | lea rcx, ptr [rsp+0x38]"
+        },
+        {
+          "line_number": 2013,
+          "text": "0x7ff744282ca9 | mov r11d, eax"
+        },
+        {
+          "line_number": 2014,
+          "text": "0x7ff744282cac | xor rbx, r11"
+        },
+        {
+          "line_number": 2015,
+          "text": "0x7ff744282caf | call qword ptr [rip+0x644b]"
+        },
+        {
+          "line_number": 2016,
+          "text": "0x7ff744282cb5 | mov r11, qword ptr [rsp+0x38]"
+        },
+        {
+          "line_number": 2017,
+          "text": "0x7ff744282cba | xor r11, rbx"
+        },
+        {
+          "line_number": 2018,
+          "text": "0x7ff744282cbd | mov rax, 0xffffffffffff"
+        },
+        {
+          "line_number": 2019,
+          "text": "0x7ff744282cc7 | and r11, rax"
+        },
+        {
+          "line_number": 2020,
+          "text": "0x7ff744282cca | mov rax, 0x2b992ddfa233"
+        },
+        {
+          "line_number": 2021,
+          "text": "0x7ff744282cd4 | cmp r11, rdi"
+        },
+        {
+          "line_number": 2022,
+          "text": "0x7ff744282cd7 | cmovz r11, rax"
+        },
+        {
+          "line_number": 2023,
+          "text": "0x7ff744282cdb | mov qword ptr [rip+0x978e], r11"
+        },
+        {
+          "line_number": 2024,
+          "text": "0x7ff744282ce2 | not r11"
+        }
+      ]
+    }
+  ]
+}

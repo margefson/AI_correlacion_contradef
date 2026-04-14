@@ -1,0 +1,3 @@
+call_site,target_api,address,thread,note
+0x2000,IsDebuggerPresent,0x1020,1,call direta para anti-debug
+0x2005,CheckRemoteDebuggerPresent,0x1030,1,call direta complementar

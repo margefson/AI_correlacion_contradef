@@ -1,0 +1,1539 @@
+{
+  "focus_function": "IsDebuggerPresent",
+  "sequence_terms": [
+    "LoadLibraryA",
+    "IsDebuggerPresent",
+    "CheckRemoteDebuggerPresent",
+    "ZwQueryInformationProcess",
+    "ZwSetInformationThread",
+    "GetTickCount",
+    "QueryPerformanceCounter",
+    "EnumSystemFirmwareTables",
+    "LocalAlloc",
+    "VirtualProtect",
+    "HeapFree",
+    "FatalExit"
+  ],
+  "nodes": [
+    {
+      "id": "load_library_a",
+      "label": "LoadLibraryA",
+      "counts": {
+        "function_interceptor": 5,
+        "tracefcncall_m1": 6,
+        "tracefcncall_m2": 12,
+        "traceinstructions": 175,
+        "tracememory": 4
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 61,
+          "line_end": 71,
+          "header": "[+] LoadLibraryA...",
+          "matched_terms": [
+            "LoadLibraryA"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "",
+          "content": "[+] LoadLibraryA...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48c3a020\n    ParÃ¡metros:\n        lpLibFileName: kernel32.dll\n    Valor de retorno: 140717259227136\n[*] ConcluÃ­do\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 1,
+          "method": "M1",
+          "target_address": "0x7ffb4a420830",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "LoadLibraryA",
+          "matched_terms": [
+            "LoadLibraryA"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 1,
+          "method": "M2",
+          "target_address": "0x7ffb4a420830",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "LoadLibraryA",
+          "matched_terms": [
+            "LoadLibraryA"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 276678,
+          "matched_terms": [
+            "LoadLibraryA"
+          ],
+          "context": [
+            {
+              "line_number": 276676,
+              "text": "0x00007ffb4af026bd ntdll.dll:RtlVirtualUnwind+0x0000000018dd                                    sub rdx, r14                                 | [T0] rdx = 0x40614f3c1, rflags = 0x202"
+            },
+            {
+              "line_number": 276677,
+              "text": "0x00007ffb4af026c0 ntdll.dll:RtlVirtualUnwind+0x0000000018e0                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ff744357f40 (140699978006336) -> \"'@'\""
+            },
+            {
+              "line_number": 276678,
+              "text": "0x00007ffb4af026c3 ntdll.dll:RtlVirtualUnwind+0x0000000018e3                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x4c] -> 76 = \"'L'\", memval [0x00007ffb4a4a7301] -> 0x4c (76) = \"LoadLibraryA\", rflags = 0x202"
+            },
+            {
+              "line_number": 276679,
+              "text": "0x00007ffb4af026c6 ntdll.dll:RtlVirtualUnwind+0x0000000018e6                                    jnz 0x7ffb4af02799                           | [T0]"
+            },
+            {
+              "line_number": 276680,
+              "text": "0x00007ffb4af026cc ntdll.dll:RtlVirtualUnwind+0x0000000018ec                                    inc rax                                      | [T0] rax = 0x7ff744357f41, rflags = 0x206"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 8162281,
+          "matched_terms": [
+            "LoadLibraryA"
+          ],
+          "context": [
+            {
+              "line_number": 8162279,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8162280,
+              "text": "[T1] 0x00007ff74428cf42             | mov al, byte ptr [r10] | [Read 1Op]: "
+            },
+            {
+              "line_number": 8162281,
+              "text": "        [0x00007ffb4a4a7301] = 0x4c (76) -> \"LoadLibraryA\""
+            },
+            {
+              "line_number": 8162282,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8162283,
+              "text": "[T1] 0x00007ff74428cf58             | mov al, byte ptr [r14] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "is_debugger_present",
+      "label": "IsDebuggerPresent",
+      "counts": {
+        "function_interceptor": 2,
+        "tracefcncall_m1": 2,
+        "tracefcncall_m2": 4,
+        "traceinstructions": 26,
+        "tracememory": 6
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 83,
+          "line_end": 91,
+          "header": "[+] IsDebuggerPresent...",
+          "matched_terms": [
+            "IsDebuggerPresent"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "",
+          "content": "[+] IsDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48bfb6c0\n    Valor de retorno: 0\n[*] ConcluÃ­do\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 3,
+          "method": "M1",
+          "target_address": "0x7ffb4a4204f0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "IsDebuggerPresent",
+          "matched_terms": [
+            "IsDebuggerPresent"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 5,
+          "method": "M2",
+          "target_address": "0x7ffb4a4204f0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "IsDebuggerPresent",
+          "matched_terms": [
+            "IsDebuggerPresent"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 262399,
+          "matched_terms": [
+            "IsDebuggerPresent"
+          ],
+          "context": [
+            {
+              "line_number": 262397,
+              "text": "0x00007ffb4af026bd ntdll.dll:RtlVirtualUnwind+0x0000000018dd                                    sub rdx, r14                                 | [T0] rdx = 0x4061567e3, rflags = 0x202"
+            },
+            {
+              "line_number": 262398,
+              "text": "0x00007ffb4af026c0 ntdll.dll:RtlVirtualUnwind+0x0000000018e0                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ff744350478 (140699977974904) -> \"'x'\""
+            },
+            {
+              "line_number": 262399,
+              "text": "0x00007ffb4af026c3 ntdll.dll:RtlVirtualUnwind+0x0000000018e3                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x49] -> 73 = \"'I'\", memval [0x00007ffb4a4a6c5b] -> 0x49 (73) = \"IsDebuggerPresent\", rflags = 0x202"
+            },
+            {
+              "line_number": 262400,
+              "text": "0x00007ffb4af026c6 ntdll.dll:RtlVirtualUnwind+0x0000000018e6                                    jnz 0x7ffb4af02799                           | [T0]"
+            },
+            {
+              "line_number": 262401,
+              "text": "0x00007ffb4af026cc ntdll.dll:RtlVirtualUnwind+0x0000000018ec                                    inc rax                                      | [T0] rax = 0x7ff744350479, rflags = 0x202"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 49524,
+          "matched_terms": [
+            "IsDebuggerPresent"
+          ],
+          "context": [
+            {
+              "line_number": 49522,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 49523,
+              "text": "[T0] 0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 | cmp al, byte ptr [rdi] | [Read 1Op]: "
+            },
+            {
+              "line_number": 49524,
+              "text": "        [0x00007ffb4a4a6c5b] = 0x49 (73) -> \"IsDebuggerPresent\""
+            },
+            {
+              "line_number": 49525,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 49526,
+              "text": "[T0] 0x00007ff7443519c4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000009ac | pop rax | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "check_remote_debugger_present",
+      "label": "CheckRemoteDebuggerPresent",
+      "counts": {
+        "function_interceptor": 1,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 2,
+        "traceinstructions": 40,
+        "tracememory": 8
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 92,
+          "line_end": 103,
+          "header": "[+] CheckRemoteDebuggerPresent...",
+          "matched_terms": [
+            "CheckRemoteDebuggerPresent"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "",
+          "content": "[+] CheckRemoteDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48c40960\n    ParÃ¢metros:\n        hProcess: 18446744073709551615\n        pbDebuggerPresent: FALSE\n    Valor de retorno: 1\n[*] ConcluÃ­do\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 4,
+          "method": "M1",
+          "target_address": "0x7ffb4a401250",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "CheckRemoteDebuggerPresent",
+          "matched_terms": [
+            "CheckRemoteDebuggerPresent"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 7,
+          "method": "M2",
+          "target_address": "0x7ffb4a401250",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "CheckRemoteDebuggerPresent",
+          "matched_terms": [
+            "CheckRemoteDebuggerPresent"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 488274,
+          "matched_terms": [
+            "CheckRemoteDebuggerPresent"
+          ],
+          "context": [
+            {
+              "line_number": 488272,
+              "text": "0x00007ff74435989e 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000018fe ror al, 0x7                     | [T0] rax = 0x7ffb4a400043, rflags = 0x282"
+            },
+            {
+              "line_number": 488273,
+              "text": "0x00007ff7443598a1 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001901 cmc                             | [T0] rflags = 0x283"
+            },
+            {
+              "line_number": 488274,
+              "text": "0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 cmp al, byte ptr [rdi]          | [T0] al [0x43] -> 67 = \"'C'\", memval [0x00007ffb4a4a225a] -> 0x43 (67) = \"CheckRemoteDebuggerPresent\", rflags = 0x283"
+            },
+            {
+              "line_number": 488275,
+              "text": "0x00007ff7443598a4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001904 movsx ax, al                    | [T0] ax = 0x43 (67) -> \"C\""
+            },
+            {
+              "line_number": 488276,
+              "text": "0x00007ff7443598a8 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001908 movsx rax, bl                   | [T0] rax = 0x88 (136)"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 51666,
+          "matched_terms": [
+            "CheckRemoteDebuggerPresent"
+          ],
+          "context": [
+            {
+              "line_number": 51664,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 51665,
+              "text": "[T0] 0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 | cmp al, byte ptr [rdi] | [Read 1Op]: "
+            },
+            {
+              "line_number": 51666,
+              "text": "        [0x00007ffb4a4a225a] = 0x43 (67) -> \"CheckRemoteDebuggerPresent\""
+            },
+            {
+              "line_number": 51667,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 51668,
+              "text": "[T0] 0x00007ff7443519c4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000009ac | pop rax | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zw_query_information_process",
+      "label": "ZwQueryInformationProcess",
+      "counts": {
+        "function_interceptor": 1,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 2,
+        "traceinstructions": 62,
+        "tracememory": 4
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 104,
+          "line_end": 121,
+          "header": "[+] NtQueryInformationProcess...",
+          "matched_terms": [
+            "ZwQueryInformationProcess"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "",
+          "content": "[+] NtQueryInformationProcess...\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 0x7ffb4af6d8b0\n    ParÃ¢metros:\n        ProcessHandle: 0xffffffffffffffff\n        ProcessInformationClass: 30\n        ProcessInformation: 0x4ff870\n        ProcessInformationLength: 8\n        ReturnLength: 0x0\n    EndereÃ§o da funÃ§Ã£o chamante: 0x7ff74435f256\n  [-] InÃ­cio da chamada NtQueryInformationProcess\n    Retorno NtQueryInformationProcess (NTSTATUS): 0xc0000353\n    Falha na operaÃ§Ã£o (NTSTATUS != 0). CÃ³digo: 0xc0000353\n  [-] Chamada NtQueryInformationProcess concluÃ­da\n[*] ConcluÃ­do\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 5,
+          "method": "M1",
+          "target_address": "0x7ffb4af6d8b0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+          "symbol": "ZwQueryInformationProcess",
+          "matched_terms": [
+            "ZwQueryInformationProcess"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 9,
+          "method": "M2",
+          "target_address": "0x7ffb4af6d8b0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+          "symbol": "ZwQueryInformationProcess",
+          "matched_terms": [
+            "ZwQueryInformationProcess"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 582338,
+          "matched_terms": [
+            "ZwQueryInformationProcess"
+          ],
+          "context": [
+            {
+              "line_number": 582336,
+              "text": "0x00007ff74435989e 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000018fe ror al, 0x7                     | [T0] rax = 0x7ffb4aed005a, rflags = 0x206"
+            },
+            {
+              "line_number": 582337,
+              "text": "0x00007ff7443598a1 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001901 cmc                             | [T0] rflags = 0x207"
+            },
+            {
+              "line_number": 582338,
+              "text": "0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 cmp al, byte ptr [rdi]          | [T0] al [0x5a] -> 90 = \"'Z'\", memval [0x00007ffb4b033ace] -> 0x5a (90) = \"ZwQueryInformationProcess\", rflags = 0x207"
+            },
+            {
+              "line_number": 582339,
+              "text": "0x00007ff7443598a4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001904 movsx ax, al                    | [T0] ax = 0x5a (90) -> \"Z\""
+            },
+            {
+              "line_number": 582340,
+              "text": "0x00007ff7443598a8 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001908 movsx rax, bl                   | [T0] rax = 0xe4 (228)"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 74119,
+          "matched_terms": [
+            "ZwQueryInformationProcess"
+          ],
+          "context": [
+            {
+              "line_number": 74117,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 74118,
+              "text": "[T0] 0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 | cmp al, byte ptr [rdi] | [Read 1Op]: "
+            },
+            {
+              "line_number": 74119,
+              "text": "        [0x00007ffb4b033ace] = 0x5a (90) -> \"ZwQueryInformationProcess\""
+            },
+            {
+              "line_number": 74120,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 74121,
+              "text": "[T0] 0x00007ff7443519c4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000009ac | pop rax | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zw_set_information_thread",
+      "label": "ZwSetInformationThread",
+      "counts": {
+        "function_interceptor": 0,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 2,
+        "traceinstructions": 9,
+        "tracememory": 2
+      },
+      "evidence": {
+        "function_interceptor": null,
+        "tracefcncall_m1": {
+          "line_number": 6,
+          "method": "M1",
+          "target_address": "0x7ffb4af6d730",
+          "thread": 0,
+          "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+          "symbol": "ZwSetInformationThread",
+          "matched_terms": [
+            "ZwSetInformationThread"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 11,
+          "method": "M2",
+          "target_address": "0x7ffb4af6d730",
+          "thread": 0,
+          "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+          "symbol": "ZwSetInformationThread",
+          "matched_terms": [
+            "ZwSetInformationThread"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 592389,
+          "matched_terms": [
+            "ZwSetInformationThread"
+          ],
+          "context": [
+            {
+              "line_number": 592387,
+              "text": "0x00007ff74435989e 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000018fe ror al, 0x7                     | [T0] rax = 0x7ffb4aed005a, rflags = 0x206"
+            },
+            {
+              "line_number": 592388,
+              "text": "0x00007ff7443598a1 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001901 cmc                             | [T0] rflags = 0x207"
+            },
+            {
+              "line_number": 592389,
+              "text": "0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 cmp al, byte ptr [rdi]          | [T0] al [0x5a] -> 90 = \"'Z'\", memval [0x00007ffb4b034440] -> 0x5a (90) = \"ZwSetInformationThread\", rflags = 0x207"
+            },
+            {
+              "line_number": 592390,
+              "text": "0x00007ff7443598a4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001904 movsx ax, al                    | [T0] ax = 0x5a (90) -> \"Z\""
+            },
+            {
+              "line_number": 592391,
+              "text": "0x00007ff7443598a8 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001908 movsx rax, bl                   | [T0] rax = 0xe4 (228)"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 77083,
+          "matched_terms": [
+            "ZwSetInformationThread"
+          ],
+          "context": [
+            {
+              "line_number": 77081,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 77082,
+              "text": "[T0] 0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 | cmp al, byte ptr [rdi] | [Read 1Op]: "
+            },
+            {
+              "line_number": 77083,
+              "text": "        [0x00007ffb4b034440] = 0x5a (90) -> \"ZwSetInformationThread\""
+            },
+            {
+              "line_number": 77084,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 77085,
+              "text": "[T0] 0x00007ff7443519c4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000009ac | pop rax | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gettickcount",
+      "label": "GetTickCount",
+      "counts": {
+        "function_interceptor": 1,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 1,
+        "traceinstructions": 28,
+        "tracememory": 14
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 190,
+          "line_end": 198,
+          "header": "[+] GetTickCount...",
+          "matched_terms": [
+            "GetTickCount"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "",
+          "content": "[+] GetTickCount...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNEL32.DLL\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb4a415980\n    Valor de retorno: 5894906\n[*] ConcluÃ­do\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 15,
+          "method": "M1",
+          "target_address": "0x7ffb4a415980",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "GetTickCount",
+          "matched_terms": [
+            "GetTickCount"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 28,
+          "method": "M2",
+          "target_address": "0x7ffb4a415980",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "GetTickCount",
+          "matched_terms": [
+            "GetTickCount"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 48265,
+          "matched_terms": [
+            "GetTickCount"
+          ],
+          "context": [
+            {
+              "line_number": 48263,
+              "text": "0x00007ffb4af01cdd ntdll.dll:RtlVirtualUnwind+0x000000000efd                                    sub rdx, r12                                 | [T0] rdx = 0x1647de5, rflags = 0x202"
+            },
+            {
+              "line_number": 48264,
+              "text": "0x00007ffb4af01ce0 ntdll.dll:RtlVirtualUnwind+0x000000000f00                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ffb48e5e348 (140717236544328) -> \"'H'\""
+            },
+            {
+              "line_number": 48265,
+              "text": "0x00007ffb4af01ce3 ntdll.dll:RtlVirtualUnwind+0x000000000f03                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x47] -> 71 = \"'G'\", memval [0x00007ffb4a4a612d] -> 0x47 (71) = \"GetTickCount\", rflags = 0x202"
+            },
+            {
+              "line_number": 48266,
+              "text": "0x00007ffb4af01ce6 ntdll.dll:RtlVirtualUnwind+0x000000000f06                                    jnz 0x7ffb4af01d30                           | [T0]"
+            },
+            {
+              "line_number": 48267,
+              "text": "0x00007ffb4af01ce8 ntdll.dll:RtlVirtualUnwind+0x000000000f08                                    inc rax                                      | [T0] rax = 0x7ffb48e5e349, rflags = 0x202"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 8151451,
+          "matched_terms": [
+            "GetTickCount"
+          ],
+          "context": [
+            {
+              "line_number": 8151449,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8151450,
+              "text": "[T1] 0x00007ff74428cf42             | mov al, byte ptr [r10] | [Read 1Op]: "
+            },
+            {
+              "line_number": 8151451,
+              "text": "        [0x00007ffb4a4a612d] = 0x47 (71) -> \"GetTickCount\""
+            },
+            {
+              "line_number": 8151452,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8151453,
+              "text": "[T1] 0x00007ff74428cf58             | mov al, byte ptr [r14] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "query_performance_counter",
+      "label": "QueryPerformanceCounter",
+      "counts": {
+        "function_interceptor": 1,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 2,
+        "traceinstructions": 234,
+        "tracememory": 13
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 199,
+          "line_end": 214,
+          "header": "[+] RtlQueryPerformanceCounter...",
+          "matched_terms": [
+            "QueryPerformanceCounter"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "0x7ff744282cb5",
+          "content": "[+] RtlQueryPerformanceCounter...\n    Thread: 0\n    Id de chamada: 0\n    Endereço da rotina: 0x7ffb4af10160\n    Parâmetros:\n        PerformanceCounter: 0x4ff8e8\n        PerformanceFrequency: 0x7ff74435b202\n    Endereço da função chamante: 0x7ff744282cb5\n  [-] Início da chamada RtlQueryPerformanceCounter\n    PerformanceCounter é NULL, não foi possível ler o valor.\n    Valor de PerformanceFrequency: 0\n    Operação concluída.\n  [-] Chamada RtlQueryPerformanceCounter concluída\n[*] Concluído\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 16,
+          "method": "M1",
+          "target_address": "0x7ffb4a415f50",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "QueryPerformanceCounter",
+          "matched_terms": [
+            "QueryPerformanceCounter"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 29,
+          "method": "M2",
+          "target_address": "0x7ffb4a415f50",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "QueryPerformanceCounter",
+          "matched_terms": [
+            "QueryPerformanceCounter"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 252879,
+          "matched_terms": [
+            "QueryPerformanceCounter"
+          ],
+          "context": [
+            {
+              "line_number": 252877,
+              "text": "0x00007ffb4af026bd ntdll.dll:RtlVirtualUnwind+0x0000000018dd                                    sub rdx, r14                                 | [T0] rdx = 0x40614e88f, rflags = 0x212"
+            },
+            {
+              "line_number": 252878,
+              "text": "0x00007ffb4af026c0 ntdll.dll:RtlVirtualUnwind+0x0000000018e0                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ff744359714 (140699978012436)"
+            },
+            {
+              "line_number": 252879,
+              "text": "0x00007ffb4af026c3 ntdll.dll:RtlVirtualUnwind+0x0000000018e3                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x51] -> 81 = \"'Q'\", memval [0x00007ffb4a4a7fa3] -> 0x51 (81) = \"QueryPerformanceCounter\", rflags = 0x212"
+            },
+            {
+              "line_number": 252880,
+              "text": "0x00007ffb4af026c6 ntdll.dll:RtlVirtualUnwind+0x0000000018e6                                    jnz 0x7ffb4af02799                           | [T0]"
+            },
+            {
+              "line_number": 252881,
+              "text": "0x00007ffb4af026cc ntdll.dll:RtlVirtualUnwind+0x0000000018ec                                    inc rax                                      | [T0] rax = 0x7ff744359715, rflags = 0x202"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 8234173,
+          "matched_terms": [
+            "QueryPerformanceCounter"
+          ],
+          "context": [
+            {
+              "line_number": 8234171,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8234172,
+              "text": "[T1] 0x00007ff74428cf42             | mov al, byte ptr [r10] | [Read 1Op]: "
+            },
+            {
+              "line_number": 8234173,
+              "text": "        [0x00007ffb4a4a7fa3] = 0x51 (81) -> \"QueryPerformanceCounter\""
+            },
+            {
+              "line_number": 8234174,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8234175,
+              "text": "[T1] 0x00007ff74428cf58             | mov al, byte ptr [r14] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "enum_system_firmware_tables",
+      "label": "EnumSystemFirmwareTables",
+      "counts": {
+        "function_interceptor": 0,
+        "tracefcncall_m1": 0,
+        "tracefcncall_m2": 0,
+        "traceinstructions": 5,
+        "tracememory": 6
+      },
+      "evidence": {
+        "function_interceptor": null,
+        "tracefcncall_m1": null,
+        "tracefcncall_m2": null,
+        "traceinstructions": {
+          "trigger_line": 21456974,
+          "matched_terms": [
+            "EnumSystemFirmwareTables"
+          ],
+          "context": [
+            {
+              "line_number": 21456972,
+              "text": "0x00007ffb4af022ed ntdll.dll:RtlVirtualUnwind+0x00000000150d                                    sub rdx, rbp                                 | [T1] rdx = 0x389a26, rflags = 0x202"
+            },
+            {
+              "line_number": 21456973,
+              "text": "0x00007ffb4af022f0 ntdll.dll:RtlVirtualUnwind+0x000000001510                                    movzx eax, byte ptr [rcx]                    | [T1] eax = 0x7ffb48adc8e0 (140717232867552)"
+            },
+            {
+              "line_number": 21456974,
+              "text": "0x00007ffb4af022f3 ntdll.dll:RtlVirtualUnwind+0x000000001513                                    cmp al, byte ptr [rcx+rdx*1]                 | [T1] al [0x45] -> 69 = \"'E'\", memval [0x00007ffb48e66306] -> 0x45 (69) = \"EnumSystemFirmwareTables\", rflags = 0x202"
+            },
+            {
+              "line_number": 21456975,
+              "text": "0x00007ffb4af022f6 ntdll.dll:RtlVirtualUnwind+0x000000001516                                    jnz 0x7ffb4af02390                           | [T1]"
+            },
+            {
+              "line_number": 21456976,
+              "text": "0x00007ffb4af022fc ntdll.dll:RtlVirtualUnwind+0x00000000151c                                    inc rcx                                      | [T1] rcx = 0x7ffb48adc8e1, rflags = 0x206"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 410026,
+          "matched_terms": [
+            "EnumSystemFirmwareTables"
+          ],
+          "context": [
+            {
+              "line_number": 410024,
+              "text": "[T0] 0x00007ff7442810a0 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x0000000000a0 | rep cmpsb byte ptr [rsi], byte ptr [rdi] | [Read 2Op]: "
+            },
+            {
+              "line_number": 410025,
+              "text": " | [Read 1Op]: "
+            },
+            {
+              "line_number": 410026,
+              "text": "        [0x00007ffb4a4a358f] = 0x45 (69) -> \"EnumSystemFirmwareTables\""
+            },
+            {
+              "line_number": 410027,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 410028,
+              "text": "[T0] 0x00007ff744281080 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x000000000080 | movzx eax, word ptr [rbp+r8*2] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "localalloc",
+      "label": "LocalAlloc",
+      "counts": {
+        "function_interceptor": 0,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 2,
+        "traceinstructions": 58,
+        "tracememory": 3
+      },
+      "evidence": {
+        "function_interceptor": null,
+        "tracefcncall_m1": {
+          "line_number": 9,
+          "method": "M1",
+          "target_address": "0x7ffb4a418800",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "LocalAlloc",
+          "matched_terms": [
+            "LocalAlloc"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 17,
+          "method": "M2",
+          "target_address": "0x7ffb4a418800",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "LocalAlloc",
+          "matched_terms": [
+            "LocalAlloc"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 277226,
+          "matched_terms": [
+            "LocalAlloc"
+          ],
+          "context": [
+            {
+              "line_number": 277224,
+              "text": "0x00007ffb4af026bd ntdll.dll:RtlVirtualUnwind+0x0000000018dd                                    sub rdx, r14                                 | [T0] rdx = 0x4061535e9, rflags = 0x212"
+            },
+            {
+              "line_number": 277225,
+              "text": "0x00007ffb4af026c0 ntdll.dll:RtlVirtualUnwind+0x0000000018e0                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ff744353d9e (140699977989534)"
+            },
+            {
+              "line_number": 277226,
+              "text": "0x00007ffb4af026c3 ntdll.dll:RtlVirtualUnwind+0x0000000018e3                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x4c] -> 76 = \"'L'\", memval [0x00007ffb4a4a7387] -> 0x4c (76) = \"LocalAlloc\", rflags = 0x212"
+            },
+            {
+              "line_number": 277227,
+              "text": "0x00007ffb4af026c6 ntdll.dll:RtlVirtualUnwind+0x0000000018e6                                    jnz 0x7ffb4af02799                           | [T0]"
+            },
+            {
+              "line_number": 277228,
+              "text": "0x00007ffb4af026cc ntdll.dll:RtlVirtualUnwind+0x0000000018ec                                    inc rax                                      | [T0] rax = 0x7ff744353d9f, rflags = 0x206"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 8226679,
+          "matched_terms": [
+            "LocalAlloc"
+          ],
+          "context": [
+            {
+              "line_number": 8226677,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8226678,
+              "text": "[T1] 0x00007ff74428cf42             | mov al, byte ptr [r10] | [Read 1Op]: "
+            },
+            {
+              "line_number": 8226679,
+              "text": "        [0x00007ffb4a4a7387] = 0x4c (76) -> \"LocalAlloc\""
+            },
+            {
+              "line_number": 8226680,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8226681,
+              "text": "[T1] 0x00007ff74428cf58             | mov al, byte ptr [r14] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "virtualprotect",
+      "label": "VirtualProtect",
+      "counts": {
+        "function_interceptor": 5,
+        "tracefcncall_m1": 5,
+        "tracefcncall_m2": 10,
+        "traceinstructions": 197,
+        "tracememory": 8
+      },
+      "evidence": {
+        "function_interceptor": {
+          "line_start": 122,
+          "line_end": 138,
+          "header": "[+] VirtualProtect...",
+          "matched_terms": [
+            "VirtualProtect"
+          ],
+          "module_name": "",
+          "thread": "0",
+          "call_id": "0",
+          "caller_address": "",
+          "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 0\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff744289000\n        dwSize: 11146 bytes\n        flNewProtect: 4\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 2\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+        },
+        "tracefcncall_m1": {
+          "line_number": 7,
+          "method": "M1",
+          "target_address": "0x7ffb4a41bfb0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "VirtualProtect",
+          "matched_terms": [
+            "VirtualProtect"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 13,
+          "method": "M2",
+          "target_address": "0x7ffb4a41bfb0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "VirtualProtect",
+          "matched_terms": [
+            "VirtualProtect"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 230244,
+          "matched_terms": [
+            "VirtualProtect"
+          ],
+          "context": [
+            {
+              "line_number": 230242,
+              "text": "0x00007ffb4af026bd ntdll.dll:RtlVirtualUnwind+0x0000000018dd                                    sub rdx, r14                                 | [T0] rdx = 0x40614f066, rflags = 0x206"
+            },
+            {
+              "line_number": 230243,
+              "text": "0x00007ffb4af026c0 ntdll.dll:RtlVirtualUnwind+0x0000000018e0                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ff74435b772 (140699978020722) -> \"'r'\""
+            },
+            {
+              "line_number": 230244,
+              "text": "0x00007ffb4af026c3 ntdll.dll:RtlVirtualUnwind+0x0000000018e3                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x57] -> 87 = \"'W'\", memval [0x00007ffb4a4aa7d8] -> 0x56 (86) = \"VirtualProtectEx\", rflags = 0x206"
+            },
+            {
+              "line_number": 230245,
+              "text": "0x00007ffb4af026c6 ntdll.dll:RtlVirtualUnwind+0x0000000018e6                                    jnz 0x7ffb4af02799                           | [T0]"
+            },
+            {
+              "line_number": 230246,
+              "text": "0x00007ffb4af02799 ntdll.dll:RtlVirtualUnwind+0x0000000019b9                                    sbb ecx, ecx                                 | [T0] rcx = 0, rflags = 0x246"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 18407,
+          "matched_terms": [
+            "VirtualProtect"
+          ],
+          "context": [
+            {
+              "line_number": 18405,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 18406,
+              "text": "[T0] 0x00007ff7443598a2 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x000000001902 | cmp al, byte ptr [rdi] | [Read 1Op]: "
+            },
+            {
+              "line_number": 18407,
+              "text": "        [0x00007ffb4a4aa7d8] = 0x56 (86) -> \"VirtualProtectEx\""
+            },
+            {
+              "line_number": 18408,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 18409,
+              "text": "[T0] 0x00007ff7443519c4 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.vmp1+0x0000000009ac | pop rax | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "heapfree",
+      "label": "HeapFree",
+      "counts": {
+        "function_interceptor": 0,
+        "tracefcncall_m1": 1,
+        "tracefcncall_m2": 1,
+        "traceinstructions": 31,
+        "tracememory": 4
+      },
+      "evidence": {
+        "function_interceptor": null,
+        "tracefcncall_m1": {
+          "line_number": 95,
+          "method": "M1",
+          "target_address": "0x7ffb4a4158b0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "HeapFree",
+          "matched_terms": [
+            "HeapFree"
+          ]
+        },
+        "tracefcncall_m2": {
+          "line_number": 140,
+          "method": "M2",
+          "target_address": "0x7ffb4a4158b0",
+          "thread": 0,
+          "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+          "symbol": "HeapFree",
+          "matched_terms": [
+            "HeapFree"
+          ]
+        },
+        "traceinstructions": {
+          "trigger_line": 266019,
+          "matched_terms": [
+            "HeapFree"
+          ],
+          "context": [
+            {
+              "line_number": 266017,
+              "text": "0x00007ffb4af026bd ntdll.dll:RtlVirtualUnwind+0x0000000018dd                                    sub rdx, r14                                 | [T0] rdx = 0x40614dea4, rflags = 0x212"
+            },
+            {
+              "line_number": 266018,
+              "text": "0x00007ffb4af026c0 ntdll.dll:RtlVirtualUnwind+0x0000000018e0                                    movzx ecx, byte ptr [rax]                    | [T0] ecx = 0x7ff74435876e (140699978008430) -> \"'n'\""
+            },
+            {
+              "line_number": 266019,
+              "text": "0x00007ffb4af026c3 ntdll.dll:RtlVirtualUnwind+0x0000000018e3                                    cmp cl, byte ptr [rax+rdx*1]                 | [T0] cl [0x48] -> 72 = \"'H'\", memval [0x00007ffb4a4a6612] -> 0x48 (72) = \"HeapFree\", rflags = 0x212"
+            },
+            {
+              "line_number": 266020,
+              "text": "0x00007ffb4af026c6 ntdll.dll:RtlVirtualUnwind+0x0000000018e6                                    jnz 0x7ffb4af02799                           | [T0]"
+            },
+            {
+              "line_number": 266021,
+              "text": "0x00007ffb4af026cc ntdll.dll:RtlVirtualUnwind+0x0000000018ec                                    inc rax                                      | [T0] rax = 0x7ff74435876f, rflags = 0x206"
+            }
+          ]
+        },
+        "tracememory": {
+          "trigger_line": 8155348,
+          "matched_terms": [
+            "HeapFree"
+          ],
+          "context": [
+            {
+              "line_number": 8155346,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8155347,
+              "text": "[T1] 0x00007ff74428cf42             | mov al, byte ptr [r10] | [Read 1Op]: "
+            },
+            {
+              "line_number": 8155348,
+              "text": "        [0x00007ffb4a4a6612] = 0x48 (72) -> \"HeapFree\""
+            },
+            {
+              "line_number": 8155349,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 8155350,
+              "text": "[T1] 0x00007ff74428cf58             | mov al, byte ptr [r14] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fatalexit",
+      "label": "FatalExit",
+      "counts": {
+        "function_interceptor": 0,
+        "tracefcncall_m1": 0,
+        "tracefcncall_m2": 0,
+        "traceinstructions": 0,
+        "tracememory": 6
+      },
+      "evidence": {
+        "function_interceptor": null,
+        "tracefcncall_m1": null,
+        "tracefcncall_m2": null,
+        "traceinstructions": null,
+        "tracememory": {
+          "trigger_line": 410458,
+          "matched_terms": [
+            "FatalExit"
+          ],
+          "context": [
+            {
+              "line_number": 410456,
+              "text": "[T0] 0x00007ff7442810a0 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x0000000000a0 | rep cmpsb byte ptr [rsi], byte ptr [rdi] | [Read 2Op]: "
+            },
+            {
+              "line_number": 410457,
+              "text": " | [Read 1Op]: "
+            },
+            {
+              "line_number": 410458,
+              "text": "        [0x00007ffb4a4a37ba] = 0x46 (70) -> \"FatalExit\""
+            },
+            {
+              "line_number": 410459,
+              "text": "-------------------------------------------------------------------------------------------------------------------------------------"
+            },
+            {
+              "line_number": 410460,
+              "text": "[T0] 0x00007ff744281080 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x000000000080 | movzx eax, word ptr [rbp+r8*2] | [Read 1Op]: "
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "load_library_a",
+      "to": "is_debugger_present",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "is_debugger_present",
+      "to": "check_remote_debugger_present",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "check_remote_debugger_present",
+      "to": "zw_query_information_process",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "zw_query_information_process",
+      "to": "zw_set_information_thread",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "zw_set_information_thread",
+      "to": "gettickcount",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "gettickcount",
+      "to": "query_performance_counter",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "query_performance_counter",
+      "to": "enum_system_firmware_tables",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "enum_system_firmware_tables",
+      "to": "localalloc",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "localalloc",
+      "to": "virtualprotect",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "virtualprotect",
+      "to": "heapfree",
+      "relation": "precede_no_fluxo_observado"
+    },
+    {
+      "from": "heapfree",
+      "to": "fatalexit",
+      "relation": "precede_no_fluxo_observado"
+    }
+  ],
+  "key_call_edges": [
+    {
+      "line_number": 637862,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a4204f0",
+      "dst_symbol": "KERNEL32.DLL:IsDebuggerPresent",
+      "thread": 0,
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a4204f0 KERNEL32.DLL:IsDebuggerPresent [T0] (0, 0, 0xffffffff, 0x1, 0x7ff74435b202, 0x4ff870, 0x2551f9be, ...)"
+    },
+    {
+      "line_number": 666972,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a401250",
+      "dst_symbol": "KERNEL32.DLL:CheckRemoteDebuggerPresent",
+      "thread": 0,
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a401250 KERNEL32.DLL:CheckRemoteDebuggerPresent [T0] (0xffffffffffffffff, 0x4ff870, 0xffffffff, 0x1, 0x4ff848, 0x7ffb4aed0000, 0, ...)"
+    },
+    {
+      "line_number": 666981,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c40972",
+      "src_symbol": "KERNELBASE.dll:CheckRemoteDebuggerPresent+0x000000000012",
+      "dst_addr": "0x00007ffb48c99f15",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x0000000231b5",
+      "thread": 0,
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c40972 KERNELBASE.dll:CheckRemoteDebuggerPresent+0x000000000012 -> 0x00007ffb48c99f15 KERNELBASE.dll:TlsGetValue+0x0000000231b5 [T0] (0xffffffffffffffff, 0x4ff870, 0xffffffff, 0x1, 0x7ffb4b035091, 0x85000000806, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 666984,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c4097b",
+      "src_symbol": "KERNELBASE.dll:CheckRemoteDebuggerPresent+0x00000000001b",
+      "dst_addr": "0x00007ffb48c99f15",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x0000000231b5",
+      "thread": 0,
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c4097b KERNELBASE.dll:CheckRemoteDebuggerPresent+0x00000000001b -> 0x00007ffb48c99f15 KERNELBASE.dll:TlsGetValue+0x0000000231b5 [T0] (0xffffffffffffffff, 0x4ff870, 0xffffffff, 0x1, 0x7ffb4b035091, 0x85000000806, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 666990,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48c40992",
+      "src_symbol": "KERNELBASE.dll:CheckRemoteDebuggerPresent+0x000000000032",
+      "dst_addr": "0x00007ffb4af6d8b0",
+      "dst_symbol": "ntdll.dll:ZwQueryInformationProcess",
+      "thread": 0,
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent",
+        "ZwQueryInformationProcess"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48c40992 KERNELBASE.dll:CheckRemoteDebuggerPresent+0x000000000032 -> 0x00007ffb4af6d8b0 ntdll.dll:ZwQueryInformationProcess [T0] (0xffffffffffffffff, 0x7, 0x4feeb0, 0x8, 0, 0x85000000806, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 667000,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c409a0",
+      "src_symbol": "KERNELBASE.dll:CheckRemoteDebuggerPresent+0x000000000040",
+      "dst_addr": "0x00007ffb48c99f0c",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x0000000231ac",
+      "thread": 0,
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c409a0 KERNELBASE.dll:CheckRemoteDebuggerPresent+0x000000000040 -> 0x00007ffb48c99f0c KERNELBASE.dll:TlsGetValue+0x0000000231ac [T0] (0x7ffb4af6d8c4, 0, 0x4fee68, 0x4ff058, 0, 0x85000000806, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 703854,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4af6d8b0",
+      "dst_symbol": "ntdll.dll:ZwQueryInformationProcess",
+      "thread": 0,
+      "matched_terms": [
+        "ZwQueryInformationProcess"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4af6d8b0 ntdll.dll:ZwQueryInformationProcess [T0] (0xffffffffffffffff, 0x1e, 0x4ff870, 0x8, 0, 0x202, 0x18580a62, ...)"
+    },
+    {
+      "line_number": 765997,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a41bfb0",
+      "dst_symbol": "KERNEL32.DLL:VirtualProtect",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff744289000, 0x2b8a, 0x4, 0x4ff870, 0x7ff74435b202, 0, 0x7ff604280000, ...)"
+    },
+    {
+      "line_number": 766015,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48c2853f",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x00000000002f",
+      "dst_addr": "0x00007ffb4af6df90",
+      "dst_symbol": "ntdll.dll:NtProtectVirtualMemory",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4feeb8, 0x4feeb0, 0x4, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 766027,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c28551",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x000000000041",
+      "dst_addr": "0x00007ffb48c9227a",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000001b51a",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 782588,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a41bfb0",
+      "dst_symbol": "KERNEL32.DLL:VirtualProtect",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff74434a000, 0x43ec, 0x40, 0x4ff870, 0x29c000, 0x7ff74435b202, 0, ...)"
+    },
+    {
+      "line_number": 782606,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48c2853f",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x00000000002f",
+      "dst_addr": "0x00007ffb4af6df90",
+      "dst_symbol": "ntdll.dll:NtProtectVirtualMemory",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4feeb8, 0x4feeb0, 0x40, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 782618,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c28551",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x000000000041",
+      "dst_addr": "0x00007ffb48c9227a",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000001b51a",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0x7ffb4aee9a26, 0x4feed0, ...)"
+    },
+    {
+      "line_number": 808637,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a418800",
+      "dst_symbol": "KERNEL32.DLL:LocalAlloc",
+      "thread": 0,
+      "matched_terms": [
+        "LocalAlloc"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a418800 KERNEL32.DLL:LocalAlloc [T0] (0, 0xd0, 0x1bdce78, 0x8, 0, 0x286, 0x4ff870, ...)"
+    },
+    {
+      "line_number": 808655,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48bf1b9b",
+      "src_symbol": "KERNELBASE.dll:LocalAlloc+0x00000000003b",
+      "dst_addr": "0x00007ffb48c86688",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000000f928",
+      "thread": 0,
+      "matched_terms": [
+        "LocalAlloc"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48bf1b9b KERNELBASE.dll:LocalAlloc+0x00000000003b -> 0x00007ffb48c86688 KERNELBASE.dll:TlsGetValue+0x00000000f928 [T0] (0, 0xd0, 0x1bdce78, 0x8, 0, 0x7ff74435aa3c, 0, ...)"
+    },
+    {
+      "line_number": 808667,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48bf1bc6",
+      "src_symbol": "KERNELBASE.dll:LocalAlloc+0x000000000066",
+      "dst_addr": "0x00007ffb4aefa9a0",
+      "dst_symbol": "ntdll.dll:RtlAllocateHeap",
+      "thread": 0,
+      "matched_terms": [
+        "LocalAlloc"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48bf1bc6 KERNELBASE.dll:LocalAlloc+0x000000000066 -> 0x00007ffb4aefa9a0 ntdll.dll:RtlAllocateHeap [T0] (5767168, 1310720, 208, 8, 0, 140699978017340, 0, ...)"
+    },
+    {
+      "line_number": 809249,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48bf1bd8",
+      "src_symbol": "KERNELBASE.dll:LocalAlloc+0x000000000078",
+      "dst_addr": "0x00007ffb48c866a0",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000000f940",
+      "thread": 0,
+      "matched_terms": [
+        "LocalAlloc"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48bf1bd8 KERNELBASE.dll:LocalAlloc+0x000000000078 -> 0x00007ffb48c866a0 KERNELBASE.dll:TlsGetValue+0x00000000f940 [T0] (0x7ffe0380, 0x1, 0, 0xf, 0, 0x7ff74435aa3c, 0, ...)"
+    },
+    {
+      "line_number": 1697752,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a41bfb0",
+      "dst_symbol": "KERNEL32.DLL:VirtualProtect",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff744289000, 0x2b8a, 0x2, 0x4ff870, 0, 0x7ff74435b202, 0x206, ...)"
+    },
+    {
+      "line_number": 1697770,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48c2853f",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x00000000002f",
+      "dst_addr": "0x00007ffb4af6df90",
+      "dst_symbol": "ntdll.dll:NtProtectVirtualMemory",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4fee58, 0x4fee50, 0x2, 0x4ff870, 0, 0x4fee70, ...)"
+    },
+    {
+      "line_number": 1697782,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c28551",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x000000000041",
+      "dst_addr": "0x00007ffb48c9227a",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000001b51a",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0, 0x4fee70, ...)"
+    },
+    {
+      "line_number": 1714404,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74435f254",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052",
+      "dst_addr": "0x00007ffb4a41bfb0",
+      "dst_symbol": "KERNEL32.DLL:VirtualProtect",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Call 0x00007ff74435f254 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:unnamedImageEntryPoint+0x000000004052 -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (0x7ff74434a000, 0x43ec, 0x20, 0x4ff870, 0, 0x17995a3e1, 0, ...)"
+    },
+    {
+      "line_number": 1714422,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48c2853f",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x00000000002f",
+      "dst_addr": "0x00007ffb4af6df90",
+      "dst_symbol": "ntdll.dll:NtProtectVirtualMemory",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4fee58, 0x4fee50, 0x20, 0x4ff870, 0, 0x4fee70, ...)"
+    },
+    {
+      "line_number": 1714434,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c28551",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x000000000041",
+      "dst_addr": "0x00007ffb48c9227a",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000001b51a",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff870, 0, 0x4fee70, ...)"
+    },
+    {
+      "line_number": 1890606,
+      "calltype": "Call",
+      "src_addr": "0x00007ff74428111d",
+      "src_symbol": "36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x00000000011d",
+      "dst_addr": "0x00007ffb4a41bfb0",
+      "dst_symbol": "KERNEL32.DLL:VirtualProtect",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Call 0x00007ff74428111d 36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f.exe:.text+0x00000000011d -> 0x00007ffb4a41bfb0 KERNEL32.DLL:VirtualProtect [T0] (140699977174736, 761553, 64, 5240896, 1, 340141064, 140699977121792, ...)"
+    },
+    {
+      "line_number": 1890624,
+      "calltype": "Call",
+      "src_addr": "0x00007ffb48c2853f",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x00000000002f",
+      "dst_addr": "0x00007ffb4af6df90",
+      "dst_symbol": "ntdll.dll:NtProtectVirtualMemory",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | | Call 0x00007ffb48c2853f KERNELBASE.dll:VirtualProtect+0x00000000002f -> 0x00007ffb4af6df90 ntdll.dll:NtProtectVirtualMemory [T0] (0xffffffffffffffff, 0x4ff818, 0x4ff810, 0x40, 0x4ff840, 0x7ff744281106, 0x7ff744280000, ...)"
+    },
+    {
+      "line_number": 1890636,
+      "calltype": "Tailcall",
+      "src_addr": "0x00007ffb48c28551",
+      "src_symbol": "KERNELBASE.dll:VirtualProtect+0x000000000041",
+      "dst_addr": "0x00007ffb48c9227a",
+      "dst_symbol": "KERNELBASE.dll:TlsGetValue+0x00000001b51a",
+      "thread": 0,
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "raw_line": "| | | Tailcall 0x00007ffb48c28551 KERNELBASE.dll:VirtualProtect+0x000000000041 -> 0x00007ffb48c9227a KERNELBASE.dll:TlsGetValue+0x00000001b51a [T0] (0x7ffb4af6dfa4, 0, 0x1bdce78, 0x8, 0x4ff840, 0x7ff744281106, 0x7ff744280000, ...)"
+    }
+  ],
+  "disassembly_windows_count": 1
+}

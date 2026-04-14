@@ -1,0 +1,84 @@
+{
+  "input": "examples/TraceInstructions_sample.csv",
+  "chunk_size": 3,
+  "total_rows": 9,
+  "chunks": 3,
+  "global_top_apis": [
+    [
+      "IsDebuggerPresent",
+      3
+    ],
+    [
+      "CheckRemoteDebuggerPresent",
+      1
+    ],
+    [
+      "NtQueryInformationProcess",
+      1
+    ],
+    [
+      "GetTickCount",
+      1
+    ],
+    [
+      "QueryPerformanceCounter",
+      1
+    ],
+    [
+      "LocalAlloc",
+      1
+    ],
+    [
+      "VirtualProtect",
+      1
+    ]
+  ],
+  "chunk_summaries": [
+    {
+      "chunk_id": 1,
+      "rows": 3,
+      "top_apis": [
+        [
+          "IsDebuggerPresent",
+          3
+        ]
+      ]
+    },
+    {
+      "chunk_id": 2,
+      "rows": 3,
+      "top_apis": [
+        [
+          "CheckRemoteDebuggerPresent",
+          1
+        ],
+        [
+          "NtQueryInformationProcess",
+          1
+        ],
+        [
+          "GetTickCount",
+          1
+        ]
+      ]
+    },
+    {
+      "chunk_id": 3,
+      "rows": 3,
+      "top_apis": [
+        [
+          "QueryPerformanceCounter",
+          1
+        ],
+        [
+          "LocalAlloc",
+          1
+        ],
+        [
+          "VirtualProtect",
+          1
+        ]
+      ]
+    }
+  ]
+}

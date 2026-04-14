@@ -1,0 +1,2904 @@
+{
+  "rows": [
+    {
+      "line_number": 1,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 2,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 3,
+      "method": "M1",
+      "target_address": "0x7ffb4a4204f0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsDebuggerPresent",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ]
+    },
+    {
+      "line_number": 4,
+      "method": "M1",
+      "target_address": "0x7ffb4a401250",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "CheckRemoteDebuggerPresent",
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ]
+    },
+    {
+      "line_number": 5,
+      "method": "M1",
+      "target_address": "0x7ffb4af6d8b0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "ZwQueryInformationProcess",
+      "matched_terms": [
+        "ZwQueryInformationProcess"
+      ]
+    },
+    {
+      "line_number": 6,
+      "method": "M1",
+      "target_address": "0x7ffb4af6d730",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "ZwSetInformationThread",
+      "matched_terms": [
+        "ZwSetInformationThread"
+      ]
+    },
+    {
+      "line_number": 7,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 8,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 9,
+      "method": "M1",
+      "target_address": "0x7ffb4a418800",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LocalAlloc",
+      "matched_terms": [
+        "LocalAlloc"
+      ]
+    },
+    {
+      "line_number": 10,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 11,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 12,
+      "method": "M1",
+      "target_address": "0x7ffb4a417ec0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetSystemTimeAsFileTime",
+      "matched_terms": []
+    },
+    {
+      "line_number": 13,
+      "method": "M1",
+      "target_address": "0x7ffb4a424bd0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetCurrentProcessId",
+      "matched_terms": []
+    },
+    {
+      "line_number": 14,
+      "method": "M1",
+      "target_address": "0x7ffb4a415890",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetCurrentThreadId",
+      "matched_terms": []
+    },
+    {
+      "line_number": 15,
+      "method": "M1",
+      "target_address": "0x7ffb4a415980",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetTickCount",
+      "matched_terms": [
+        "GetTickCount"
+      ]
+    },
+    {
+      "line_number": 16,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "QueryPerformanceCounter",
+      "matched_terms": [
+        "QueryPerformanceCounter"
+      ]
+    },
+    {
+      "line_number": 17,
+      "method": "M1",
+      "target_address": "0x7ffb4a41db70",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetStartupInfoW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 18,
+      "method": "M1",
+      "target_address": "0x7ffb4a420290",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "HeapCreate",
+      "matched_terms": []
+    },
+    {
+      "line_number": 19,
+      "method": "M1",
+      "target_address": "0x7ffb4a421350",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetVersion",
+      "matched_terms": []
+    },
+    {
+      "line_number": 20,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 21,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 22,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 23,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 24,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 25,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 26,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 27,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 28,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 29,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 30,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 31,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 32,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 33,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 34,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 35,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 36,
+      "method": "M1",
+      "target_address": "0x7ffb4a420510",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsAlloc",
+      "matched_terms": []
+    },
+    {
+      "line_number": 37,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 38,
+      "method": "M1",
+      "target_address": "0x7ffb4a41c610",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsSetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 39,
+      "method": "M1",
+      "target_address": "0x7ffb4aeffaa0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEnterCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 40,
+      "method": "M1",
+      "target_address": "0x7ffb4aeff230",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlLeaveCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 41,
+      "method": "M1",
+      "target_address": "0x7ffb4aeffaa0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEnterCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 42,
+      "method": "M1",
+      "target_address": "0x7ffb4aeff230",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlLeaveCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 43,
+      "method": "M1",
+      "target_address": "0x7ffb4a415890",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetCurrentThreadId",
+      "matched_terms": []
+    },
+    {
+      "line_number": 44,
+      "method": "M1",
+      "target_address": "0x7ffb4a41db70",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetStartupInfoW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 45,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 46,
+      "method": "M1",
+      "target_address": "0x7ffb4a41d7d0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetStdHandle",
+      "matched_terms": []
+    },
+    {
+      "line_number": 47,
+      "method": "M1",
+      "target_address": "0x7ffb4a41d7d0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetStdHandle",
+      "matched_terms": []
+    },
+    {
+      "line_number": 48,
+      "method": "M1",
+      "target_address": "0x7ffb4a4250f0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetFileType",
+      "matched_terms": []
+    },
+    {
+      "line_number": 49,
+      "method": "M1",
+      "target_address": "0x7ffb4a424d20",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "InitializeCriticalSectionAndSpinCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 50,
+      "method": "M1",
+      "target_address": "0x7ffb4a41d7d0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetStdHandle",
+      "matched_terms": []
+    },
+    {
+      "line_number": 51,
+      "method": "M1",
+      "target_address": "0x7ffb4a421620",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetHandleCount",
+      "matched_terms": []
+    },
+    {
+      "line_number": 52,
+      "method": "M1",
+      "target_address": "0x7ffb4a41f700",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetCommandLineW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 53,
+      "method": "M1",
+      "target_address": "0x7ffb4a41f9d0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetEnvironmentStringsW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 54,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 55,
+      "method": "M1",
+      "target_address": "0x7ffb4a41f9f0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FreeEnvironmentStringsW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 56,
+      "method": "M1",
+      "target_address": "0x7ffb4a41e260",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetModuleFileNameW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 57,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 58,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 59,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 60,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 61,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 62,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 63,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 64,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 65,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 66,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 67,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 68,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 69,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 70,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 71,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 72,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 73,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 74,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 75,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 76,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 77,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 78,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 79,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 80,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 81,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 82,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 83,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 84,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 85,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 86,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 87,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 88,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 89,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 90,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 91,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 92,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 93,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 94,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 95,
+      "method": "M1",
+      "target_address": "0x7ffb4a4158b0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "HeapFree",
+      "matched_terms": [
+        "HeapFree"
+      ]
+    },
+    {
+      "line_number": 96,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 97,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 98,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 99,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 100,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 101,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 102,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 103,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 104,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 105,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 106,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 107,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 108,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 109,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 110,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 111,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 112,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 113,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 114,
+      "method": "M1",
+      "target_address": "0x7ffb4aeffaa0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEnterCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 115,
+      "method": "M1",
+      "target_address": "0x7ffb4aeff230",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlLeaveCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 116,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 117,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 118,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 119,
+      "method": "M1",
+      "target_address": "0x7ffb4a41e3a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetACP",
+      "matched_terms": []
+    },
+    {
+      "line_number": 120,
+      "method": "M1",
+      "target_address": "0x7ffb4aefa9a0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlAllocateHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 121,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 122,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 123,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 124,
+      "method": "M1",
+      "target_address": "0x7ffb4a41ffb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsValidCodePage",
+      "matched_terms": []
+    },
+    {
+      "line_number": 125,
+      "method": "M1",
+      "target_address": "0x7ffb4a41e620",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetCPInfo",
+      "matched_terms": []
+    },
+    {
+      "line_number": 126,
+      "method": "M1",
+      "target_address": "0x7ffb4a41e620",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetCPInfo",
+      "matched_terms": []
+    },
+    {
+      "line_number": 127,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 128,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 129,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 130,
+      "method": "M1",
+      "target_address": "0x7ffb4a415b50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "MultiByteToWideChar",
+      "matched_terms": []
+    },
+    {
+      "line_number": 131,
+      "method": "M1",
+      "target_address": "0x7ffb4a415b50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "MultiByteToWideChar",
+      "matched_terms": []
+    },
+    {
+      "line_number": 132,
+      "method": "M1",
+      "target_address": "0x7ffb4a41e670",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetStringTypeW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 133,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 134,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 135,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 136,
+      "method": "M1",
+      "target_address": "0x7ffb4a415b50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "MultiByteToWideChar",
+      "matched_terms": []
+    },
+    {
+      "line_number": 137,
+      "method": "M1",
+      "target_address": "0x7ffb4a415b50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "MultiByteToWideChar",
+      "matched_terms": []
+    },
+    {
+      "line_number": 138,
+      "method": "M1",
+      "target_address": "0x7ffb4a4187e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LCMapStringW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 139,
+      "method": "M1",
+      "target_address": "0x7ffb4a4187e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LCMapStringW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 140,
+      "method": "M1",
+      "target_address": "0x7ffb4a415e70",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "WideCharToMultiByte",
+      "matched_terms": []
+    },
+    {
+      "line_number": 141,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f30",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 142,
+      "method": "M1",
+      "target_address": "0x7ffb4a418820",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "FlsGetValue",
+      "matched_terms": []
+    },
+    {
+      "line_number": 143,
+      "method": "M1",
+      "target_address": "0x7ffb4a415ff0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetLastError",
+      "matched_terms": []
+    },
+    {
+      "line_number": 144,
+      "method": "M1",
+      "target_address": "0x7ffb4a415b50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "MultiByteToWideChar",
+      "matched_terms": []
+    },
+    {
+      "line_number": 145,
+      "method": "M1",
+      "target_address": "0x7ffb4a415b50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "MultiByteToWideChar",
+      "matched_terms": []
+    },
+    {
+      "line_number": 146,
+      "method": "M1",
+      "target_address": "0x7ffb4a4187e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LCMapStringW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 147,
+      "method": "M1",
+      "target_address": "0x7ffb4a4187e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LCMapStringW",
+      "matched_terms": []
+    },
+    {
+      "line_number": 148,
+      "method": "M1",
+      "target_address": "0x7ffb4a415e70",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "WideCharToMultiByte",
+      "matched_terms": []
+    },
+    {
+      "line_number": 149,
+      "method": "M1",
+      "target_address": "0x7ffb4aeffaa0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEnterCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 150,
+      "method": "M1",
+      "target_address": "0x7ffb4aeff230",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlLeaveCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 151,
+      "method": "M1",
+      "target_address": "0x7ffb4a420140",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "SetUnhandledExceptionFilter",
+      "matched_terms": []
+    },
+    {
+      "line_number": 152,
+      "method": "M1",
+      "target_address": "0x7ffb4aeffaa0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEnterCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 153,
+      "method": "M1",
+      "target_address": "0x7ffb4af3b3e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlDecodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 154,
+      "method": "M1",
+      "target_address": "0x7ffb4af3b3e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlDecodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 155,
+      "method": "M1",
+      "target_address": "0x7ffb4aef4160",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlSizeHeap",
+      "matched_terms": []
+    },
+    {
+      "line_number": 156,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 157,
+      "method": "M1",
+      "target_address": "0x7ffb4af42f40",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlEncodePointer",
+      "matched_terms": []
+    },
+    {
+      "line_number": 158,
+      "method": "M1",
+      "target_address": "0x7ffb4aeff230",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlLeaveCriticalSection",
+      "matched_terms": []
+    },
+    {
+      "line_number": 159,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 160,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 161,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b8e0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "CreateThread",
+      "matched_terms": []
+    },
+    {
+      "line_number": 162,
+      "method": "M1",
+      "target_address": "0x7ffb4a424e10",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "WaitForSingleObject",
+      "matched_terms": []
+    },
+    {
+      "line_number": 163,
+      "method": "M1",
+      "target_address": "0x7ffb4a4204f0",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsDebuggerPresent",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ]
+    },
+    {
+      "line_number": 164,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 165,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 166,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 167,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 168,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 169,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 170,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 171,
+      "method": "M1",
+      "target_address": "0x7ffb4a418840",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualAlloc",
+      "matched_terms": []
+    },
+    {
+      "line_number": 172,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 173,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 174,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 175,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 176,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 177,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 178,
+      "method": "M1",
+      "target_address": "0x7ffb4af74400",
+      "thread": 1,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "RtlMoveMemory",
+      "matched_terms": []
+    },
+    {
+      "line_number": 179,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 180,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 181,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 182,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 183,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 184,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 185,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 186,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 187,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 188,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 189,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 190,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 191,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 192,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 193,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 194,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 195,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 196,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 197,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 198,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 199,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 200,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 201,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 202,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 203,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 204,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 205,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 206,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 207,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 208,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 209,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 210,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 211,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 212,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 213,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 214,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 215,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 216,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 217,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 218,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 219,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 220,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 221,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 222,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 223,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 224,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 225,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 226,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 227,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 228,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 229,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 230,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 231,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 232,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 233,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 234,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 235,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 236,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 237,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 238,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 239,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 240,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 241,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 242,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 243,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 244,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 245,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 246,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 247,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 248,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 249,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 250,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 251,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 252,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 253,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 254,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 255,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 256,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 257,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 258,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 259,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 260,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 261,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 262,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 263,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 264,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 265,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 266,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 267,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 268,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 269,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 270,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 271,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 272,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 273,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 274,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 275,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 276,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 277,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 278,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 279,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 280,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 281,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 282,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 283,
+      "method": "M1",
+      "target_address": "0x7ffb4a41b200",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetProcAddress",
+      "matched_terms": []
+    },
+    {
+      "line_number": 284,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    }
+  ],
+  "focus_rows": [
+    {
+      "line_number": 1,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 2,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 3,
+      "method": "M1",
+      "target_address": "0x7ffb4a4204f0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsDebuggerPresent",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ]
+    },
+    {
+      "line_number": 4,
+      "method": "M1",
+      "target_address": "0x7ffb4a401250",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "CheckRemoteDebuggerPresent",
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ]
+    },
+    {
+      "line_number": 5,
+      "method": "M1",
+      "target_address": "0x7ffb4af6d8b0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "ZwQueryInformationProcess",
+      "matched_terms": [
+        "ZwQueryInformationProcess"
+      ]
+    },
+    {
+      "line_number": 6,
+      "method": "M1",
+      "target_address": "0x7ffb4af6d730",
+      "thread": 0,
+      "module_path": "C:\\Windows\\SYSTEM32\\ntdll.dll",
+      "symbol": "ZwSetInformationThread",
+      "matched_terms": [
+        "ZwSetInformationThread"
+      ]
+    },
+    {
+      "line_number": 7,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 8,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 9,
+      "method": "M1",
+      "target_address": "0x7ffb4a418800",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LocalAlloc",
+      "matched_terms": [
+        "LocalAlloc"
+      ]
+    },
+    {
+      "line_number": 10,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 11,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 15,
+      "method": "M1",
+      "target_address": "0x7ffb4a415980",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "GetTickCount",
+      "matched_terms": [
+        "GetTickCount"
+      ]
+    },
+    {
+      "line_number": 16,
+      "method": "M1",
+      "target_address": "0x7ffb4a415f50",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "QueryPerformanceCounter",
+      "matched_terms": [
+        "QueryPerformanceCounter"
+      ]
+    },
+    {
+      "line_number": 95,
+      "method": "M1",
+      "target_address": "0x7ffb4a4158b0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "HeapFree",
+      "matched_terms": [
+        "HeapFree"
+      ]
+    },
+    {
+      "line_number": 160,
+      "method": "M1",
+      "target_address": "0x7ffb4a41bfb0",
+      "thread": 0,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "VirtualProtect",
+      "matched_terms": [
+        "VirtualProtect"
+      ]
+    },
+    {
+      "line_number": 163,
+      "method": "M1",
+      "target_address": "0x7ffb4a4204f0",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "IsDebuggerPresent",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ]
+    },
+    {
+      "line_number": 168,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 179,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 278,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "line_number": 284,
+      "method": "M1",
+      "target_address": "0x7ffb4a420830",
+      "thread": 1,
+      "module_path": "C:\\Windows\\System32\\KERNEL32.DLL",
+      "symbol": "LoadLibraryA",
+      "matched_terms": [
+        "LoadLibraryA"
+      ]
+    }
+  ],
+  "symbol_counts_top20": [
+    [
+      "GetProcAddress",
+      110
+    ],
+    [
+      "RtlAllocateHeap",
+      43
+    ],
+    [
+      "RtlEncodePointer",
+      15
+    ],
+    [
+      "InitializeCriticalSectionAndSpinCount",
+      15
+    ],
+    [
+      "GetLastError",
+      7
+    ],
+    [
+      "FlsGetValue",
+      7
+    ],
+    [
+      "SetLastError",
+      7
+    ],
+    [
+      "RtlMoveMemory",
+      7
+    ],
+    [
+      "LoadLibraryA",
+      6
+    ],
+    [
+      "MultiByteToWideChar",
+      6
+    ],
+    [
+      "VirtualProtect",
+      5
+    ],
+    [
+      "RtlEnterCriticalSection",
+      5
+    ],
+    [
+      "RtlLeaveCriticalSection",
+      5
+    ],
+    [
+      "LCMapStringW",
+      4
+    ],
+    [
+      "GetStdHandle",
+      3
+    ],
+    [
+      "IsDebuggerPresent",
+      2
+    ],
+    [
+      "GetCurrentThreadId",
+      2
+    ],
+    [
+      "GetStartupInfoW",
+      2
+    ],
+    [
+      "GetCPInfo",
+      2
+    ],
+    [
+      "WideCharToMultiByte",
+      2
+    ]
+  ]
+}

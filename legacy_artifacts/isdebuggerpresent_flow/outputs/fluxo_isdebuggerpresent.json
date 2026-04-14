@@ -1,0 +1,182 @@
+{
+  "focus_function": "IsDebuggerPresent",
+  "source_document": "Análise dos Resultados de Execução - Full-Execution-Sample-1.docx",
+  "limitations": [
+    "Os arquivos CDF brutos não estavam disponíveis no sandbox.",
+    "Endereços, offsets, argumentos e timestamps não puderam ser extraídos diretamente."
+  ],
+  "nodes": [
+    {
+      "id": "load_core_dlls",
+      "label": "Carregamento de kernel32.dll e ntdll.dll",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "isdebuggerpresent",
+      "label": "IsDebuggerPresent",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "tracefcncall_m1",
+      "label": "Origem por call direta",
+      "file": "TraceFcnCall.M1.cdf",
+      "confidence": "inferido_alto"
+    },
+    {
+      "id": "tracefcncall_m2",
+      "label": "Origem por salto indireto ou resolução dinâmica",
+      "file": "TraceFcnCall.M2.cdf",
+      "confidence": "inferido_alto"
+    },
+    {
+      "id": "traceinstructions_branch",
+      "label": "Instrução exata e branch após o teste",
+      "file": "TraceInstructions.cdf",
+      "confidence": "inferido_alto"
+    },
+    {
+      "id": "checkremotedebuggerpresent",
+      "label": "CheckRemoteDebuggerPresent",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "ntqueryinformationprocess_30",
+      "label": "NtQueryInformationProcess classe 30",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "trace_memory_context",
+      "label": "Contexto de memória e buffers associados",
+      "file": "TraceMemory.cdf",
+      "confidence": "inferido_medio"
+    },
+    {
+      "id": "timing_evasion",
+      "label": "GetTickCount e QueryPerformanceCounter",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "anti_vm",
+      "label": "EnumSystemFirmwareTables e WMI",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "localalloc",
+      "label": "LocalAlloc",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "virtualprotect",
+      "label": "VirtualProtect RW para RX",
+      "file": "FunctionInterceptor.cdf + TraceMemory.cdf",
+      "confidence": "observado"
+    },
+    {
+      "id": "trace_disassembly_transfer",
+      "label": "Transferência para código desempacotado",
+      "file": "TraceDisassembly.cdf",
+      "confidence": "inferido_alto"
+    },
+    {
+      "id": "malware_identification",
+      "label": "Trojan 64-bit protegido por VMProtect",
+      "file": "Síntese analítica",
+      "confidence": "observado"
+    },
+    {
+      "id": "termination",
+      "label": "HeapFree e FatalExit",
+      "file": "FunctionInterceptor.cdf",
+      "confidence": "observado"
+    }
+  ],
+  "edges": [
+    {
+      "from": "load_core_dlls",
+      "to": "isdebuggerpresent",
+      "relation": "precede"
+    },
+    {
+      "from": "isdebuggerpresent",
+      "to": "tracefcncall_m1",
+      "relation": "origem_pode_ser_rastreada_em"
+    },
+    {
+      "from": "isdebuggerpresent",
+      "to": "tracefcncall_m2",
+      "relation": "origem_pode_ser_rastreada_em"
+    },
+    {
+      "from": "tracefcncall_m1",
+      "to": "traceinstructions_branch",
+      "relation": "desemboca_em"
+    },
+    {
+      "from": "tracefcncall_m2",
+      "to": "traceinstructions_branch",
+      "relation": "desemboca_em"
+    },
+    {
+      "from": "traceinstructions_branch",
+      "to": "checkremotedebuggerpresent",
+      "relation": "encadeia_para"
+    },
+    {
+      "from": "traceinstructions_branch",
+      "to": "ntqueryinformationprocess_30",
+      "relation": "encadeia_para"
+    },
+    {
+      "from": "ntqueryinformationprocess_30",
+      "to": "trace_memory_context",
+      "relation": "usa_ou_alimenta"
+    },
+    {
+      "from": "checkremotedebuggerpresent",
+      "to": "timing_evasion",
+      "relation": "precede"
+    },
+    {
+      "from": "ntqueryinformationprocess_30",
+      "to": "timing_evasion",
+      "relation": "precede"
+    },
+    {
+      "from": "timing_evasion",
+      "to": "anti_vm",
+      "relation": "precede"
+    },
+    {
+      "from": "anti_vm",
+      "to": "localalloc",
+      "relation": "precede"
+    },
+    {
+      "from": "localalloc",
+      "to": "virtualprotect",
+      "relation": "prepara_para"
+    },
+    {
+      "from": "virtualprotect",
+      "to": "trace_disassembly_transfer",
+      "relation": "leva_a"
+    },
+    {
+      "from": "trace_disassembly_transfer",
+      "to": "malware_identification",
+      "relation": "permite_classificar"
+    },
+    {
+      "from": "trace_disassembly_transfer",
+      "to": "termination",
+      "relation": "prossegue_para"
+    }
+  ]
+}

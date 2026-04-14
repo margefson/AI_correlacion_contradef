@@ -1,0 +1,32 @@
+flowchart TD
+    load_core_dlls["Carregamento de kernel32.dll e ntdll.dll\n[FunctionInterceptor.cdf]\n<observado>"]
+    isdebuggerpresent["IsDebuggerPresent\n[FunctionInterceptor.cdf]\n<observado>"]
+    tracefcncall_m1["Origem por call direta\n[TraceFcnCall.M1.cdf]\n<inferido_alto>"]
+    tracefcncall_m2["Origem por salto indireto ou resolução dinâmica\n[TraceFcnCall.M2.cdf]\n<inferido_alto>"]
+    traceinstructions_branch["Instrução exata e branch após o teste\n[TraceInstructions.cdf]\n<inferido_alto>"]
+    checkremotedebuggerpresent["CheckRemoteDebuggerPresent\n[FunctionInterceptor.cdf]\n<observado>"]
+    ntqueryinformationprocess_30["NtQueryInformationProcess classe 30\n[FunctionInterceptor.cdf]\n<observado>"]
+    trace_memory_context["Contexto de memória e buffers associados\n[TraceMemory.cdf]\n<inferido_medio>"]
+    timing_evasion["GetTickCount e QueryPerformanceCounter\n[FunctionInterceptor.cdf]\n<observado>"]
+    anti_vm["EnumSystemFirmwareTables e WMI\n[FunctionInterceptor.cdf]\n<observado>"]
+    localalloc["LocalAlloc\n[FunctionInterceptor.cdf]\n<observado>"]
+    virtualprotect["VirtualProtect RW para RX\n[FunctionInterceptor.cdf + TraceMemory.cdf]\n<observado>"]
+    trace_disassembly_transfer["Transferência para código desempacotado\n[TraceDisassembly.cdf]\n<inferido_alto>"]
+    malware_identification["Trojan 64-bit protegido por VMProtect\n[Síntese analítica]\n<observado>"]
+    termination["HeapFree e FatalExit\n[FunctionInterceptor.cdf]\n<observado>"]
+    load_core_dlls -->|precede| isdebuggerpresent
+    isdebuggerpresent -->|origem_pode_ser_rastreada_em| tracefcncall_m1
+    isdebuggerpresent -->|origem_pode_ser_rastreada_em| tracefcncall_m2
+    tracefcncall_m1 -->|desemboca_em| traceinstructions_branch
+    tracefcncall_m2 -->|desemboca_em| traceinstructions_branch
+    traceinstructions_branch -->|encadeia_para| checkremotedebuggerpresent
+    traceinstructions_branch -->|encadeia_para| ntqueryinformationprocess_30
+    ntqueryinformationprocess_30 -->|usa_ou_alimenta| trace_memory_context
+    checkremotedebuggerpresent -->|precede| timing_evasion
+    ntqueryinformationprocess_30 -->|precede| timing_evasion
+    timing_evasion -->|precede| anti_vm
+    anti_vm -->|precede| localalloc
+    localalloc -->|prepara_para| virtualprotect
+    virtualprotect -->|leva_a| trace_disassembly_transfer
+    trace_disassembly_transfer -->|permite_classificar| malware_identification
+    trace_disassembly_transfer -->|prossegue_para| termination

@@ -1,0 +1,24 @@
+flowchart TD
+    load_library_a["LoadLibraryA\nFI:5 M1:6 M2:12 TI:175 TM:4"]
+    is_debugger_present["IsDebuggerPresent\nFI:2 M1:2 M2:4 TI:26 TM:6"]
+    check_remote_debugger_present["CheckRemoteDebuggerPresent\nFI:1 M1:1 M2:2 TI:40 TM:8"]
+    zw_query_information_process["ZwQueryInformationProcess\nFI:1 M1:1 M2:2 TI:62 TM:4"]
+    zw_set_information_thread["ZwSetInformationThread\nFI:0 M1:1 M2:2 TI:9 TM:2"]
+    gettickcount["GetTickCount\nFI:1 M1:1 M2:1 TI:28 TM:14"]
+    query_performance_counter["QueryPerformanceCounter\nFI:1 M1:1 M2:2 TI:234 TM:13"]
+    enum_system_firmware_tables["EnumSystemFirmwareTables\nFI:0 M1:0 M2:0 TI:5 TM:6"]
+    localalloc["LocalAlloc\nFI:0 M1:1 M2:2 TI:58 TM:3"]
+    virtualprotect["VirtualProtect\nFI:5 M1:5 M2:10 TI:197 TM:8"]
+    heapfree["HeapFree\nFI:0 M1:1 M2:1 TI:31 TM:4"]
+    fatalexit["FatalExit\nFI:0 M1:0 M2:0 TI:0 TM:6"]
+    load_library_a -->|precede_no_fluxo_observado| is_debugger_present
+    is_debugger_present -->|precede_no_fluxo_observado| check_remote_debugger_present
+    check_remote_debugger_present -->|precede_no_fluxo_observado| zw_query_information_process
+    zw_query_information_process -->|precede_no_fluxo_observado| zw_set_information_thread
+    zw_set_information_thread -->|precede_no_fluxo_observado| gettickcount
+    gettickcount -->|precede_no_fluxo_observado| query_performance_counter
+    query_performance_counter -->|precede_no_fluxo_observado| enum_system_firmware_tables
+    enum_system_firmware_tables -->|precede_no_fluxo_observado| localalloc
+    localalloc -->|precede_no_fluxo_observado| virtualprotect
+    virtualprotect -->|precede_no_fluxo_observado| heapfree
+    heapfree -->|precede_no_fluxo_observado| fatalexit

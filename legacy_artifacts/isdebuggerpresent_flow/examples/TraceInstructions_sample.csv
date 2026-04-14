@@ -1,0 +1,10 @@
+step,address,api,instruction,note
+1,0x1020,IsDebuggerPresent,call qword ptr [IsDebuggerPresent],chamada ao anti-debug
+2,0x1021,IsDebuggerPresent,test eax eax,teste do retorno
+3,0x1022,IsDebuggerPresent,je 0x1100,branch para continuidade
+4,0x1030,CheckRemoteDebuggerPresent,call qword ptr [CheckRemoteDebuggerPresent],validacao complementar
+5,0x1040,NtQueryInformationProcess,call rax,consulta classe 30
+6,0x1050,GetTickCount,call qword ptr [GetTickCount],anti-overhead
+7,0x1060,QueryPerformanceCounter,call qword ptr [QueryPerformanceCounter],anti-overhead
+8,0x1090,LocalAlloc,call qword ptr [LocalAlloc],alocacao para unpacking
+9,0x10A0,VirtualProtect,call qword ptr [VirtualProtect],RW para RX

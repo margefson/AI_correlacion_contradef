@@ -1,0 +1,222 @@
+{
+  "total_blocks": 147,
+  "focus_blocks": [
+    {
+      "line_start": 61,
+      "line_end": 71,
+      "header": "[+] LoadLibraryA...",
+      "matched_terms": [
+        "LoadLibraryA"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] LoadLibraryA...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48c3a020\n    ParÃ¡metros:\n        lpLibFileName: kernel32.dll\n    Valor de retorno: 140717259227136\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 72,
+      "line_end": 82,
+      "header": "[+] LoadLibraryA...",
+      "matched_terms": [
+        "LoadLibraryA"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "1",
+      "caller_address": "",
+      "content": "[+] LoadLibraryA...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 1\n    EndereÃ§o da rotina: 7ffb48c3a020\n    ParÃ¡metros:\n        lpLibFileName: ntdll.dll\n    Valor de retorno: 140717270564864\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 83,
+      "line_end": 91,
+      "header": "[+] IsDebuggerPresent...",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] IsDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48bfb6c0\n    Valor de retorno: 0\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 92,
+      "line_end": 103,
+      "header": "[+] CheckRemoteDebuggerPresent...",
+      "matched_terms": [
+        "CheckRemoteDebuggerPresent"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] CheckRemoteDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb48c40960\n    ParÃ¢metros:\n        hProcess: 18446744073709551615\n        pbDebuggerPresent: FALSE\n    Valor de retorno: 1\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 104,
+      "line_end": 121,
+      "header": "[+] NtQueryInformationProcess...",
+      "matched_terms": [
+        "ZwQueryInformationProcess"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] NtQueryInformationProcess...\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 0x7ffb4af6d8b0\n    ParÃ¢metros:\n        ProcessHandle: 0xffffffffffffffff\n        ProcessInformationClass: 30\n        ProcessInformation: 0x4ff870\n        ProcessInformationLength: 8\n        ReturnLength: 0x0\n    EndereÃ§o da funÃ§Ã£o chamante: 0x7ff74435f256\n  [-] InÃ­cio da chamada NtQueryInformationProcess\n    Retorno NtQueryInformationProcess (NTSTATUS): 0xc0000353\n    Falha na operaÃ§Ã£o (NTSTATUS != 0). CÃ³digo: 0xc0000353\n  [-] Chamada NtQueryInformationProcess concluÃ­da\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 122,
+      "line_end": 138,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 0\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff744289000\n        dwSize: 11146 bytes\n        flNewProtect: 4\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 2\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "line_start": 139,
+      "line_end": 155,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "1",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 1\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff74434a000\n        dwSize: 17388 bytes\n        flNewProtect: 64\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 32\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "line_start": 156,
+      "line_end": 172,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "2",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 2\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff744289000\n        dwSize: 11146 bytes\n        flNewProtect: 2\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 4\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "line_start": 173,
+      "line_end": 189,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "3",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 3\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff74434a000\n        dwSize: 17388 bytes\n        flNewProtect: 32\n        lpflOldProtect (Endereço): 4ff870\n    Endereço da função chamante: 7ff74435f256\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699978035798\n    Proteção antiga: 64\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "line_start": 190,
+      "line_end": 198,
+      "header": "[+] GetTickCount...",
+      "matched_terms": [
+        "GetTickCount"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "",
+      "content": "[+] GetTickCount...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNEL32.DLL\n    Thread: 0\n    Id de chamada: 0\n    EndereÃ§o da rotina: 7ffb4a415980\n    Valor de retorno: 5894906\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 199,
+      "line_end": 214,
+      "header": "[+] RtlQueryPerformanceCounter...",
+      "matched_terms": [
+        "QueryPerformanceCounter"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "0",
+      "caller_address": "0x7ff744282cb5",
+      "content": "[+] RtlQueryPerformanceCounter...\n    Thread: 0\n    Id de chamada: 0\n    Endereço da rotina: 0x7ffb4af10160\n    Parâmetros:\n        PerformanceCounter: 0x4ff8e8\n        PerformanceFrequency: 0x7ff74435b202\n    Endereço da função chamante: 0x7ff744282cb5\n  [-] Início da chamada RtlQueryPerformanceCounter\n    PerformanceCounter é NULL, não foi possível ler o valor.\n    Valor de PerformanceFrequency: 0\n    Operação concluída.\n  [-] Chamada RtlQueryPerformanceCounter concluída\n[*] Concluído\n\n"
+    },
+    {
+      "line_start": 981,
+      "line_end": 997,
+      "header": "[+] VirtualProtect...",
+      "matched_terms": [
+        "VirtualProtect"
+      ],
+      "module_name": "",
+      "thread": "0",
+      "call_id": "4",
+      "caller_address": "",
+      "content": "[+] VirtualProtect...\n    Thread: 0\n    Id de chamada: 4\n    Endereço da rotina: 7ffb48c28510\n    Parâmetros:\n        lpAddress: 7ff74428ced0\n        dwSize: 761553 bytes\n        flNewProtect: 64\n        lpflOldProtect (Endereço): 4ff840\n    Endereço da função chamante: 7ff74428111f\n  [-] Alteração de proteção de memória iniciada\n    Valor de retorno: 140699977126175\n    Proteção antiga: 4\n  [-] Alteração de proteção de memória concluída\n[*] Concluído\n\n"
+    },
+    {
+      "line_start": 1039,
+      "line_end": 1047,
+      "header": "[+] IsDebuggerPresent...",
+      "matched_terms": [
+        "IsDebuggerPresent"
+      ],
+      "module_name": "",
+      "thread": "1",
+      "call_id": "1",
+      "caller_address": "",
+      "content": "[+] IsDebuggerPresent...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 1\n    Id de chamada: 1\n    EndereÃ§o da rotina: 7ffb48bfb6c0\n    Valor de retorno: 0\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 1048,
+      "line_end": 1058,
+      "header": "[+] LoadLibraryA...",
+      "matched_terms": [
+        "LoadLibraryA"
+      ],
+      "module_name": "",
+      "thread": "1",
+      "call_id": "2",
+      "caller_address": "",
+      "content": "[+] LoadLibraryA...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 1\n    Id de chamada: 2\n    EndereÃ§o da rotina: 7ffb48c3a020\n    ParÃ¡metros:\n        lpLibFileName: ntdll\n    Valor de retorno: 140717270564864\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 1076,
+      "line_end": 1086,
+      "header": "[+] LoadLibraryA...",
+      "matched_terms": [
+        "LoadLibraryA"
+      ],
+      "module_name": "",
+      "thread": "1",
+      "call_id": "3",
+      "caller_address": "",
+      "content": "[+] LoadLibraryA...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 1\n    Id de chamada: 3\n    EndereÃ§o da rotina: 7ffb48c3a020\n    ParÃ¡metros:\n        lpLibFileName: KERNEL32.dll\n    Valor de retorno: 140717259227136\n[*] ConcluÃ­do\n\n"
+    },
+    {
+      "line_start": 2287,
+      "line_end": 2296,
+      "header": "[+] LoadLibraryA...",
+      "matched_terms": [
+        "LoadLibraryA"
+      ],
+      "module_name": "",
+      "thread": "1",
+      "call_id": "4",
+      "caller_address": "",
+      "content": "[+] LoadLibraryA...\n    Nome do mÃ³dulo: C:\\Windows\\System32\\KERNELBASE.dll\n    Thread: 1\n    Id de chamada: 4\n    EndereÃ§o da rotina: 7ffb48c3a020\n    ParÃ¡metros:\n        lpLibFileName: NULL\n    Valor de retorno: 140717266305024\n[*] ConcluÃ­do\n"
+    }
+  ],
+  "term_counts": {
+    "LoadLibraryA": 5,
+    "IsDebuggerPresent": 2,
+    "CheckRemoteDebuggerPresent": 1,
+    "ZwQueryInformationProcess": 1,
+    "VirtualProtect": 5,
+    "GetTickCount": 1,
+    "QueryPerformanceCounter": 1
+  }
+}

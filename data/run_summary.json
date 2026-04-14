@@ -1,0 +1,14 @@
+{
+  "dataset_manifest": "/home/ubuntu/repos/AI_correlacion_contradef/data/manifests/dataset_manifest.json",
+  "function_interceptor_focus": "/home/ubuntu/repos/AI_correlacion_contradef/data/derived/function_interceptor_focus.json",
+  "tracefcncall_m1_focus_csv": "/home/ubuntu/repos/AI_correlacion_contradef/data/derived/tracefcncall_m1_focus.csv",
+  "tracefcncall_m2_focus_csv": "/home/ubuntu/repos/AI_correlacion_contradef/data/derived/tracefcncall_m2_focus.csv",
+  "traceinstructions_focus_matches": "/home/ubuntu/repos/AI_correlacion_contradef/data/filtered/traceinstructions_focus_matches.json",
+  "tracememory_focus_matches": "/home/ubuntu/repos/AI_correlacion_contradef/data/filtered/tracememory_focus_matches.json",
+  "traceinstructions_chunk_summary": "/home/ubuntu/repos/AI_correlacion_contradef/data/derived/traceinstructions_chunk_summary.json",
+  "tracememory_chunk_summary": "/home/ubuntu/repos/AI_correlacion_contradef/data/derived/tracememory_chunk_summary.json",
+  "tracedisassembly_windows": "/home/ubuntu/repos/AI_correlacion_contradef/data/filtered/tracedisassembly_windows.json",
+  "correlation_json": "/home/ubuntu/repos/AI_correlacion_contradef/data/correlation/isdebuggerpresent_flow_real.json",
+  "mermaid_file": "/home/ubuntu/repos/AI_correlacion_contradef/data/figures/isdebuggerpresent_flow_real.mmd",
+  "compression_manifest": null
+}

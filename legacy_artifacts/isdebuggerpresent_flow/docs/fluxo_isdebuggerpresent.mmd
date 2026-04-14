@@ -1,0 +1,16 @@
+flowchart TD
+    A["Carregamento de kernel32.dll / ntdll.dll\nFunctionInterceptor"] --> B["IsDebuggerPresent\nFunctionInterceptor"]
+    B --> C1["Origem por call direta\nTraceFcnCall.M1"]
+    B --> C2["Origem por salto indireto ou API dinâmica\nTraceFcnCall.M2"]
+    C1 --> D["Instrução exata e branch\nTraceInstructions"]
+    C2 --> D
+    D --> E1["CheckRemoteDebuggerPresent\nFunctionInterceptor + TraceFcnCall + TraceInstructions"]
+    D --> E2["NtQueryInformationProcess classe 30\nFunctionInterceptor + TraceFcnCall + TraceInstructions + TraceMemory"]
+    E1 --> F["GetTickCount / QueryPerformanceCounter\nanti-overhead"]
+    E2 --> F
+    F --> G["EnumSystemFirmwareTables / WMI\nanti-VM"]
+    G --> H["LocalAlloc\npreparação de memória"]
+    H --> I["VirtualProtect RW para RX\nunpacking"]
+    I --> J["Transferência para código desempacotado\nTraceDisassembly + TraceInstructions"]
+    J --> K["Classificação: trojan 64-bit protegido por VMProtect"]
+    J --> L["HeapFree / FatalExit\nencerramento"]

@@ -1,0 +1,4 @@
+jump_site,resolved_target,address,thread,note
+0x3000,NtQueryInformationProcess,0x1040,1,resolvido em tempo de execução
+0x3008,EnumSystemFirmwareTables,0x1070,1,resolvido em tempo de execução
+0x3010,VirtualProtect,0x10A0,1,resolvido em tempo de execução

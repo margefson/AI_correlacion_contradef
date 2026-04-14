@@ -1,0 +1,18 @@
+{
+  "chunk_id": 2,
+  "rows": 3,
+  "top_apis": [
+    [
+      "CheckRemoteDebuggerPresent",
+      1
+    ],
+    [
+      "NtQueryInformationProcess",
+      1
+    ],
+    [
+      "GetTickCount",
+      1
+    ]
+  ]
+}

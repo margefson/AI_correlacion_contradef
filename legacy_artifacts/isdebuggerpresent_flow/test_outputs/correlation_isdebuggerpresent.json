@@ -1,0 +1,311 @@
+{
+  "focus_function": "IsDebuggerPresent",
+  "function_interceptor_hits": [
+    {
+      "timestamp": "3",
+      "api": "IsDebuggerPresent",
+      "module": "kernel32.dll",
+      "address": "0x1020",
+      "note": "inicio do anti-debug"
+    }
+  ],
+  "tracefcncall_m1_hits": [
+    {
+      "call_site": "0x2000",
+      "target_api": "IsDebuggerPresent",
+      "address": "0x1020",
+      "thread": "1",
+      "note": "call direta para anti-debug"
+    }
+  ],
+  "tracefcncall_m2_hits": [],
+  "traceinstructions_hits": [
+    {
+      "step": "1",
+      "address": "0x1020",
+      "api": "IsDebuggerPresent",
+      "instruction": "call qword ptr [IsDebuggerPresent]",
+      "note": "chamada ao anti-debug"
+    },
+    {
+      "step": "2",
+      "address": "0x1021",
+      "api": "IsDebuggerPresent",
+      "instruction": "test eax eax",
+      "note": "teste do retorno"
+    },
+    {
+      "step": "3",
+      "address": "0x1022",
+      "api": "IsDebuggerPresent",
+      "instruction": "je 0x1100",
+      "note": "branch para continuidade"
+    }
+  ],
+  "tracememory_hits": [],
+  "tracedisassembly_hits": [],
+  "related_functions": {
+    "CheckRemoteDebuggerPresent": {
+      "function_interceptor": [
+        {
+          "timestamp": "4",
+          "api": "CheckRemoteDebuggerPresent",
+          "module": "kernel32.dll",
+          "address": "0x1030",
+          "note": "encadeamento anti-debug"
+        }
+      ],
+      "tracefcncall_m1": [
+        {
+          "call_site": "0x2005",
+          "target_api": "CheckRemoteDebuggerPresent",
+          "address": "0x1030",
+          "thread": "1",
+          "note": "call direta complementar"
+        }
+      ],
+      "tracefcncall_m2": [],
+      "traceinstructions": [
+        {
+          "step": "4",
+          "address": "0x1030",
+          "api": "CheckRemoteDebuggerPresent",
+          "instruction": "call qword ptr [CheckRemoteDebuggerPresent]",
+          "note": "validacao complementar"
+        }
+      ],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "NtQueryInformationProcess": {
+      "function_interceptor": [
+        {
+          "timestamp": "5",
+          "api": "NtQueryInformationProcess",
+          "module": "ntdll.dll",
+          "address": "0x1040",
+          "note": "classe 30 anti-debug"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [
+        {
+          "jump_site": "0x3000",
+          "resolved_target": "NtQueryInformationProcess",
+          "address": "0x1040",
+          "thread": "1",
+          "note": "resolvido em tempo de execução"
+        }
+      ],
+      "traceinstructions": [
+        {
+          "step": "5",
+          "address": "0x1040",
+          "api": "NtQueryInformationProcess",
+          "instruction": "call rax",
+          "note": "consulta classe 30"
+        }
+      ],
+      "tracememory": [
+        {
+          "step": "1",
+          "address": "0x1040",
+          "region": "ProcessInformation",
+          "operation": "write",
+          "value": "0x00000000",
+          "note": "buffer para NtQueryInformationProcess"
+        }
+      ],
+      "tracedisassembly": []
+    },
+    "GetTickCount": {
+      "function_interceptor": [
+        {
+          "timestamp": "6",
+          "api": "GetTickCount",
+          "module": "kernel32.dll",
+          "address": "0x1050",
+          "note": "anti-overhead"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [],
+      "traceinstructions": [
+        {
+          "step": "6",
+          "address": "0x1050",
+          "api": "GetTickCount",
+          "instruction": "call qword ptr [GetTickCount]",
+          "note": "anti-overhead"
+        }
+      ],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "QueryPerformanceCounter": {
+      "function_interceptor": [
+        {
+          "timestamp": "7",
+          "api": "QueryPerformanceCounter",
+          "module": "kernel32.dll",
+          "address": "0x1060",
+          "note": "anti-overhead"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [],
+      "traceinstructions": [
+        {
+          "step": "7",
+          "address": "0x1060",
+          "api": "QueryPerformanceCounter",
+          "instruction": "call qword ptr [QueryPerformanceCounter]",
+          "note": "anti-overhead"
+        }
+      ],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "EnumSystemFirmwareTables": {
+      "function_interceptor": [
+        {
+          "timestamp": "8",
+          "api": "EnumSystemFirmwareTables",
+          "module": "kernel32.dll",
+          "address": "0x1070",
+          "note": "anti-vm"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [
+        {
+          "jump_site": "0x3008",
+          "resolved_target": "EnumSystemFirmwareTables",
+          "address": "0x1070",
+          "thread": "1",
+          "note": "resolvido em tempo de execução"
+        }
+      ],
+      "traceinstructions": [],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "WMI": {
+      "function_interceptor": [
+        {
+          "timestamp": "9",
+          "api": "WMI",
+          "module": "wbemprox.dll",
+          "address": "0x1080",
+          "note": "anti-sandbox"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [],
+      "traceinstructions": [],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "LocalAlloc": {
+      "function_interceptor": [
+        {
+          "timestamp": "10",
+          "api": "LocalAlloc",
+          "module": "kernel32.dll",
+          "address": "0x1090",
+          "note": "buffer para unpacking"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [],
+      "traceinstructions": [
+        {
+          "step": "8",
+          "address": "0x1090",
+          "api": "LocalAlloc",
+          "instruction": "call qword ptr [LocalAlloc]",
+          "note": "alocacao para unpacking"
+        }
+      ],
+      "tracememory": [
+        {
+          "step": "2",
+          "address": "0x1090",
+          "region": "HeapBuffer",
+          "operation": "write",
+          "value": "allocated",
+          "note": "buffer preparado por LocalAlloc"
+        }
+      ],
+      "tracedisassembly": []
+    },
+    "VirtualProtect": {
+      "function_interceptor": [
+        {
+          "timestamp": "11",
+          "api": "VirtualProtect",
+          "module": "kernel32.dll",
+          "address": "0x10A0",
+          "note": "RW para RX"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [
+        {
+          "jump_site": "0x3010",
+          "resolved_target": "VirtualProtect",
+          "address": "0x10A0",
+          "thread": "1",
+          "note": "resolvido em tempo de execução"
+        }
+      ],
+      "traceinstructions": [
+        {
+          "step": "9",
+          "address": "0x10A0",
+          "api": "VirtualProtect",
+          "instruction": "call qword ptr [VirtualProtect]",
+          "note": "RW para RX"
+        }
+      ],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "HeapFree": {
+      "function_interceptor": [
+        {
+          "timestamp": "12",
+          "api": "HeapFree",
+          "module": "kernel32.dll",
+          "address": "0x10B0",
+          "note": "liberacao de recursos"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [],
+      "traceinstructions": [],
+      "tracememory": [],
+      "tracedisassembly": []
+    },
+    "FatalExit": {
+      "function_interceptor": [
+        {
+          "timestamp": "13",
+          "api": "FatalExit",
+          "module": "kernel32.dll",
+          "address": "0x10C0",
+          "note": "encerramento"
+        }
+      ],
+      "tracefcncall_m1": [],
+      "tracefcncall_m2": [],
+      "traceinstructions": [],
+      "tracememory": [],
+      "tracedisassembly": []
+    }
+  },
+  "notes": [
+    "Os resultados dependem da qualidade e do esquema das exportações CSV/TSV.",
+    "Para melhorar a correlação, preserve colunas como timestamp, endereço, thread, processo, API e módulo."
+  ]
+}

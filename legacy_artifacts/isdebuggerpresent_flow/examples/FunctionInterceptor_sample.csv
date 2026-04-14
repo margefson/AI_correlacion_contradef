@@ -1,0 +1,14 @@
+timestamp,api,module,address,note
+1,LoadLibraryW,kernel32.dll,0x1000,carregamento de kernel32.dll
+2,LoadLibraryW,ntdll.dll,0x1010,carregamento de ntdll.dll
+3,IsDebuggerPresent,kernel32.dll,0x1020,inicio do anti-debug
+4,CheckRemoteDebuggerPresent,kernel32.dll,0x1030,encadeamento anti-debug
+5,NtQueryInformationProcess,ntdll.dll,0x1040,classe 30 anti-debug
+6,GetTickCount,kernel32.dll,0x1050,anti-overhead
+7,QueryPerformanceCounter,kernel32.dll,0x1060,anti-overhead
+8,EnumSystemFirmwareTables,kernel32.dll,0x1070,anti-vm
+9,WMI,wbemprox.dll,0x1080,anti-sandbox
+10,LocalAlloc,kernel32.dll,0x1090,buffer para unpacking
+11,VirtualProtect,kernel32.dll,0x10A0,RW para RX
+12,HeapFree,kernel32.dll,0x10B0,liberacao de recursos
+13,FatalExit,kernel32.dll,0x10C0,encerramento
