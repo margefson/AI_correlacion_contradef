@@ -31,18 +31,19 @@ vi.mock("./db", async () => {
   };
 });
 
+import { TRPCError } from "@trpc/server";
 import { appRouter } from "./routers";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAuthContext(): TrpcContext {
+function createAuthContext(role: AuthenticatedUser["role"] = "user"): TrpcContext {
   const user: AuthenticatedUser = {
     id: 7,
     openId: "analyst-user",
     email: "analyst@example.com",
-    name: "Analyst User",
+    name: role === "admin" ? "Admin User" : "Analyst User",
     loginMethod: "manus",
-    role: "user",
+    role,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -141,7 +142,7 @@ describe("analysis router", () => {
   });
 
   it("sincroniza um job específico e retoma a sincronização dos jobs ativos", async () => {
-    const ctx = createAuthContext();
+    const ctx = createAuthContext("admin");
     const caller = appRouter.createCaller(ctx);
 
     mockSyncAnalysisJob.mockResolvedValue({ job: { jobId: "job-123", status: "running" } });
@@ -154,5 +155,20 @@ describe("analysis router", () => {
     expect(syncResult).toEqual({ job: { jobId: "job-123", status: "running" } });
     expect(mockSyncActiveAnalysisJobs).toHaveBeenCalledTimes(1);
     expect(resumeResult).toEqual({ resumedJobs: 3 });
+  });
+
+  it("bloqueia sincronização manual e retomada para usuários sem papel administrativo", async () => {
+    const ctx = createAuthContext("user");
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(caller.analysis.sync({ jobId: "job-123" })).rejects.toMatchObject<Partial<TRPCError>>({
+      code: "FORBIDDEN",
+    });
+    await expect(caller.analysis.resumeActiveSync()).rejects.toMatchObject<Partial<TRPCError>>({
+      code: "FORBIDDEN",
+    });
+
+    expect(mockSyncAnalysisJob).not.toHaveBeenCalled();
+    expect(mockSyncActiveAnalysisJobs).not.toHaveBeenCalled();
   });
 });

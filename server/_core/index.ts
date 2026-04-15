@@ -5,6 +5,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
+import { registerAnalysisHttpRoutes } from "../analysisHttp";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -38,6 +39,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: `${UPLOAD_REQUEST_LIMIT_MB}mb`, extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  registerAnalysisHttpRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",
@@ -46,6 +48,36 @@ async function startServer() {
       createContext,
     })
   );
+  app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!req.path.startsWith("/api/")) {
+      next(error);
+      return;
+    }
+
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+
+    const status = typeof error === "object" && error && "status" in error && typeof error.status === "number"
+      ? error.status
+      : typeof error === "object" && error && "statusCode" in error && typeof error.statusCode === "number"
+        ? error.statusCode
+        : 500;
+    const type = typeof error === "object" && error && "type" in error && typeof error.type === "string"
+      ? error.type
+      : "internal_error";
+    const message = status === 413 || type === "entity.too.large"
+      ? "O payload enviado excede o limite aceito pelo backend web. Reduza o arquivo ou use o fluxo multipart do formulário."
+      : error instanceof Error
+        ? error.message
+        : "Falha inesperada ao processar a requisição da API.";
+
+    res.status(status === 413 || type === "entity.too.large" ? 413 : status).json({
+      message,
+      code: type === "entity.too.large" ? "PAYLOAD_TOO_LARGE" : "API_ERROR",
+    });
+  });
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

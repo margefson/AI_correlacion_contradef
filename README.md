@@ -22,12 +22,13 @@ A experiência foi desenhada para manter o operador dentro de um único fluxo de
 
 | Capacidade entregue | Descrição |
 | --- | --- |
-| Submissão validada de `.7z` | Rejeita formato inválido, base64 inconsistente e entradas fora do contrato esperado |
-| Acompanhamento em tempo real | Exibe estágio, progresso, mensagens, stdout e stderr resumidos por job |
+| Submissão validada de `.7z` | Aceita upload multipart autenticado, rejeita formato inválido e retorna erros JSON explícitos para limite, sessão e contrato |
+| Acompanhamento em tempo real | Exibe estágio, progresso, mensagens, stdout e stderr resumidos por job via stream SSE autenticado |
 | Histórico filtrável | Mantém jobs anteriores disponíveis para inspeção e retomada operacional |
 | Visualização de correlação | Mostra nós, relações e tabela associada ao job selecionado |
-| Exportação operacional | Exibe links explícitos para JSON, Markdown, DOCX e demais artefatos publicados |
+| Comparação entre jobs | Contrasta amostras, função focal, densidade do grafo e artefatos compartilhados entre execuções |
 | Resumo interpretativo | Consolida a correlação em linguagem legível por operador |
+| Perfis operacionais | Restringe sincronizações forçadas e retomada manual a administradores, mantendo analistas em modo de triagem |
 | Notificação e commit | Aciona alerta operacional e registra resultado no repositório configurado |
 
 ## Arquitetura da aplicação
@@ -39,9 +40,9 @@ O desenho também separa claramente o que é **persistência de metadados** do q
 | Camada | Arquivos centrais |
 | --- | --- |
 | Persistência | `drizzle/schema.ts`, `server/db.ts` |
-| Orquestração de análise | `server/analysisService.ts`, `server/analysisRouter.ts` |
-| Roteamento principal | `server/routers.ts` |
-| Interface analítica | `client/src/pages/Home.tsx`, `client/src/components/DashboardLayout.tsx` |
+| Orquestração de análise | `server/analysisService.ts`, `server/analysisRouter.ts`, `server/analysisHttp.ts` |
+| Roteamento principal | `server/routers.ts`, `server/_core/index.ts` |
+| Interface analítica | `client/src/pages/Home.tsx`, `client/src/components/DashboardLayout.tsx`, `client/src/lib/analysisUpload.ts` |
 | Tema visual | `client/src/index.css`, `client/src/App.tsx` |
 | Testes | `server/analysis.router.test.ts`, `server/auth.logout.test.ts`, `client/src/pages/Home.test.tsx` |
 | Contrato legado | `docs/pipeline-integration-contract.md` |
@@ -50,15 +51,15 @@ O desenho também separa claramente o que é **persistência de metadados** do q
 
 O fluxo operacional começa com o envio de um pacote `.7z` e a indicação da função de interesse. O backend valida o arquivo, registra um novo job e repassa a execução para o pipeline legado, preservando o identificador do job e a trilha de estados no banco da aplicação.
 
-Durante o processamento, o backend sincroniza o status do job, captura logs progressivos, registra eventos e atualiza artefatos intermediários ou finais. Quando a execução é concluída, o serviço consolida a correlação, publica os arquivos, gera o resumo interpretativo, envia a notificação operacional e executa o commit dos resultados no repositório configurado.
+Durante o processamento, o backend sincroniza o status do job, captura logs progressivos, registra eventos e atualiza artefatos intermediários ou finais. A interface principal consome snapshots autenticados via SSE em `/api/analysis/stream`, reduzindo dependência de polling contínuo para refletir a evolução do job quase em tempo real. Quando a execução é concluída, o serviço consolida a correlação, publica os arquivos, gera o resumo interpretativo, envia a notificação operacional e executa o commit dos resultados no repositório configurado.
 
 | Etapa | Resultado esperado |
 | --- | --- |
-| Submissão | Job criado e enfileirado com parâmetros do operador |
-| Polling e sincronização | Progresso, estágio e logs atualizados na interface |
+| Submissão multipart | Job criado e enfileirado com parâmetros do operador e erros JSON previsíveis |
+| Stream SSE autenticado | Progresso, estágio, snapshots do job e logs atualizados na interface |
 | Consolidação | Grafo, tabela, resumo, artefatos e estado final persistidos |
 | Pós-processamento | Notificação enviada e commit realizado quando aplicável |
-| Inspeção posterior | Histórico e detalhe continuam disponíveis no dashboard |
+| Inspeção posterior | Histórico, comparação e detalhe continuam disponíveis no dashboard |
 
 ## Interface web
 
@@ -68,11 +69,12 @@ A página principal agrega métricas, formulário de submissão, painel de ativi
 
 | Área da interface | Conteúdo |
 | --- | --- |
-| Hero operacional | Contexto do pipeline, capacidades do backend e métricas resumidas |
-| Nova submissão | Upload `.7z`, foco analítico e disparo de job |
-| Atividade imediata | Estado do job ativo ou instrução de retomada da fila |
+| Hero operacional | Contexto do pipeline, perfil atual, estado do stream SSE e métricas resumidas |
+| Nova submissão | Upload `.7z` multipart, foco analítico, progresso de envio e mensagens claras de erro |
+| Atividade imediata | Estado do job ativo, snapshots em tempo real e ações administrativas condicionadas ao papel |
 | Histórico | Lista de jobs com seleção, status, progresso e recorte temporal |
 | Detalhe do job | Resumo, correlação, eventos, logs, commit e artefatos |
+| Comparação | Contraste entre jobs para cruzar amostras, foco analítico e artefatos compartilhados |
 | Exportações | Links explícitos para JSON, Markdown, DOCX e demais saídas |
 
 ## Execução local
@@ -90,15 +92,15 @@ A autenticação, os helpers internos e os segredos injetados pela plataforma j�
 
 ## Validação e testes
 
-A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise e o fluxo de logout. Os testes do frontend exercitam a submissão do formulário, a atualização do histórico e a presença das exportações explícitas no painel de detalhes.
+A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas e o fluxo de logout. Os testes do frontend exercitam a submissão multipart, a atualização do histórico, a exposição de exportações, o erro explícito de limite e a experiência de triagem para perfis não administrativos.
 
-Além da suíte automatizada, a aplicação foi verificada com compilação TypeScript limpa e servidor de desenvolvimento saudável. A prévia visual do dashboard confirma o funcionamento da identidade visual e do layout principal.
+Além da suíte automatizada, a aplicação foi verificada com compilação TypeScript limpa e servidor de desenvolvimento saudável. A prévia visual do dashboard confirma o funcionamento da identidade visual, da aba comparativa e do layout principal.
 
 | Suíte | Cobertura principal |
 | --- | --- |
-| `server/analysis.router.test.ts` | Submissão, listagem, detalhe e retomada de sincronização |
+| `server/analysis.router.test.ts` | Submissão, listagem, detalhe, restrição administrativa e retomada de sincronização |
 | `server/auth.logout.test.ts` | Limpeza do cookie de sessão e resposta do logout |
-| `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico e exibição de exportações |
+| `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico, erro de limite, modo de triagem e exibição de exportações |
 
 ## Integração com GitHub
 
@@ -121,7 +123,7 @@ Também é importante lembrar que os links de exportação exibem formatos dispo
 | --- | --- |
 | Mudanças no contrato do pipeline legado | Exigem atualização em `analysisService.ts` e possivelmente no schema |
 | Falhas de publicação de artefatos | Afetam exportação e commit pós-processamento |
-| Execuções longas ou instáveis | Podem ampliar o uso de polling e a necessidade de retentativas |
+| Execuções longas ou instáveis | Podem exigir reconexão do stream SSE e retentativas administrativas controladas |
 | Novos formatos de saída | Devem ser incorporados à UI e ao mapeamento de artefatos |
 
 ## Estrutura resumida do projeto
@@ -142,6 +144,6 @@ A base do projeto já contém a separação entre cliente, servidor, schema e do
 
 ## Estado atual
 
-Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, acompanhamento em tempo real, submissão controlada, leitura de logs, visualização de correlação, histórico, resumo por LLM, exportações explícitas e capacidade de versionamento operacional.
+Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão multipart controlada, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, perfis operacionais e capacidade de versionamento operacional.
 
-Os próximos incrementos naturais, caso desejados, seriam expandir filtros avançados do histórico, aumentar a profundidade das visualizações do grafo, enriquecer métricas operacionais e adicionar comparações entre execuções.
+Os próximos incrementos naturais, caso desejados, seriam expandir filtros avançados do histórico, aumentar a profundidade das visualizações do grafo, enriquecer métricas operacionais e sofisticar ainda mais as regras comparativas entre execuções.

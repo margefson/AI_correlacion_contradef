@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockState = vi.hoisted(() => ({
   jobs: [] as Array<Record<string, any>>,
   details: {} as Record<string, any>,
-  submitMutateAsync: vi.fn(async () => ({ jobId: "job-1" })),
+  authUserRole: "admin" as "admin" | "user",
+  uploadAnalysisArchive: vi.fn(async (_input?: unknown, _options?: unknown) => ({ jobId: "job-1" })),
   syncMutateAsync: vi.fn(async ({ jobId }: { jobId: string }) => ({ job: { jobId } })),
   resumeMutate: vi.fn(),
   resumeMutateAsync: vi.fn(async () => ({ resumedJobs: 1 })),
@@ -45,6 +46,22 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, name: "Analista", role: mockState.authUserRole },
+    loading: false,
+    error: null,
+    isAuthenticated: true,
+    refresh: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
+
+vi.mock("@/lib/analysisUpload", () => ({
+  MAX_ARCHIVE_BYTES: 40 * 1024 * 1024,
+  uploadAnalysisArchive: (input: unknown, options: unknown) => mockState.uploadAnalysisArchive(input, options),
+}));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
@@ -78,12 +95,6 @@ vi.mock("@/lib/trpc", () => ({
           isPending: false,
         }),
       },
-      submit: {
-        useMutation: () => ({
-          mutateAsync: mockState.submitMutateAsync,
-          isPending: false,
-        }),
-      },
     },
   },
 }));
@@ -93,6 +104,25 @@ import Home from "./Home";
 describe("Home dashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    class MockEventSource {
+      public url: string;
+
+      constructor(url: string) {
+        this.url = url;
+      }
+
+      addEventListener() {
+        return undefined;
+      }
+
+      close() {
+        return undefined;
+      }
+    }
+
+    vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
+    mockState.authUserRole = "admin";
 
     mockState.jobs = [
       {
@@ -210,18 +240,6 @@ describe("Home dashboard", () => {
       },
     };
 
-    class MockFileReader {
-      public result: string | ArrayBuffer | null = null;
-      public onload: null | (() => void) = null;
-      public onerror: null | (() => void) = null;
-
-      readAsDataURL(file: File) {
-        this.result = `data:application/x-7z-compressed;base64,${btoa(file.name)}`;
-        this.onload?.();
-      }
-    }
-
-    vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
   });
 
   it("submete um novo arquivo 7z com os parâmetros atuais do formulário", async () => {
@@ -232,14 +250,17 @@ describe("Home dashboard", () => {
     const file = new File(["fake-binary"], "sample.7z", { type: "application/x-7z-compressed" });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    await user.click(screen.getByRole("button", { name: /iniciar análise/i }));
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
 
     await waitFor(() => {
-      expect(mockState.submitMutateAsync).toHaveBeenCalledWith(
+      expect(mockState.uploadAnalysisArchive).toHaveBeenCalledWith(
         expect.objectContaining({
-          archiveName: "sample.7z",
+          file,
           focusFunction: "IsDebuggerPresent",
           focusTerms: ["IsDebuggerPresent", "VirtualProtect", "CreateRemoteThread"],
+        }),
+        expect.objectContaining({
+          onUploadProgress: expect.any(Function),
         }),
       );
     });
@@ -257,6 +278,30 @@ describe("Home dashboard", () => {
       expect(screen.getAllByText("CreateRemoteThread").length).toBeGreaterThan(0);
       expect(screen.getByText(/stdout running/i)).toBeTruthy();
     });
+  });
+
+  it("expõe erro explícito quando o backend rejeita o upload por limite", async () => {
+    const user = userEvent.setup();
+    mockState.uploadAnalysisArchive.mockRejectedValueOnce(new Error("O arquivo excede o limite operacional de 40 MB aceito pelo backend web."));
+
+    render(<Home />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["fake-binary"], "sample.7z", { type: "application/x-7z-compressed" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+
+    expect(await screen.findByText(/excede o limite operacional/i)).toBeTruthy();
+  });
+
+  it("expõe orientação de triagem para o perfil não administrativo e mantém a matriz comparativa disponível", () => {
+    mockState.authUserRole = "user";
+    render(<Home />);
+
+    expect(screen.getByText(/modo de triagem com controles críticos bloqueados/i)).toBeTruthy();
+    expect(screen.getByText(/analistas acompanham a execução em tempo real/i)).toBeTruthy();
+    expect(screen.getAllByText(/matriz comparativa/i).length).toBeGreaterThan(0);
   });
 
   it("expõe exportações explícitas e links publicados no painel de detalhes", () => {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { protectedProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "./_core/trpc";
 import {
   getAnalysisJobDetail,
   startAnalysisJob,
@@ -60,11 +60,11 @@ export const analysisRouter = router({
     });
   }),
 
-  sync: protectedProcedure.input(jobIdInputSchema).mutation(async ({ input }) => {
+  sync: adminProcedure.input(jobIdInputSchema).mutation(async ({ input }) => {
     return syncAnalysisJob(input.jobId);
   }),
 
-  resumeActiveSync: protectedProcedure.mutation(async () => {
+  resumeActiveSync: adminProcedure.mutation(async () => {
     const resumedJobs = await syncActiveAnalysisJobs();
     return { resumedJobs };
   }),

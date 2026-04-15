@@ -1,4 +1,5 @@
 import React from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { uploadAnalysisArchive, MAX_ARCHIVE_BYTES } from "@/lib/analysisUpload";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -62,6 +64,14 @@ type GraphEdge = {
   weight?: number | null;
   evidence?: string | null;
   metadata?: Record<string, unknown>;
+};
+
+type StreamStatus = "connecting" | "live" | "degraded" | "offline";
+
+type StreamSnapshot = {
+  emittedAt: number;
+  jobs?: Array<Record<string, any>>;
+  detail?: any | null;
 };
 
 function statusClasses(status?: string | null) {
@@ -122,26 +132,6 @@ function parseCommaSeparated(value: string) {
     .filter(Boolean);
 }
 
-function fileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("Não foi possível ler o arquivo selecionado."));
-        return;
-      }
-      const normalized = reader.result.includes(",") ? reader.result.split(",").pop() : reader.result;
-      if (!normalized) {
-        reject(new Error("Falha ao extrair o conteúdo binário do arquivo selecionado."));
-        return;
-      }
-      resolve(normalized);
-    };
-    reader.onerror = () => reject(new Error("Falha ao processar o arquivo selecionado."));
-    reader.readAsDataURL(file);
-  });
-}
-
 function buildGraphLayout(nodes: GraphNode[]) {
   if (nodes.length === 0) return [] as Array<GraphNode & { x: number; y: number }>;
   const centerX = 320;
@@ -163,6 +153,7 @@ function buildGraphLayout(nodes: GraphNode[]) {
 
 export default function Home() {
   const utils = trpc.useUtils();
+  const auth = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [focusFunction, setFocusFunction] = useState("IsDebuggerPresent");
@@ -172,7 +163,18 @@ export default function Home() {
   const [focusFilter, setFocusFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusValue>("all");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [compareJobId, setCompareJobId] = useState<string | null>(null);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [submitPhase, setSubmitPhase] = useState<"idle" | "uploading" | "starting">("idle");
+  const [liveJobs, setLiveJobs] = useState<Array<Record<string, any>> | null>(null);
+  const [liveDetail, setLiveDetail] = useState<any | null>(null);
+  const [streamStatus, setStreamStatus] = useState<StreamStatus>("offline");
+  const [streamError, setStreamError] = useState<string | null>(null);
+
+  const isAdmin = auth.user?.role === "admin";
+  const isSubmittingJob = submitPhase !== "idle";
 
   const listInput = useMemo(
     () => ({
@@ -185,13 +187,21 @@ export default function Home() {
   );
 
   const jobsQuery = trpc.analysis.list.useQuery(listInput, {
-    refetchInterval: 4000,
+    enabled: auth.isAuthenticated,
+    refetchInterval: false,
   });
 
   const detailQuery = trpc.analysis.detail.useQuery(
     { jobId: selectedJobId ?? "" },
     {
-      enabled: !!selectedJobId,
+      enabled: auth.isAuthenticated && !!selectedJobId,
+    },
+  );
+
+  const compareDetailQuery = trpc.analysis.detail.useQuery(
+    { jobId: compareJobId ?? "" },
+    {
+      enabled: auth.isAuthenticated && !!compareJobId,
     },
   );
 
@@ -202,39 +212,92 @@ export default function Home() {
     },
   });
 
-  const submitJobMutation = trpc.analysis.submit.useMutation({
-    onError: (error) => {
-      toast.error(error.message || "Falha ao iniciar a análise.");
-    },
-  });
-
   useEffect(() => {
+    if (!auth.isAuthenticated || !isAdmin) return;
     resumeSyncMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auth.isAuthenticated, isAdmin]);
 
   useEffect(() => {
-    const firstJobId = jobsQuery.data?.[0]?.jobId;
-    if (!selectedJobId && firstJobId) {
-      setSelectedJobId(firstJobId);
+    if (!auth.isAuthenticated) {
+      setLiveJobs(null);
+      setLiveDetail(null);
+      setStreamStatus("offline");
+      setStreamError(null);
+      return;
     }
-  }, [jobsQuery.data, selectedJobId]);
 
-  const jobs = jobsQuery.data ?? [];
-  const selectedDetail = detailQuery.data;
+    setStreamStatus("connecting");
+    setStreamError(null);
+
+    const streamUrl = selectedJobId
+      ? `/api/analysis/stream?jobId=${encodeURIComponent(selectedJobId)}`
+      : "/api/analysis/stream";
+    const source = new EventSource(streamUrl);
+
+    source.addEventListener("snapshot", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data) as StreamSnapshot;
+        setLiveJobs(Array.isArray(payload.jobs) ? payload.jobs : []);
+        setLiveDetail(payload.detail ?? null);
+        setStreamStatus("live");
+        setStreamError(null);
+      } catch {
+        setStreamStatus("degraded");
+        setStreamError("O stream retornou um snapshot inválido e foi ignorado pelo cliente.");
+      }
+    });
+
+    source.addEventListener("error", (event) => {
+      const message = (event as MessageEvent<string>).data
+        ? (() => {
+            try {
+              const parsed = JSON.parse((event as MessageEvent<string>).data) as { message?: string };
+              return parsed.message || "Conexão em tempo real temporariamente indisponível.";
+            } catch {
+              return "Conexão em tempo real temporariamente indisponível.";
+            }
+          })()
+        : "Conexão em tempo real temporariamente indisponível.";
+
+      setStreamStatus("degraded");
+      setStreamError(message);
+    });
+
+    return () => {
+      source.close();
+    };
+  }, [auth.isAuthenticated, selectedJobId]);
+
+  const jobs = (liveJobs ?? jobsQuery.data ?? []) as Array<Record<string, any>>;
+  const selectedDetail = (liveDetail ?? detailQuery.data) as any;
+  const compareDetail = compareDetailQuery.data as any;
   const activeJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
 
   useEffect(() => {
-    if (!selectedJobId) return;
-    const status = detailQuery.data?.job?.status;
-    if (status !== "queued" && status !== "running") return;
+    const firstJobId = jobs[0]?.jobId;
+    if (!selectedJobId && firstJobId) {
+      setSelectedJobId(firstJobId);
+    }
+  }, [jobs, selectedJobId]);
 
-    const intervalId = window.setInterval(() => {
-      utils.analysis.detail.invalidate({ jobId: selectedJobId });
-    }, 3000);
+  useEffect(() => {
+    if (jobs.length === 0) {
+      if (compareJobId !== null) {
+        setCompareJobId(null);
+      }
+      return;
+    }
 
-    return () => window.clearInterval(intervalId);
-  }, [detailQuery.data?.job?.status, selectedJobId, utils.analysis.detail]);
+    if (compareJobId && compareJobId !== selectedJobId && jobs.some((job) => job.jobId === compareJobId)) {
+      return;
+    }
+
+    const fallbackCompareJobId = jobs.find((job) => job.jobId !== selectedJobId)?.jobId ?? null;
+    if (fallbackCompareJobId !== compareJobId) {
+      setCompareJobId(fallbackCompareJobId);
+    }
+  }, [compareJobId, jobs, selectedJobId]);
 
   const metrics = useMemo(() => {
     const total = jobs.length;
@@ -253,11 +316,36 @@ export default function Home() {
     };
   }, [activeJobs.length, jobs]);
 
-  const jsonArtifact = selectedDetail?.artifacts?.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".json"));
-  const markdownArtifact = selectedDetail?.artifacts?.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".md") || artifact.relativePath.toLowerCase().endsWith(".markdown"));
-  const docxArtifact = selectedDetail?.artifacts?.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".docx"));
+  const jsonArtifact = selectedDetail?.artifacts?.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".json"));
+  const markdownArtifact = selectedDetail?.artifacts?.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".md") || artifact.relativePath.toLowerCase().endsWith(".markdown"));
+  const docxArtifact = selectedDetail?.artifacts?.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".docx"));
   const graphNodes = (selectedDetail?.graph?.nodes ?? []) as GraphNode[];
   const graphEdges = (selectedDetail?.graph?.edges ?? []) as GraphEdge[];
+  const compareGraphNodes = (compareDetail?.graph?.nodes ?? []) as GraphNode[];
+  const compareGraphEdges = (compareDetail?.graph?.edges ?? []) as GraphEdge[];
+  const compareCandidates = jobs.filter((job) => job.jobId !== selectedJobId);
+  const comparisonSummary = useMemo(() => {
+    if (!selectedDetail?.job || !compareDetail?.job) return null;
+
+    const selectedNodeIds = new Set<string>(graphNodes.map((node) => node.id));
+    const compareNodeIds = new Set<string>(compareGraphNodes.map((node) => node.id));
+    const sharedFunctions = Array.from(selectedNodeIds).filter((nodeId) => compareNodeIds.has(nodeId));
+
+    const selectedArtifacts = new Set<string>((selectedDetail.artifacts ?? []).map((artifact: any) => artifact.relativePath));
+    const comparedArtifacts = new Set<string>((compareDetail.artifacts ?? []).map((artifact: any) => artifact.relativePath));
+    const sharedArtifacts = Array.from(selectedArtifacts).filter((artifactPath) => comparedArtifacts.has(artifactPath));
+
+    return {
+      sharedFunctions: sharedFunctions.slice(0, 12),
+      sharedArtifacts: sharedArtifacts.slice(0, 12),
+      selectedNodeCount: graphNodes.length,
+      compareNodeCount: compareGraphNodes.length,
+      selectedEdgeCount: graphEdges.length,
+      compareEdgeCount: compareGraphEdges.length,
+      sameFocusFunction: selectedDetail.job.focusFunction === compareDetail.job.focusFunction,
+    };
+  }, [compareDetail, compareGraphEdges.length, compareGraphNodes, graphEdges.length, graphNodes, selectedDetail]);
+
   const positionedNodes = useMemo(() => buildGraphLayout(graphNodes), [graphNodes]);
   const selectedGraphNode = positionedNodes.find((node) => node.id === highlightedNodeId) ?? positionedNodes[0] ?? null;
   const visibleEdges = highlightedNodeId
@@ -265,41 +353,74 @@ export default function Home() {
     : graphEdges;
 
   async function handleSubmitJob() {
+    if (!auth.isAuthenticated) {
+      const message = "Sua sessão não está ativa. Faça login novamente antes de iniciar a análise.";
+      setSubmissionError(message);
+      toast.error(message);
+      return;
+    }
+
     if (!selectedFile) {
-      toast.error("Selecione um pacote .7z antes de iniciar a análise.");
+      const message = "Selecione um pacote .7z antes de iniciar a análise.";
+      setSubmissionError(message);
+      toast.error(message);
       return;
     }
     if (!selectedFile.name.toLowerCase().endsWith(".7z")) {
-      toast.error("A plataforma aceita apenas arquivos .7z nesta etapa.");
+      const message = "A plataforma aceita apenas arquivos .7z nesta etapa.";
+      setSubmissionError(message);
+      toast.error(message);
       return;
     }
-    if (selectedFile.size > 40 * 1024 * 1024) {
-      toast.error("O arquivo excede o limite de 40 MB suportado pelo orquestrador web.");
-      return;
-    }
-
-    const archiveBase64 = await fileToBase64(selectedFile);
-    const createdJob = await submitJobMutation.mutateAsync({
-      archiveName: selectedFile.name,
-      archiveBase64,
-      focusFunction: focusFunction.trim(),
-      focusTerms: parseCommaSeparated(focusTermsInput),
-      focusRegexes: parseCommaSeparated(focusRegexesInput),
-      origin: window.location.origin,
-    }) as { jobId: string } | undefined;
-
-    if (!createdJob?.jobId) {
-      toast.error("A análise foi iniciada, mas o identificador do job não foi retornado corretamente.");
+    if (selectedFile.size > MAX_ARCHIVE_BYTES) {
+      const message = `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB aceito pelo backend web.`;
+      setSubmissionError(message);
+      toast.error(message);
       return;
     }
 
-    toast.success("Job enviado para a fila de análise.");
-    setSelectedFile(null);
-    setSelectedJobId(createdJob.jobId);
-    setActiveTab("queue");
-    await resumeSyncMutation.mutateAsync();
-    await utils.analysis.list.invalidate();
-    await utils.analysis.detail.invalidate({ jobId: createdJob.jobId });
+    try {
+      setSubmissionError(null);
+      setSubmitPhase("uploading");
+      setUploadProgress(0);
+
+      const createdJob = await uploadAnalysisArchive(
+        {
+          file: selectedFile,
+          focusFunction: focusFunction.trim(),
+          focusTerms: parseCommaSeparated(focusTermsInput),
+          focusRegexes: parseCommaSeparated(focusRegexesInput),
+          origin: window.location.origin,
+        },
+        {
+          onUploadProgress: (progress) => setUploadProgress(progress),
+        },
+      ) as { jobId: string } | undefined;
+
+      setSubmitPhase("starting");
+      setUploadProgress(100);
+
+      if (!createdJob?.jobId) {
+        throw new Error("A análise foi iniciada, mas o identificador do job não foi retornado corretamente.");
+      }
+
+      toast.success("Job enviado para a fila de análise.");
+      setSelectedFile(null);
+      setSelectedJobId(createdJob.jobId);
+      setActiveTab("queue");
+      if (isAdmin) {
+        await resumeSyncMutation.mutateAsync();
+      }
+      await utils.analysis.list.invalidate();
+      await utils.analysis.detail.invalidate({ jobId: createdJob.jobId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao iniciar a análise.";
+      setSubmissionError(message);
+      toast.error(message);
+    } finally {
+      setSubmitPhase("idle");
+      setUploadProgress(0);
+    }
   }
 
   return (
@@ -325,7 +446,7 @@ export default function Home() {
                   <div className="grid min-w-[230px] gap-3 rounded-2xl border border-cyan-400/10 bg-slate-950/60 p-4 shadow-inner shadow-cyan-950/30">
                     <div className="flex items-center gap-3 text-sm text-slate-300">
                       <ShieldCheck className="h-4 w-4 text-cyan-300" />
-                      Backend acoplado ao serviço Python existente
+                      Perfil atual: {isAdmin ? "Administrador operacional" : "Analista de triagem"}
                     </div>
                     <div className="flex items-center gap-3 text-sm text-slate-300">
                       <TerminalSquare className="h-4 w-4 text-cyan-300" />
@@ -334,6 +455,10 @@ export default function Home() {
                     <div className="flex items-center gap-3 text-sm text-slate-300">
                       <GitCommitHorizontal className="h-4 w-4 text-cyan-300" />
                       Commit e trilha operacional ao final do processamento
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-slate-300">
+                      <Radar className="h-4 w-4 text-cyan-300" />
+                      Stream SSE {streamStatus === "live" ? "ao vivo" : streamStatus === "connecting" ? "conectando" : streamStatus === "degraded" ? "em reconexão" : "inativo"}
                     </div>
                   </div>
                 </div>
@@ -430,7 +555,7 @@ export default function Home() {
           </section>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid h-auto grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2 lg:grid-cols-4">
+            <TabsList className="grid h-auto grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2 lg:grid-cols-5">
               <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
                 Visão executiva
               </TabsTrigger>
@@ -442,6 +567,9 @@ export default function Home() {
               </TabsTrigger>
               <TabsTrigger value="results" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
                 Resultados
+              </TabsTrigger>
+              <TabsTrigger value="compare" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
+                Comparação
               </TabsTrigger>
             </TabsList>
 
@@ -614,7 +742,7 @@ export default function Home() {
                           className="border-white/10 bg-slate-950/70 text-slate-100 file:text-slate-200"
                         />
                         <p className="mt-3 text-sm text-slate-400">
-                          Limite operacional atual: 40 MB. O backend valida extensão, base64 e tamanho antes do despacho ao serviço legado.
+                          Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB. O envio agora usa upload multipart, evitando a sobrecarga do transporte em base64 e retornando JSON explícito em caso de falha.
                         </p>
                         {selectedFile ? (
                           <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
@@ -622,6 +750,20 @@ export default function Home() {
                               <FileArchive className="h-4 w-4 text-cyan-300" /> {selectedFile.name}
                             </div>
                             <div className="mt-2 text-slate-400">{formatBytes(selectedFile.size)}</div>
+                          </div>
+                        ) : null}
+                        {submissionError ? (
+                          <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm leading-6 text-rose-100">
+                            {submissionError}
+                          </div>
+                        ) : null}
+                        {isSubmittingJob ? (
+                          <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-500/10 p-3 text-sm text-cyan-50">
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <span>{submitPhase === "uploading" ? "Enviando arquivo para o backend web..." : "Upload concluído. Criando job e sincronizando a fila..."}</span>
+                              <span>{submitPhase === "uploading" ? formatPercent(uploadProgress) : "100%"}</span>
+                            </div>
+                            <Progress value={submitPhase === "uploading" ? uploadProgress : 100} className="h-2 bg-cyan-950/40" />
                           </div>
                         ) : null}
                       </div>
@@ -664,21 +806,24 @@ export default function Home() {
                   <div className="flex flex-wrap gap-3">
                     <Button
                       onClick={handleSubmitJob}
-                      disabled={submitJobMutation.isPending}
+                      disabled={isSubmittingJob || !auth.isAuthenticated}
                       className="rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400"
                     >
-                      {submitJobMutation.isPending ? (
+                      {isSubmittingJob ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
                         <UploadCloud className="mr-2 h-4 w-4" />
                       )}
-                      Iniciar análise
+                      {isSubmittingJob ? "Enviando..." : "Iniciar análise"}
                     </Button>
                     <Button
                       variant="outline"
                       className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
                       onClick={() => {
                         setSelectedFile(null);
+                        setSubmissionError(null);
+                        setUploadProgress(0);
+                        setSubmitPhase("idle");
                         setFocusFunction("IsDebuggerPresent");
                         setFocusTermsInput("IsDebuggerPresent, VirtualProtect, CreateRemoteThread");
                         setFocusRegexesInput("Zw.*InformationProcess, Nt.*QuerySystemInformation");
@@ -756,31 +901,68 @@ export default function Home() {
               </Card>
 
               <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <CardTitle className="text-white">Telemetria do job selecionado</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Os dados são refletidos automaticamente a partir das sincronizações periódicas do backend.
-                    </CardDescription>
+                <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div>
+                      <CardTitle className="text-white">Telemetria do job selecionado</CardTitle>
+                      <CardDescription className="text-slate-400">
+                        O painel principal agora consome snapshots contínuos via SSE, reduzindo polling no cliente e refletindo progresso, estágio e logs à medida que o backend persiste novos eventos.
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className={streamStatus === "live" ? "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/20" : streamStatus === "connecting" ? "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/20" : streamStatus === "degraded" ? "bg-rose-500/15 text-rose-200 ring-1 ring-rose-400/20" : "bg-slate-500/15 text-slate-200 ring-1 ring-slate-400/20"}>
+                        SSE {streamStatus === "live" ? "ao vivo" : streamStatus === "connecting" ? "conectando" : streamStatus === "degraded" ? "reconectando" : "offline"}
+                      </Badge>
+                      <Badge className={isAdmin ? "bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-400/20" : "bg-white/10 text-slate-200 ring-1 ring-white/10"}>
+                        {isAdmin ? "Ações administrativas habilitadas" : "Modo de triagem com controles críticos bloqueados"}
+                      </Badge>
+                    </div>
+                    {streamError ? (
+                      <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                        {streamError}
+                      </div>
+                    ) : null}
                   </div>
-                  <Button
-                    variant="outline"
-                    disabled={!selectedJobId || syncJobMutation.isPending}
-                    onClick={async () => {
-                      if (!selectedJobId) return;
-                      const result = await syncJobMutation.mutateAsync({ jobId: selectedJobId }) as { job: { jobId: string } };
-                      await utils.analysis.detail.invalidate({ jobId: result.job.jobId });
-                      await utils.analysis.list.invalidate();
-                    }}
-                    className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
-                  >
-                    {syncJobMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <div className="flex flex-wrap gap-3">
+                    {isAdmin ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          disabled={resumeSyncMutation.isPending}
+                          onClick={async () => {
+                            await resumeSyncMutation.mutateAsync();
+                            await utils.analysis.list.invalidate();
+                          }}
+                          className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
+                        >
+                          {resumeSyncMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Radar className="mr-2 h-4 w-4" />}
+                          Retomar acompanhamento
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={!selectedJobId || syncJobMutation.isPending}
+                          onClick={async () => {
+                            if (!selectedJobId) return;
+                            const result = await syncJobMutation.mutateAsync({ jobId: selectedJobId }) as { job: { jobId: string } };
+                            await utils.analysis.detail.invalidate({ jobId: result.job.jobId });
+                            await utils.analysis.list.invalidate();
+                          }}
+                          className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
+                        >
+                          {syncJobMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="mr-2 h-4 w-4" />
+                          )}
+                          Sincronizar agora
+                        </Button>
+                      </>
                     ) : (
-                      <RefreshCcw className="mr-2 h-4 w-4" />
+                      <div className="max-w-sm rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm leading-6 text-slate-300">
+                        Analistas acompanham a execução em tempo real, mas a retomada e a sincronização forçada ficam restritas ao perfil administrativo.
+                      </div>
                     )}
-                    Sincronizar agora
-                  </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {selectedDetail?.job ? (
@@ -832,6 +1014,131 @@ export default function Home() {
                   ) : (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-6 text-sm text-slate-400">
                       Selecione um job para observar os logs progressivos e o status de execução em tempo real.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="compare" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
+                <CardHeader>
+                  <CardTitle className="text-white">Seleção de jobs para comparação</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Escolha um job de referência e outro job concluído ou em andamento para contrastar foco analítico, tamanho do grafo, artefatos publicados e interseções estruturais.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-4">
+                    <div className="text-xs uppercase tracking-[0.16em] text-cyan-200/80">Job base</div>
+                    <div className="mt-2 text-lg font-medium text-white">{selectedDetail?.job?.sampleName || "Selecione um job na fila ou no histórico"}</div>
+                    <div className="mt-2 text-sm text-slate-300">{selectedDetail?.job?.focusFunction || "Sem função focal definida"}</div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Comparar com</div>
+                    {compareCandidates.length > 0 ? compareCandidates.slice(0, 8).map((job: any) => (
+                      <button
+                        key={job.jobId}
+                        type="button"
+                        onClick={() => setCompareJobId(job.jobId)}
+                        className={`w-full rounded-2xl border p-4 text-left transition ${compareJobId === job.jobId ? "border-cyan-400/30 bg-cyan-500/8" : "border-white/10 bg-slate-950/60 hover:border-white/20"}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium text-white">{job.sampleName}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{job.focusFunction}</div>
+                          </div>
+                          <Badge className={statusClasses(job.status)}>{job.status}</Badge>
+                        </div>
+                        <div className="mt-3 text-sm text-slate-400">{job.message || "Sem mensagem operacional publicada."}</div>
+                      </button>
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-5 text-sm text-slate-400">
+                        É necessário haver pelo menos dois jobs no histórico para habilitar a comparação lado a lado.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
+                <CardHeader>
+                  <CardTitle className="text-white">Matriz comparativa</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    A matriz evidencia convergências entre funções correlacionadas, artefatos emitidos e densidade do grafo para acelerar triagem e revisão entre amostras.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {comparisonSummary && compareDetail?.job && selectedDetail?.job ? (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Nós do job base</div>
+                          <div className="mt-2 text-2xl font-semibold text-white">{comparisonSummary.selectedNodeCount}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Nós do comparado</div>
+                          <div className="mt-2 text-2xl font-semibold text-white">{comparisonSummary.compareNodeCount}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Arestas do job base</div>
+                          <div className="mt-2 text-2xl font-semibold text-white">{comparisonSummary.selectedEdgeCount}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Arestas do comparado</div>
+                          <div className="mt-2 text-2xl font-semibold text-white">{comparisonSummary.compareEdgeCount}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Função focal</div>
+                              <div className="mt-2 text-lg font-medium text-white">{selectedDetail.job.focusFunction}</div>
+                            </div>
+                            <Badge className={comparisonSummary.sameFocusFunction ? "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/20" : "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/20"}>
+                              {comparisonSummary.sameFocusFunction ? "Foco coincidente" : "Focos diferentes"}
+                            </Badge>
+                          </div>
+                          <div className="text-sm leading-7 text-slate-300">
+                            Base: <span className="font-medium text-white">{selectedDetail.job.sampleName}</span><br />
+                            Comparado: <span className="font-medium text-white">{compareDetail.job.sampleName}</span>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Artefatos compartilhados</div>
+                          <div className="mt-2 text-2xl font-semibold text-white">{comparisonSummary.sharedArtifacts.length}</div>
+                          <div className="mt-2 text-sm text-slate-400">A sobreposição considera caminhos relativos publicados pela orquestração web.</div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="mb-3 text-sm font-medium text-cyan-200">Funções compartilhadas</div>
+                          <ScrollArea className="h-[220px] rounded-xl border border-white/10 bg-black/30 p-3">
+                            <div className="space-y-2 text-sm text-slate-300">
+                              {comparisonSummary.sharedFunctions.length > 0 ? comparisonSummary.sharedFunctions.map((nodeId: string) => (
+                                <div key={nodeId} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">{nodeId}</div>
+                              )) : <div className="text-slate-500">Nenhum nó compartilhado foi identificado até o momento.</div>}
+                            </div>
+                          </ScrollArea>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <div className="mb-3 text-sm font-medium text-cyan-200">Artefatos com mesmo caminho relativo</div>
+                          <ScrollArea className="h-[220px] rounded-xl border border-white/10 bg-black/30 p-3">
+                            <div className="space-y-2 text-sm text-slate-300">
+                              {comparisonSummary.sharedArtifacts.length > 0 ? comparisonSummary.sharedArtifacts.map((artifactPath: string) => (
+                                <div key={artifactPath} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">{artifactPath}</div>
+                              )) : <div className="text-slate-500">Ainda não há artefatos equivalentes entre os dois jobs.</div>}
+                            </div>
+                          </ScrollArea>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-6 text-sm leading-7 text-slate-400">
+                      Selecione um job base e um segundo job para habilitar a matriz comparativa de grafo, artefatos e foco analítico.
                     </div>
                   )}
                 </CardContent>
@@ -1030,7 +1337,7 @@ export default function Home() {
                         )
                       ))}
                     </div>
-                    {selectedDetail?.artifacts?.map((artifact) => (
+                    {selectedDetail?.artifacts?.map((artifact: any) => (
                       <a
                         key={artifact.id}
                         href={artifact.storageUrl || "#"}

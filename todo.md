@@ -24,3 +24,10 @@
 - [x] Corrigir definitivamente o erro de runtime do cookie/logout no servidor (`COOKIE_NAME`) e revalidar a aplicação após o ajuste final
 - [x] Executar e registrar uma validação final ponta a ponta cobrindo submissão, acompanhamento em tempo real, artefatos/exportações, histórico e push/versionamento antes da entrega final
 - [x] Corrigir o erro de submissão que retorna HTML em vez de JSON ao clicar em `Iniciar análise` com um arquivo `.7z`
+- [x] Corrigir definitivamente o erro persistente de submissão `.7z` que ainda retorna HTML em vez de JSON ao clicar em `Iniciar análise`
+- [x] Exibir mensagem de erro explícita no formulário quando o upload ultrapassar o limite aceito pelo backend
+- [x] Implementar acompanhamento visual do envio e processamento do arquivo com estados mais claros no painel
+- [x] Avaliar e, se viável, substituir o envio em base64 por upload multipart/streaming para suportar arquivos maiores com mais eficiência
+- [x] Substituir o polling principal por atualização em tempo real via SSE para eventos e progresso dos jobs
+- [x] Implementar controle de acesso por papéis para triagem operacional e ações administrativas
+- [x] Implementar tela de comparação entre jobs para cruzar amostras, funções e artefatos analisados

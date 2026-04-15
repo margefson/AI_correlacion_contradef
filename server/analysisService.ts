@@ -45,6 +45,16 @@ export type StartAnalysisJobInput = {
   origin?: string;
 };
 
+export type StartAnalysisJobArchiveInput = {
+  archiveName: string;
+  archiveBuffer: Buffer;
+  focusFunction: string;
+  focusTerms?: string[];
+  focusRegexes?: string[];
+  createdByUserId?: number;
+  origin?: string;
+};
+
 type LegacyStatusPayload = {
   state?: string;
   progress?: number;
@@ -513,22 +523,21 @@ function stopJobPolling(jobId: string) {
   }
 }
 
-export async function startAnalysisJob(input: StartAnalysisJobInput) {
+export async function startAnalysisJobFromArchive(input: StartAnalysisJobArchiveInput) {
   const focusTerms = normalizeCsvValues(input.focusTerms, input.focusFunction);
   const focusRegexes = (input.focusRegexes ?? []).map((item) => item.trim()).filter(Boolean);
-  const archiveBuffer = decodeBase64(input.archiveBase64);
-  validateArchiveInput({ archiveName: input.archiveName, archiveBuffer });
+  validateArchiveInput({ archiveName: input.archiveName, archiveBuffer: input.archiveBuffer });
   const sampleName = path.parse(input.archiveName).name;
 
   const archiveUpload = await storagePut(
     `analysis-inputs/${sampleName}/${input.archiveName}`,
-    archiveBuffer,
+    input.archiveBuffer,
     "application/x-7z-compressed"
   );
 
   const pipelineJob = await submitArchiveToPipeline({
     archiveName: input.archiveName,
-    archiveBuffer,
+    archiveBuffer: input.archiveBuffer,
     focusTerms,
     focusRegexes,
   });
@@ -576,6 +585,19 @@ export async function startAnalysisJob(input: StartAnalysisJobInput) {
   });
 
   return job ?? getAnalysisJobByJobId(pipelineJob.job_id);
+}
+
+export async function startAnalysisJob(input: StartAnalysisJobInput) {
+  const archiveBuffer = decodeBase64(input.archiveBase64);
+  return startAnalysisJobFromArchive({
+    archiveName: input.archiveName,
+    archiveBuffer,
+    focusFunction: input.focusFunction,
+    focusTerms: input.focusTerms,
+    focusRegexes: input.focusRegexes,
+    createdByUserId: input.createdByUserId,
+    origin: input.origin,
+  });
 }
 
 export async function syncAnalysisJob(jobId: string) {
