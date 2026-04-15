@@ -1,4 +1,5 @@
-// @vitest-environment jsdom
+/* @vitest-environment jsdom */
+
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -8,7 +9,28 @@ const mockState = vi.hoisted(() => ({
   jobs: [] as Array<Record<string, any>>,
   details: {} as Record<string, any>,
   authUserRole: "admin" as "admin" | "user",
-  uploadAnalysisArchive: vi.fn(async (_input?: unknown, _options?: unknown) => ({ jobId: "job-1" })),
+  inspectAnalysisArchive: vi.fn(async (file: File) => ({
+    ok: true,
+    message: "Assinatura 7z validada. Upload pronto para análise.",
+    remainingBytes: Math.max(0, 64 * 1024 * 1024 - file.size),
+    chunkCount: file.size > 30 * 1024 * 1024 ? 2 : 1,
+    usesChunkedTransport: file.size > 30 * 1024 * 1024,
+  })),
+  uploadAnalysisArchiveBatch: vi.fn(async (input?: any, options?: any) => {
+    const files = (input?.files ?? []) as File[];
+    const results: Array<{ file: File; result?: { jobId: string } }> = [];
+
+    for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+      const file = files[fileIndex]!;
+      options?.onFileStart?.(file, fileIndex, files.length);
+      options?.onFileProgress?.(file, 100, fileIndex, files.length);
+      const result = { jobId: `job-upload-${fileIndex + 1}` };
+      options?.onFileSuccess?.(file, result, fileIndex, files.length);
+      results.push({ file, result });
+    }
+
+    return results;
+  }),
   syncMutateAsync: vi.fn(async ({ jobId }: { jobId: string }) => ({ job: { jobId } })),
   resumeMutate: vi.fn(),
   resumeMutateAsync: vi.fn(async () => ({ resumedJobs: 1 })),
@@ -58,8 +80,11 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 }));
 
 vi.mock("@/lib/analysisUpload", () => ({
-  MAX_ARCHIVE_BYTES: 30 * 1024 * 1024,
-  uploadAnalysisArchive: (input: unknown, options: unknown) => mockState.uploadAnalysisArchive(input, options),
+  MAX_ARCHIVE_BYTES: 64 * 1024 * 1024,
+  GATEWAY_SINGLE_REQUEST_MAX_BYTES: 30 * 1024 * 1024,
+  MAX_BATCH_UPLOAD_FILES: 10,
+  inspectAnalysisArchive: (file: File) => mockState.inspectAnalysisArchive(file),
+  uploadAnalysisArchiveBatch: (input: unknown, options: unknown) => mockState.uploadAnalysisArchiveBatch(input, options),
 }));
 
 vi.mock("@/lib/trpc", () => ({
@@ -123,6 +148,30 @@ describe("Home dashboard", () => {
 
     vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
     mockState.authUserRole = "admin";
+
+    mockState.inspectAnalysisArchive.mockImplementation(async (file: File) => ({
+      ok: true,
+      message: "Assinatura 7z validada. Upload pronto para análise.",
+      remainingBytes: Math.max(0, 64 * 1024 * 1024 - file.size),
+      chunkCount: file.size > 30 * 1024 * 1024 ? 2 : 1,
+      usesChunkedTransport: file.size > 30 * 1024 * 1024,
+    }));
+
+    mockState.uploadAnalysisArchiveBatch.mockImplementation(async (input?: any, options?: any) => {
+      const files = (input?.files ?? []) as File[];
+      const results: Array<{ file: File; result?: { jobId: string } }> = [];
+
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+        const file = files[fileIndex]!;
+        options?.onFileStart?.(file, fileIndex, files.length);
+        options?.onFileProgress?.(file, 100, fileIndex, files.length);
+        const result = { jobId: `job-upload-${fileIndex + 1}` };
+        options?.onFileSuccess?.(file, result, fileIndex, files.length);
+        results.push({ file, result });
+      }
+
+      return results;
+    });
 
     mockState.jobs = [
       {
@@ -239,7 +288,6 @@ describe("Home dashboard", () => {
         },
       },
     };
-
   });
 
   it("submete um novo arquivo 7z com os parâmetros atuais do formulário", async () => {
@@ -250,17 +298,23 @@ describe("Home dashboard", () => {
     const file = new File(["fake-binary"], "sample.7z", { type: "application/x-7z-compressed" });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
+    await waitFor(() => {
+      expect(mockState.inspectAnalysisArchive).toHaveBeenCalledWith(file);
+    });
+
     await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
 
     await waitFor(() => {
-      expect(mockState.uploadAnalysisArchive).toHaveBeenCalledWith(
+      expect(mockState.uploadAnalysisArchiveBatch).toHaveBeenCalledWith(
         expect.objectContaining({
-          file,
+          files: [file],
           focusFunction: "IsDebuggerPresent",
           focusTerms: ["IsDebuggerPresent", "VirtualProtect", "CreateRemoteThread"],
         }),
         expect.objectContaining({
-          onUploadProgress: expect.any(Function),
+          onFileStart: expect.any(Function),
+          onFileProgress: expect.any(Function),
+          onFileSuccess: expect.any(Function),
         }),
       );
     });
@@ -282,7 +336,7 @@ describe("Home dashboard", () => {
 
   it("expõe erro explícito quando o backend rejeita o upload por limite", async () => {
     const user = userEvent.setup();
-    mockState.uploadAnalysisArchive.mockRejectedValueOnce(new Error("O arquivo excede o limite operacional de 30 MB aceito pelo domínio publicado."));
+    mockState.uploadAnalysisArchiveBatch.mockRejectedValueOnce(new Error("O arquivo excede o limite operacional de 64 MB por arquivo."));
 
     render(<Home />);
 
@@ -290,33 +344,49 @@ describe("Home dashboard", () => {
     const file = new File(["fake-binary"], "sample.7z", { type: "application/x-7z-compressed" });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
+    await waitFor(() => {
+      expect(mockState.inspectAnalysisArchive).toHaveBeenCalledWith(file);
+    });
+
     await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
 
-    expect(await screen.findByText(/excede o limite operacional/i)).toBeTruthy();
+    await waitFor(() => {
+      expect(mockState.uploadAnalysisArchiveBatch).toHaveBeenCalled();
+      expect(screen.getByText(/^O arquivo excede o limite operacional de 64 MB por arquivo\.$/i)).toBeTruthy();
+    });
   });
 
   it("bloqueia no cliente arquivos acima do limite publicado antes de chamar o upload", async () => {
     const user = userEvent.setup();
+    mockState.inspectAnalysisArchive.mockImplementation(async () => ({
+      ok: false,
+      message: "O arquivo excede o limite operacional de 64 MB por arquivo. Reduza o pacote ou recompacte antes do envio.",
+      remainingBytes: 0,
+      chunkCount: 0,
+      usesChunkedTransport: false,
+    }));
+
     render(<Home />);
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["fake-binary"], "oversized-sample.7z", { type: "application/x-7z-compressed" });
-    Object.defineProperty(file, "size", { value: 31 * 1024 * 1024 });
+    Object.defineProperty(file, "size", { value: 65 * 1024 * 1024 });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+    await waitFor(() => {
+      expect(screen.getByText(/recompacte antes do envio/i)).toBeTruthy();
+    });
 
-    expect(await screen.findByText(/30 MB aceito pelo domínio publicado/i)).toBeTruthy();
-    expect(mockState.uploadAnalysisArchive).not.toHaveBeenCalled();
+    expect(mockState.uploadAnalysisArchiveBatch).not.toHaveBeenCalled();
   });
 
   it("expõe orientação de triagem para o perfil não administrativo e mantém a matriz comparativa disponível", () => {
     mockState.authUserRole = "user";
     render(<Home />);
 
-    expect(screen.getByText(/modo de triagem com controles críticos bloqueados/i)).toBeTruthy();
-    expect(screen.getByText(/analistas acompanham a execução em tempo real/i)).toBeTruthy();
-    expect(screen.getAllByText(/matriz comparativa/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Analista de triagem/i)).toBeTruthy();
+    expect(screen.getByText(/Modo de triagem com controles críticos bloqueados/i)).toBeTruthy();
+    expect(screen.getAllByText(/Matriz comparativa/i).length).toBeGreaterThan(0);
   });
 
   it("expõe exportações explícitas e links publicados no painel de detalhes", () => {

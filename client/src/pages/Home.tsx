@@ -25,7 +25,13 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { uploadAnalysisArchive, MAX_ARCHIVE_BYTES } from "@/lib/analysisUpload";
+import {
+  GATEWAY_SINGLE_REQUEST_MAX_BYTES,
+  inspectAnalysisArchive,
+  MAX_ARCHIVE_BYTES,
+  MAX_BATCH_UPLOAD_FILES,
+  uploadAnalysisArchiveBatch,
+} from "@/lib/analysisUpload";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -74,6 +80,20 @@ type StreamSnapshot = {
   detail?: any | null;
 };
 
+type UploadQueueStatus = "validated" | "invalid" | "uploading" | "starting" | "completed" | "error";
+
+type UploadQueueItem = {
+  id: string;
+  file: File;
+  status: UploadQueueStatus;
+  progress: number;
+  message: string;
+  remainingBytes: number;
+  chunkCount: number;
+  usesChunkedTransport: boolean;
+  jobId?: string;
+};
+
 function statusClasses(status?: string | null) {
   switch (status) {
     case "completed":
@@ -96,6 +116,44 @@ function metricTone(kind: "primary" | "success" | "warning" | "neutral") {
   if (kind === "warning") return "from-amber-500/20 via-amber-500/5 to-transparent";
   if (kind === "neutral") return "from-slate-500/20 via-slate-500/5 to-transparent";
   return "from-cyan-500/25 via-indigo-500/10 to-transparent";
+}
+
+function uploadQueueStatusLabel(status: UploadQueueStatus) {
+  switch (status) {
+    case "validated":
+      return "Validado";
+    case "invalid":
+      return "Bloqueado";
+    case "uploading":
+      return "Enviando";
+    case "starting":
+      return "Criando job";
+    case "completed":
+      return "Concluído";
+    case "error":
+      return "Falhou";
+    default:
+      return "Aguardando";
+  }
+}
+
+function uploadQueueStatusClasses(status: UploadQueueStatus) {
+  switch (status) {
+    case "validated":
+      return "bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-400/20";
+    case "invalid":
+      return "bg-rose-500/15 text-rose-200 ring-1 ring-rose-400/20";
+    case "uploading":
+      return "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/20";
+    case "starting":
+      return "bg-indigo-500/15 text-indigo-200 ring-1 ring-indigo-400/20";
+    case "completed":
+      return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/20";
+    case "error":
+      return "bg-rose-500/15 text-rose-200 ring-1 ring-rose-400/20";
+    default:
+      return "bg-white/10 text-white ring-1 ring-white/10";
+  }
 }
 
 function formatDateTime(value?: Date | string | number | null) {
@@ -132,6 +190,10 @@ function parseCommaSeparated(value: string) {
     .filter(Boolean);
 }
 
+function buildUploadQueueId(file: File) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
 function buildGraphLayout(nodes: GraphNode[]) {
   if (nodes.length === 0) return [] as Array<GraphNode & { x: number; y: number }>;
   const centerX = 320;
@@ -155,7 +217,7 @@ export default function Home() {
   const utils = trpc.useUtils();
   const auth = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [focusFunction, setFocusFunction] = useState("IsDebuggerPresent");
   const [focusTermsInput, setFocusTermsInput] = useState("IsDebuggerPresent, VirtualProtect, CreateRemoteThread");
   const [focusRegexesInput, setFocusRegexesInput] = useState("Zw.*InformationProcess, Nt.*QuerySystemInformation");
@@ -167,7 +229,8 @@ export default function Home() {
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [submitPhase, setSubmitPhase] = useState<"idle" | "uploading" | "starting">("idle");
+  const [activeUploadLabel, setActiveUploadLabel] = useState<string | null>(null);
+  const [submitPhase, setSubmitPhase] = useState<"idle" | "validating" | "uploading" | "starting">("idle");
   const [liveJobs, setLiveJobs] = useState<Array<Record<string, any>> | null>(null);
   const [liveDetail, setLiveDetail] = useState<any | null>(null);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("offline");
@@ -346,6 +409,77 @@ export default function Home() {
     };
   }, [compareDetail, compareGraphEdges.length, compareGraphNodes, graphEdges.length, graphNodes, selectedDetail]);
 
+  const queueSummary = useMemo(() => {
+    const totalFiles = uploadQueue.length;
+    const totalBytes = uploadQueue.reduce((sum, item) => sum + item.file.size, 0);
+    const completedFiles = uploadQueue.filter((item) => item.status === "completed").length;
+    const invalidFiles = uploadQueue.filter((item) => item.status === "invalid").length;
+    const activeFiles = uploadQueue.filter((item) => item.status === "uploading" || item.status === "starting").length;
+    const averageProgress = totalFiles > 0
+      ? Math.round(uploadQueue.reduce((sum, item) => sum + item.progress, 0) / totalFiles)
+      : 0;
+
+    return {
+      totalFiles,
+      totalBytes,
+      completedFiles,
+      invalidFiles,
+      activeFiles,
+      averageProgress,
+    };
+  }, [uploadQueue]);
+
+  const readyUploadItems = useMemo(
+    () => uploadQueue.filter((item) => item.status === "validated" || item.status === "error"),
+    [uploadQueue],
+  );
+
+  function updateUploadQueueItem(queueId: string, updater: (item: UploadQueueItem) => UploadQueueItem) {
+    setUploadQueue((current) => current.map((item) => (item.id === queueId ? updater(item) : item)));
+  }
+
+  async function handleFileSelection(fileList: FileList | null) {
+    const incomingFiles = Array.from(fileList ?? []);
+    if (incomingFiles.length === 0) return;
+
+    if (incomingFiles.length > MAX_BATCH_UPLOAD_FILES) {
+      toast.error(`A fila aceita até ${MAX_BATCH_UPLOAD_FILES} arquivos por rodada. Os demais foram ignorados.`);
+    }
+
+    setSubmitPhase("validating");
+    setSubmissionError(null);
+    setActiveUploadLabel(null);
+    setUploadProgress(0);
+
+    const inspectedItems = await Promise.all(
+      incomingFiles.slice(0, MAX_BATCH_UPLOAD_FILES).map(async (file) => {
+        const inspection = await inspectAnalysisArchive(file);
+        return {
+          id: buildUploadQueueId(file),
+          file,
+          status: inspection.ok ? "validated" : "invalid",
+          progress: 0,
+          message: inspection.message,
+          remainingBytes: inspection.remainingBytes,
+          chunkCount: inspection.chunkCount,
+          usesChunkedTransport: inspection.usesChunkedTransport,
+        } satisfies UploadQueueItem;
+      }),
+    );
+
+    setUploadQueue((current) => {
+      const nextItems = new Map(current.map((item) => [item.id, item]));
+      inspectedItems.forEach((item) => nextItems.set(item.id, item));
+      return Array.from(nextItems.values());
+    });
+
+    if (inspectedItems.some((item) => item.status === "invalid")) {
+      setSubmissionError("Um ou mais arquivos foram bloqueados na verificação prévia. Revise a fila antes de iniciar a análise.");
+    }
+
+    setSubmitPhase("idle");
+  }
+
   const positionedNodes = useMemo(() => buildGraphLayout(graphNodes), [graphNodes]);
   const selectedGraphNode = positionedNodes.find((node) => node.id === highlightedNodeId) ?? positionedNodes[0] ?? null;
   const visibleEdges = highlightedNodeId
@@ -360,20 +494,19 @@ export default function Home() {
       return;
     }
 
-    if (!selectedFile) {
-      const message = "Selecione um pacote .7z antes de iniciar a análise.";
+    const focusFunctionValue = focusFunction.trim();
+    if (!focusFunctionValue) {
+      const message = "Informe uma função de interesse antes de iniciar a fila de análise.";
       setSubmissionError(message);
       toast.error(message);
       return;
     }
-    if (!selectedFile.name.toLowerCase().endsWith(".7z")) {
-      const message = "A plataforma aceita apenas arquivos .7z nesta etapa.";
-      setSubmissionError(message);
-      toast.error(message);
-      return;
-    }
-    if (selectedFile.size > MAX_ARCHIVE_BYTES) {
-      const message = `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB aceito pelo domínio publicado.`;
+
+    const pendingItems = readyUploadItems;
+    if (pendingItems.length === 0) {
+      const message = uploadQueue.length === 0
+        ? "Selecione um ou mais pacotes .7z antes de iniciar a análise."
+        : "Não há arquivos elegíveis para envio. Revise os itens bloqueados ou adicione novos arquivos à fila.";
       setSubmissionError(message);
       toast.error(message);
       return;
@@ -384,35 +517,84 @@ export default function Home() {
       setSubmitPhase("uploading");
       setUploadProgress(0);
 
-      const createdJob = await uploadAnalysisArchive(
+      const results = await uploadAnalysisArchiveBatch(
         {
-          file: selectedFile,
-          focusFunction: focusFunction.trim(),
+          files: pendingItems.map((item) => item.file),
+          focusFunction: focusFunctionValue,
           focusTerms: parseCommaSeparated(focusTermsInput),
           focusRegexes: parseCommaSeparated(focusRegexesInput),
           origin: window.location.origin,
         },
         {
-          onUploadProgress: (progress) => setUploadProgress(progress),
+          onFileStart: (file, fileIndex, totalFiles) => {
+            const queueId = buildUploadQueueId(file);
+            setActiveUploadLabel(file.name);
+            updateUploadQueueItem(queueId, (item) => ({
+              ...item,
+              status: "uploading",
+              progress: 0,
+              message: `Arquivo ${fileIndex + 1} de ${totalFiles}: preparando envio seguro em partes.`,
+            }));
+          },
+          onFileProgress: (file, progress, fileIndex, totalFiles) => {
+            const queueId = buildUploadQueueId(file);
+            setActiveUploadLabel(file.name);
+            setUploadProgress(progress);
+            updateUploadQueueItem(queueId, (item) => ({
+              ...item,
+              status: "uploading",
+              progress,
+              message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${formatPercent(progress)} transferido para o backend web.`,
+            }));
+          },
+          onFileSuccess: (file, result, fileIndex, totalFiles) => {
+            const queueId = buildUploadQueueId(file);
+            setSubmitPhase("starting");
+            updateUploadQueueItem(queueId, (item) => ({
+              ...item,
+              status: "completed",
+              progress: 100,
+              message: `Arquivo ${fileIndex + 1} de ${totalFiles}: job ${result.jobId} criado com sucesso e entregue à fila operacional.`,
+              jobId: result.jobId,
+            }));
+          },
+          onFileError: (file, error, fileIndex, totalFiles) => {
+            const queueId = buildUploadQueueId(file);
+            updateUploadQueueItem(queueId, (item) => ({
+              ...item,
+              status: "error",
+              progress: 0,
+              message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${error.message}`,
+            }));
+          },
         },
-      ) as { jobId: string } | undefined;
+      );
 
-      setSubmitPhase("starting");
-      setUploadProgress(100);
+      const successfulJobIds = results
+        .map((entry) => entry.result?.jobId)
+        .filter((jobId): jobId is string => Boolean(jobId));
+      const failedCount = results.filter((entry) => entry.error).length;
 
-      if (!createdJob?.jobId) {
-        throw new Error("A análise foi iniciada, mas o identificador do job não foi retornado corretamente.");
+      if (successfulJobIds.length === 0) {
+        throw new Error("Nenhum arquivo elegível conseguiu iniciar análise. Revise as mensagens da fila e tente novamente.");
       }
 
-      toast.success("Job enviado para a fila de análise.");
-      setSelectedFile(null);
-      setSelectedJobId(createdJob.jobId);
+      setUploadProgress(100);
+      setSelectedJobId(successfulJobIds[successfulJobIds.length - 1] ?? null);
       setActiveTab("queue");
       if (isAdmin) {
         await resumeSyncMutation.mutateAsync();
       }
       await utils.analysis.list.invalidate();
-      await utils.analysis.detail.invalidate({ jobId: createdJob.jobId });
+      await Promise.all(successfulJobIds.map((jobId) => utils.analysis.detail.invalidate({ jobId })));
+
+      if (failedCount > 0) {
+        const message = `${failedCount} arquivo(s) falharam na fila atual. Os demais foram enviados com sucesso.`;
+        setSubmissionError(message);
+        toast.error(message);
+      } else {
+        toast.success(`${successfulJobIds.length} arquivo(s) enviados para a fila de análise.`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao iniciar a análise.";
       setSubmissionError(message);
@@ -420,8 +602,11 @@ export default function Home() {
     } finally {
       setSubmitPhase("idle");
       setUploadProgress(0);
+      setActiveUploadLabel(null);
     }
   }
+
+  const canSubmitUploadQueue = auth.isAuthenticated && readyUploadItems.length > 0 && !isSubmittingJob;
 
   return (
     <DashboardLayout>
@@ -733,25 +918,67 @@ export default function Home() {
                 <CardContent className="space-y-5">
                   <div className="grid gap-5 lg:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-200">Pacote compactado</label>
+                      <label className="text-sm font-medium text-slate-200">Pacotes compactados</label>
                       <div className="rounded-2xl border border-dashed border-cyan-400/20 bg-slate-950/60 p-4">
                         <Input
                           type="file"
                           accept=".7z"
-                          onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                          multiple
+                          onChange={(event) => {
+                            void handleFileSelection(event.target.files);
+                            event.currentTarget.value = "";
+                          }}
                           className="border-white/10 bg-slate-950/70 text-slate-100 file:text-slate-200"
                         />
                         <p className="mt-3 text-sm text-slate-400">
-                          Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB no domínio publicado. O envio usa upload multipart, mas o gateway externo bloqueia arquivos maiores antes de o endpoint JSON processar a requisição.
+                          Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB por arquivo. Arquivos acima de {Math.round(GATEWAY_SINGLE_REQUEST_MAX_BYTES / (1024 * 1024))} MB são enviados em partes seguras para contornar o limite por requisição do domínio publicado. Cada rodada aceita até {MAX_BATCH_UPLOAD_FILES} arquivos .7z.
                         </p>
-                        {selectedFile ? (
-                          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
-                            <div className="flex items-center gap-2 font-medium text-white">
-                              <FileArchive className="h-4 w-4 text-cyan-300" /> {selectedFile.name}
-                            </div>
-                            <div className="mt-2 text-slate-400">{formatBytes(selectedFile.size)}</div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Fila atual</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{queueSummary.totalFiles}</div>
+                            <p className="mt-1 text-slate-400">{formatBytes(queueSummary.totalBytes)} preparados para validação e envio.</p>
                           </div>
-                        ) : null}
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Concluídos</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{queueSummary.completedFiles}</div>
+                            <p className="mt-1 text-slate-400">{queueSummary.invalidFiles} item(ns) bloqueado(s) na checagem prévia.</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Progresso médio</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{formatPercent(queueSummary.averageProgress)}</div>
+                            <p className="mt-1 text-slate-400">{queueSummary.activeFiles > 0 ? `${queueSummary.activeFiles} arquivo(s) em trânsito.` : "Nenhuma transferência em andamento."}</p>
+                          </div>
+                        </div>
+                        {uploadQueue.length > 0 ? (
+                          <div className="mt-4 space-y-3">
+                            {uploadQueue.map((item) => (
+                              <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div>
+                                    <div className="flex items-center gap-2 font-medium text-white">
+                                      <FileArchive className="h-4 w-4 text-cyan-300" /> {item.file.name}
+                                    </div>
+                                    <p className="mt-2 text-xs text-slate-400">
+                                      {formatBytes(item.file.size)} · restante até o teto: {item.remainingBytes > 0 ? formatBytes(item.remainingBytes) : "0 B"} · {item.usesChunkedTransport ? `${item.chunkCount} parte(s) seguras` : "envio direto"}
+                                    </p>
+                                  </div>
+                                  <Badge className={uploadQueueStatusClasses(item.status)}>{uploadQueueStatusLabel(item.status)}</Badge>
+                                </div>
+                                <p className={`mt-3 leading-6 ${item.status === "invalid" || item.status === "error" ? "text-rose-200" : "text-slate-300"}`}>
+                                  {item.message}
+                                </p>
+                                <div className="mt-3">
+                                  <Progress value={item.progress} className="h-2 bg-cyan-950/40" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-300">
+                            Selecione um ou mais arquivos .7z para validar assinatura, estimar o envio em partes e montar a fila sequencial de análise.
+                          </div>
+                        )}
                         {submissionError ? (
                           <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm leading-6 text-rose-100">
                             {submissionError}
@@ -760,10 +987,16 @@ export default function Home() {
                         {isSubmittingJob ? (
                           <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-500/10 p-3 text-sm text-cyan-50">
                             <div className="mb-2 flex items-center justify-between gap-3">
-                              <span>{submitPhase === "uploading" ? "Enviando arquivo para o backend web..." : "Upload concluído. Criando job e sincronizando a fila..."}</span>
-                              <span>{submitPhase === "uploading" ? formatPercent(uploadProgress) : "100%"}</span>
+                              <span>
+                                {submitPhase === "validating"
+                                  ? "Validando assinatura e preparando sessões seguras..."
+                                  : submitPhase === "uploading"
+                                    ? `Enviando ${activeUploadLabel ?? "arquivo atual"} em partes seguras...`
+                                    : "Upload concluído. Criando job e sincronizando a fila..."}
+                              </span>
+                              <span>{submitPhase === "starting" ? "100%" : formatPercent(uploadProgress)}</span>
                             </div>
-                            <Progress value={submitPhase === "uploading" ? uploadProgress : 100} className="h-2 bg-cyan-950/40" />
+                            <Progress value={submitPhase === "starting" ? 100 : uploadProgress} className="h-2 bg-cyan-950/40" />
                           </div>
                         ) : null}
                       </div>
@@ -806,7 +1039,7 @@ export default function Home() {
                   <div className="flex flex-wrap gap-3">
                     <Button
                       onClick={handleSubmitJob}
-                      disabled={isSubmittingJob || !auth.isAuthenticated}
+                      disabled={!canSubmitUploadQueue}
                       className="rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400"
                     >
                       {isSubmittingJob ? (
@@ -814,15 +1047,16 @@ export default function Home() {
                       ) : (
                         <UploadCloud className="mr-2 h-4 w-4" />
                       )}
-                      {isSubmittingJob ? "Enviando..." : "Iniciar análise"}
+                      {isSubmittingJob ? "Enviando fila..." : "Iniciar análise em lote"}
                     </Button>
                     <Button
                       variant="outline"
                       className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
                       onClick={() => {
-                        setSelectedFile(null);
+                        setUploadQueue([]);
                         setSubmissionError(null);
                         setUploadProgress(0);
+                        setActiveUploadLabel(null);
                         setSubmitPhase("idle");
                         setFocusFunction("IsDebuggerPresent");
                         setFocusTermsInput("IsDebuggerPresent, VirtualProtect, CreateRemoteThread");

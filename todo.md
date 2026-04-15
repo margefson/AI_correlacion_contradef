@@ -32,3 +32,9 @@
 - [x] Implementar controle de acesso por papéis para triagem operacional e ações administrativas
 - [x] Implementar tela de comparação entre jobs para cruzar amostras, funções e artefatos analisados
 - [x] Corrigir o caso remanescente em que o upload recebe uma página HTML inesperada em vez de JSON no endpoint esperado
+- [x] Elevar a capacidade mínima de upload publicada para pelo menos 50 MB sem retorno HTML inesperado no domínio atual ou implementar alternativa compatível equivalente
+- [x] Implementar compactação ou verificação pré-upload do pacote `.7z` antes do envio
+- [x] Exibir contador visual de tamanho restante antes do envio do arquivo
+- [x] Criar fila de uploads em lote com validação individual por arquivo
+- [x] Atualizar documentação operacional e testes para o novo fluxo de upload ampliado
+- [ ] Commitar e enviar todas as mudanças finais no GitHub após validação completa

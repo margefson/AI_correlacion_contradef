@@ -22,7 +22,7 @@ A experiência foi desenhada para manter o operador dentro de um único fluxo de
 
 | Capacidade entregue | Descrição |
 | --- | --- |
-| Submissão validada de `.7z` | Aceita upload multipart autenticado até 30 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato |
+| Submissão validada de `.7z` | Aceita upload autenticado com sessão em partes, suporta arquivos acima de 50 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato |
 | Acompanhamento em tempo real | Exibe estágio, progresso, mensagens, stdout e stderr resumidos por job via stream SSE autenticado |
 | Histórico filtrável | Mantém jobs anteriores disponíveis para inspeção e retomada operacional |
 | Visualização de correlação | Mostra nós, relações e tabela associada ao job selecionado |
@@ -55,7 +55,7 @@ Durante o processamento, o backend sincroniza o status do job, captura logs prog
 
 | Etapa | Resultado esperado |
 | --- | --- |
-| Submissão multipart | Job criado e enfileirado com parâmetros do operador; acima de 30 MB no domínio publicado, o envio deve ser bloqueado preventivamente no cliente |
+| Submissão em partes | Job criado e enfileirado com parâmetros do operador; o cliente faz verificação prévia, divide arquivos grandes em partes seguras e suporta lotes sequenciais acima de 50 MB no domínio publicado |
 | Stream SSE autenticado | Progresso, estágio, snapshots do job e logs atualizados na interface |
 | Consolidação | Grafo, tabela, resumo, artefatos e estado final persistidos |
 | Pós-processamento | Notificação enviada e commit realizado quando aplicável |
@@ -70,7 +70,7 @@ A página principal agrega métricas, formulário de submissão, painel de ativi
 | Área da interface | Conteúdo |
 | --- | --- |
 | Hero operacional | Contexto do pipeline, perfil atual, estado do stream SSE e métricas resumidas |
-| Nova submissão | Upload `.7z` multipart, foco analítico, progresso de envio e mensagens claras de erro |
+| Nova submissão | Upload `.7z` em lote com verificação prévia, foco analítico, contador de capacidade restante, progresso por arquivo e mensagens claras de erro |
 | Atividade imediata | Estado do job ativo, snapshots em tempo real e ações administrativas condicionadas ao papel |
 | Histórico | Lista de jobs com seleção, status, progresso e recorte temporal |
 | Detalhe do job | Resumo, correlação, eventos, logs, commit e artefatos |
@@ -92,7 +92,7 @@ A autenticação, os helpers internos e os segredos injetados pela plataforma j�
 
 ## Validação e testes
 
-A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas e o fluxo de logout. Os testes do frontend exercitam a submissão multipart, a atualização do histórico, a exposição de exportações, o erro explícito de limite e a experiência de triagem para perfis não administrativos.
+A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas e o fluxo de logout. Os testes do frontend exercitam a submissão em lote com verificação prévia, a atualização do histórico, a exposição de exportações, o erro explícito de limite e a experiência de triagem para perfis não administrativos.
 
 Além da suíte automatizada, a aplicação foi verificada com compilação TypeScript limpa e servidor de desenvolvimento saudável. A prévia visual do dashboard confirma o funcionamento da identidade visual, da aba comparativa e do layout principal.
 
@@ -144,6 +144,6 @@ A base do projeto já contém a separação entre cliente, servidor, schema e do
 
 ## Estado atual
 
-Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão multipart controlada com limite operacional de 30 MB no domínio publicado, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, perfis operacionais e capacidade de versionamento operacional.
+Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão autenticada em partes com suporte operacional acima de 50 MB no domínio publicado, verificação prévia do pacote `.7z`, fila em lote com validação individual, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, perfis operacionais e capacidade de versionamento operacional.
 
 Os próximos incrementos naturais, caso desejados, seriam expandir filtros avançados do histórico, aumentar a profundidade das visualizações do grafo, enriquecer métricas operacionais e sofisticar ainda mais as regras comparativas entre execuções.
