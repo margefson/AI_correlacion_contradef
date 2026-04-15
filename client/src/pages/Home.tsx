@@ -26,6 +26,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  CHUNK_UPLOAD_HARD_MAX_BYTES,
+  CHUNK_UPLOAD_MAX_BYTES,
   GATEWAY_SINGLE_REQUEST_MAX_BYTES,
   inspectAnalysisArchive,
   MAX_ARCHIVE_BYTES,
@@ -84,6 +86,8 @@ type StreamSnapshot = {
 
 type UploadQueueStatus = "validated" | "invalid" | "uploading" | "starting" | "completed" | "error";
 
+type UploadStageTelemetry = Record<UploadRetryStage, number>;
+
 type UploadQueueItem = {
   id: string;
   file: File;
@@ -93,6 +97,8 @@ type UploadQueueItem = {
   remainingBytes: number;
   chunkCount: number;
   usesChunkedTransport: boolean;
+  maxPartBytes: number;
+  failureTelemetry: UploadStageTelemetry;
   jobId?: string;
 };
 
@@ -156,6 +162,14 @@ function uploadQueueStatusClasses(status: UploadQueueStatus) {
     default:
       return "bg-white/10 text-white ring-1 ring-white/10";
   }
+}
+
+function createEmptyUploadStageTelemetry(): UploadStageTelemetry {
+  return {
+    session: 0,
+    chunk: 0,
+    complete: 0,
+  };
 }
 
 function uploadRetryStageLabel(stage: UploadRetryStage) {
@@ -534,6 +548,11 @@ export default function Home() {
     const averageProgress = totalFiles > 0
       ? Math.round(uploadQueue.reduce((sum, item) => sum + item.progress, 0) / totalFiles)
       : 0;
+    const failureTelemetry = uploadQueue.reduce<UploadStageTelemetry>((accumulator, item) => ({
+      session: accumulator.session + item.failureTelemetry.session,
+      chunk: accumulator.chunk + item.failureTelemetry.chunk,
+      complete: accumulator.complete + item.failureTelemetry.complete,
+    }), createEmptyUploadStageTelemetry());
 
     return {
       totalFiles,
@@ -542,6 +561,7 @@ export default function Home() {
       invalidFiles,
       activeFiles,
       averageProgress,
+      failureTelemetry,
     };
   }, [uploadQueue]);
 
@@ -579,6 +599,8 @@ export default function Home() {
           remainingBytes: inspection.remainingBytes,
           chunkCount: inspection.chunkCount,
           usesChunkedTransport: inspection.usesChunkedTransport,
+          maxPartBytes: inspection.usesChunkedTransport ? CHUNK_UPLOAD_MAX_BYTES : GATEWAY_SINGLE_REQUEST_MAX_BYTES,
+          failureTelemetry: createEmptyUploadStageTelemetry(),
         } satisfies UploadQueueItem;
       }),
     );
@@ -664,6 +686,19 @@ export default function Home() {
               ...item,
               status: "uploading",
               message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${uploadRetryStageLabel(stage)} (tentativa ${attempt}/3) após falha transitória. ${error.message}`,
+            }));
+          },
+          onFileStageFailure: (file, stage, error, context, fileIndex, totalFiles) => {
+            const queueId = buildUploadQueueId(file);
+            updateUploadQueueItem(queueId, (item) => ({
+              ...item,
+              failureTelemetry: {
+                ...item.failureTelemetry,
+                [stage]: item.failureTelemetry[stage] + 1,
+              },
+              message: context.willRetry
+                ? `Arquivo ${fileIndex + 1} de ${totalFiles}: ${uploadRetryStageLabel(stage)} após falha transitória. ${error.message}`
+                : item.message,
             }));
           },
           onFileSuccess: (file, result, fileIndex, totalFiles) => {
@@ -1115,10 +1150,11 @@ export default function Home() {
                           }}
                           className="border-white/10 bg-slate-950/70 text-slate-100 file:text-slate-200"
                         />
-                        <p className="mt-3 text-sm text-slate-400">
-                          Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB por arquivo. Arquivos acima de {Math.round(GATEWAY_SINGLE_REQUEST_MAX_BYTES / (1024 * 1024))} MB são enviados em partes seguras para contornar o limite por requisição do domínio publicado. Cada rodada aceita até {MAX_BATCH_UPLOAD_FILES} arquivos .7z.
-                        </p>
-                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <p className="mt-3 text-sm text-slate-400">
+                            Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB por arquivo. Arquivos acima de {Math.round(GATEWAY_SINGLE_REQUEST_MAX_BYTES / (1024 * 1024))} MB são enviados em partes seguras para contornar o limite por requisição do domínio publicado. Cada parte fragmentada usa até {Math.round(CHUNK_UPLOAD_MAX_BYTES / (1024 * 1024))} MB, abaixo do teto rígido de {Math.round(CHUNK_UPLOAD_HARD_MAX_BYTES / (1024 * 1024))} MB do parser multipart. Cada rodada aceita até {MAX_BATCH_UPLOAD_FILES} arquivos .7z.
+                          </p>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-4">
                           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Fila atual</div>
                             <div className="mt-2 text-2xl font-semibold text-white">{queueSummary.totalFiles}</div>
@@ -1132,8 +1168,14 @@ export default function Home() {
                           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Progresso médio</div>
                             <div className="mt-2 text-2xl font-semibold text-white">{formatPercent(queueSummary.averageProgress)}</div>
-                            <p className="mt-1 text-slate-400">{queueSummary.activeFiles > 0 ? `${queueSummary.activeFiles} arquivo(s) em trânsito.` : "Nenhuma transferência em andamento."}</p>
+                            <p className="mt-1 text-slate-400">{queueSummary.completedFiles > 0 ? "Fila com entregas concluídas." : "Sem uploads concluídos até agora."}</p>
                           </div>
+                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Telemetria de falhas</div>
+                            <div className="mt-2 text-sm font-medium text-white">sessão {queueSummary.failureTelemetry.session} · parte {queueSummary.failureTelemetry.chunk} · conclusão {queueSummary.failureTelemetry.complete}</div>
+                            <p className="mt-1 text-slate-400">Contagem acumulada das falhas observadas antes do sucesso ou da interrupção final.</p>
+                          </div>
+
                         </div>
                         {uploadQueue.length > 0 ? (
                           <div className="mt-4 space-y-3">
@@ -1147,12 +1189,22 @@ export default function Home() {
                                     <p className="mt-2 text-xs text-slate-400">
                                       {formatBytes(item.file.size)} · restante até o teto: {item.remainingBytes > 0 ? formatBytes(item.remainingBytes) : "0 B"} · {item.usesChunkedTransport ? `${item.chunkCount} parte(s) seguras` : "envio direto"}
                                     </p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {item.usesChunkedTransport
+                                        ? `Máximo efetivo por parte: ${formatBytes(item.maxPartBytes)} · teto rígido do parser: ${formatBytes(CHUNK_UPLOAD_HARD_MAX_BYTES)}`
+                                        : `Limite do envio direto por requisição: ${formatBytes(item.maxPartBytes)}`}
+                                    </p>
                                   </div>
                                   <Badge className={uploadQueueStatusClasses(item.status)}>{uploadQueueStatusLabel(item.status)}</Badge>
                                 </div>
                                 <p className={`mt-3 leading-6 ${item.status === "invalid" || item.status === "error" ? "text-rose-200" : "text-slate-300"}`}>
                                   {item.message}
                                 </p>
+                                {(item.failureTelemetry.session > 0 || item.failureTelemetry.chunk > 0 || item.failureTelemetry.complete > 0) ? (
+                                  <div className="mt-3 rounded-lg border border-amber-400/15 bg-amber-500/10 px-3 py-2 text-xs leading-6 text-amber-100">
+                                    Telemetria de falhas do arquivo: sessão {item.failureTelemetry.session} · parte {item.failureTelemetry.chunk} · conclusão {item.failureTelemetry.complete}
+                                  </div>
+                                ) : null}
                                 <div className="mt-3">
                                   <Progress value={item.progress} className="h-2 bg-cyan-950/40" />
                                 </div>

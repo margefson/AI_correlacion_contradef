@@ -1,11 +1,17 @@
 import {
   CHUNK_UPLOAD_HARD_MAX_BYTES,
+  CHUNK_UPLOAD_SAFE_MARGIN_BYTES,
   CHUNK_UPLOAD_SAFE_MAX_BYTES,
   GATEWAY_SINGLE_REQUEST_MAX_BYTES,
   OPERATIONAL_ARCHIVE_MAX_BYTES,
 } from "../../../shared/analysis";
 
-export { GATEWAY_SINGLE_REQUEST_MAX_BYTES, OPERATIONAL_ARCHIVE_MAX_BYTES as MAX_ARCHIVE_BYTES };
+export {
+  CHUNK_UPLOAD_HARD_MAX_BYTES,
+  CHUNK_UPLOAD_SAFE_MARGIN_BYTES,
+  GATEWAY_SINGLE_REQUEST_MAX_BYTES,
+  OPERATIONAL_ARCHIVE_MAX_BYTES as MAX_ARCHIVE_BYTES,
+};
 export const CHUNK_UPLOAD_MAX_BYTES = CHUNK_UPLOAD_SAFE_MAX_BYTES;
 export const MAX_BATCH_UPLOAD_FILES = 10;
 
@@ -30,15 +36,30 @@ export type AnalysisUploadResult = {
 
 export type UploadRetryStage = "session" | "chunk" | "complete";
 
+export type UploadStageFailureContext = {
+  attempt: number;
+  maxAttempts: number;
+  willRetry: boolean;
+};
+
 export type AnalysisUploadOptions = {
   onUploadProgress?: (progress: number) => void;
   onUploadRetry?: (attempt: number, stage: UploadRetryStage, error: Error) => void;
+  onUploadStageFailure?: (stage: UploadRetryStage, error: Error, context: UploadStageFailureContext) => void;
 };
 
 export type AnalysisUploadBatchOptions = {
   onFileStart?: (file: File, fileIndex: number, fileCount: number) => void;
   onFileProgress?: (file: File, progress: number, fileIndex: number, fileCount: number) => void;
   onFileRetry?: (file: File, attempt: number, stage: UploadRetryStage, error: Error, fileIndex: number, fileCount: number) => void;
+  onFileStageFailure?: (
+    file: File,
+    stage: UploadRetryStage,
+    error: Error,
+    context: UploadStageFailureContext,
+    fileIndex: number,
+    fileCount: number,
+  ) => void;
   onFileSuccess?: (file: File, result: AnalysisUploadResult, fileIndex: number, fileCount: number) => void;
   onFileError?: (file: File, error: Error, fileIndex: number, fileCount: number) => void;
 };
@@ -137,21 +158,38 @@ async function getJson<T>(url: string) {
   return parseJsonResponse<T>(response);
 }
 
-async function postForm<T>(url: string, formData: FormData) {
+async function postOctetStream<T>(url: string, chunk: Blob, chunkIndex: number) {
   const response = await fetch(url, {
     method: "POST",
     credentials: "include",
     headers: {
       Accept: "application/json",
+      "Content-Type": "application/octet-stream",
+      "x-chunk-index": String(chunkIndex),
     },
-    body: formData,
+    body: chunk,
   });
 
   return parseJsonResponse<T>(response);
 }
 
-function normalizeUploadError(error: unknown) {
-  return error instanceof Error ? error : new Error("Falha operacional ao transferir o arquivo para análise.");
+function normalizeUploadError(error: unknown, stage?: UploadRetryStage) {
+  if (error instanceof Error) {
+    const message = error.message?.trim() || "Falha operacional ao transferir o arquivo para análise.";
+    if (/fetch failed|failed to fetch/i.test(message)) {
+      const stageLabel = stage === "session"
+        ? "a criação da sessão"
+        : stage === "chunk"
+          ? "o envio de uma das partes"
+          : stage === "complete"
+            ? "a conclusão do upload"
+            : "a transferência";
+      return new Error(`Falha de rede ao concluir ${stageLabel} no domínio publicado. O cliente registrou a etapa afetada na telemetria operacional e tentará retomar usando a sessão persistida quando possível.`);
+    }
+    return new Error(message);
+  }
+
+  return new Error("Falha operacional ao transferir o arquivo para análise.");
 }
 
 function buildStoredUploadSessionKey(input: AnalysisUploadInput) {
@@ -211,6 +249,7 @@ async function runWithRetry<T>(
   operation: () => Promise<T>,
   stage: UploadRetryStage,
   onRetry: AnalysisUploadOptions["onUploadRetry"],
+  onStageFailure: AnalysisUploadOptions["onUploadStageFailure"],
   maxAttempts = 3,
 ): Promise<T> {
   let lastError: Error | null = null;
@@ -219,8 +258,14 @@ async function runWithRetry<T>(
     try {
       return await operation();
     } catch (error) {
-      lastError = normalizeUploadError(error);
-      if (attempt >= maxAttempts) break;
+      lastError = normalizeUploadError(error, stage);
+      const willRetry = attempt < maxAttempts;
+      onStageFailure?.(stage, lastError, {
+        attempt,
+        maxAttempts,
+        willRetry,
+      });
+      if (!willRetry) break;
       onRetry?.(attempt + 1, stage, lastError);
       await new Promise((resolve) => window.setTimeout(resolve, attempt * 400));
     }
@@ -284,7 +329,7 @@ export async function inspectAnalysisArchive(file: File): Promise<AnalysisArchiv
   return {
     ok: true,
     message: usesChunkedTransport
-      ? `Assinatura 7z validada. O envio ocorrerá em ${chunkCount} partes seguras para contornar o limite por requisição do domínio publicado.`
+      ? `Assinatura 7z validada. O envio ocorrerá em ${chunkCount} partes seguras de até ${Math.round(CHUNK_UPLOAD_MAX_BYTES / (1024 * 1024))} MB cada para contornar o limite por requisição do domínio publicado.`
       : "Assinatura 7z validada. O arquivo pode seguir pelo fluxo protegido desta aplicação.",
     remainingBytes,
     usesChunkedTransport,
@@ -317,6 +362,7 @@ export async function uploadAnalysisArchive(
       }),
       "session",
       options.onUploadRetry,
+      options.onUploadStageFailure,
     );
     persistStoredUploadSessionId(storageKey, session.uploadId);
   }
@@ -338,14 +384,13 @@ export async function uploadAnalysisArchive(
     }
 
     const end = Math.min(input.file.size, start + chunkSize);
-    const formData = new FormData();
-    formData.append("chunk", input.file.slice(start, end), `${input.file.name}.part-${chunkIndex}`);
-    formData.append("chunkIndex", String(chunkIndex));
+    const chunkBlob = input.file.slice(start, end);
 
     await runWithRetry(
-      () => postForm(`/api/analysis/upload-sessions/${session.uploadId}/chunks`, formData),
+      () => postOctetStream(`/api/analysis/upload-sessions/${session.uploadId}/chunks`, chunkBlob, chunkIndex),
       "chunk",
       options.onUploadRetry,
+      options.onUploadStageFailure,
     );
 
     receivedChunkIndexes.add(chunkIndex);
@@ -357,6 +402,7 @@ export async function uploadAnalysisArchive(
     () => postJson<AnalysisUploadResult>(`/api/analysis/upload-sessions/${session.uploadId}/complete`, {}),
     "complete",
     options.onUploadRetry,
+    options.onUploadStageFailure,
   );
   clearStoredUploadSessionId(storageKey);
   options.onUploadProgress?.(100);
@@ -385,6 +431,7 @@ export async function uploadAnalysisArchiveBatch(
         {
           onUploadProgress: (progress) => options.onFileProgress?.(file, progress, fileIndex, files.length),
           onUploadRetry: (attempt, stage, error) => options.onFileRetry?.(file, attempt, stage, error, fileIndex, files.length),
+          onUploadStageFailure: (stage, error, context) => options.onFileStageFailure?.(file, stage, error, context, fileIndex, files.length),
         },
       );
 

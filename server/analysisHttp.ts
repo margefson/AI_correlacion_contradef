@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import express from "express";
 import multer from "multer";
 import {
   CHUNK_UPLOAD_HARD_MAX_BYTES,
@@ -27,12 +28,9 @@ const directUpload = multer({
   },
 });
 
-const chunkUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: CHUNK_UPLOAD_HARD_MAX_BYTES,
-    files: 1,
-  },
+const chunkUploadRaw = express.raw({
+  type: "application/octet-stream",
+  limit: CHUNK_UPLOAD_HARD_MAX_BYTES,
 });
 
 type UploadSessionMeta = {
@@ -102,6 +100,10 @@ function respondJsonError(res: Response, status: number, message: string, code: 
     code,
     details: details ?? null,
   });
+}
+
+function parseChunkIndex(req: Request) {
+  return parseNumericField(req.header("x-chunk-index") ?? req.query?.chunkIndex);
 }
 
 async function resolveAuthenticatedUser(req: Request, res: Response) {
@@ -348,33 +350,18 @@ export function registerAnalysisHttpRoutes(app: Express) {
   });
 
   app.post("/api/analysis/upload-sessions/:uploadId/chunks", (req, res) => {
-    chunkUpload.single("chunk")(req, res, async (error) => {
-      if (error instanceof multer.MulterError) {
-        if (error.code === "LIMIT_FILE_SIZE") {
-          return respondJsonError(
-            res,
-            413,
-            `Cada parte do upload em lote deve permanecer abaixo de ${Math.round(CHUNK_UPLOAD_HARD_MAX_BYTES / (1024 * 1024))} MB.`,
-            "CHUNK_TOO_LARGE",
-          );
-        }
-
-        return respondJsonError(
-          res,
-          400,
-          "Não foi possível processar a parte multipart enviada pelo navegador.",
-          "CHUNK_PARSE_ERROR",
-          error.code,
-        );
-      }
-
+    chunkUploadRaw(req, res, async (error) => {
       if (error) {
+        const message = extractMessage(error);
+        const isTooLarge = /too large|entity too large|request entity too large|payload too large|limit/i.test(message);
         return respondJsonError(
           res,
-          400,
-          "Falha ao processar a parte do arquivo selecionado.",
-          "CHUNK_UPLOAD_ERROR",
-          extractMessage(error),
+          isTooLarge ? 413 : 400,
+          isTooLarge
+            ? `Cada parte do upload em lote deve permanecer abaixo de ${Math.round(CHUNK_UPLOAD_HARD_MAX_BYTES / (1024 * 1024))} MB.`
+            : "Não foi possível processar a parte bruta enviada pelo navegador.",
+          isTooLarge ? "CHUNK_TOO_LARGE" : "CHUNK_PARSE_ERROR",
+          message,
         );
       }
 
@@ -397,18 +384,19 @@ export function registerAnalysisHttpRoutes(app: Express) {
         return respondJsonError(res, 403, "Esta sessão de upload pertence a outro usuário autenticado.", "UPLOAD_SESSION_FORBIDDEN");
       }
 
-      const chunkIndex = parseNumericField(req.body?.chunkIndex);
+      const chunkIndex = parseChunkIndex(req);
       if (chunkIndex === null || !Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= meta.totalChunks) {
         return respondJsonError(res, 400, "O índice da parte enviada é inválido para esta sessão.", "INVALID_CHUNK_INDEX");
       }
 
-      if (!req.file?.buffer?.length) {
+      const chunkBuffer = Buffer.isBuffer(req.body) ? req.body : null;
+      if (!chunkBuffer?.length) {
         return respondJsonError(res, 400, "Nenhuma parte do arquivo foi recebida nesta requisição.", "MISSING_CHUNK_FILE");
       }
 
       const chunkPath = path.join(sessionChunkDirectory(uploadId), chunkFilename(chunkIndex));
       await fs.mkdir(sessionChunkDirectory(uploadId), { recursive: true });
-      await fs.writeFile(chunkPath, req.file.buffer);
+      await fs.writeFile(chunkPath, chunkBuffer);
 
       meta.updatedAt = Date.now();
       meta.receivedChunkIndexes = normalizeReceivedChunkIndexes([...meta.receivedChunkIndexes, chunkIndex], meta.totalChunks);

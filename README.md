@@ -22,7 +22,7 @@ A experiência foi desenhada para manter o operador dentro de um único fluxo de
 
 | Capacidade entregue | Descrição |
 | --- | --- |
-| Submissão validada de `.7z` | Aceita upload autenticado com sessão em partes, suporta arquivos acima de 50 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato; no modo fragmentado, o cliente divide o pacote em blocos levemente abaixo de 8 MiB para evitar rejeições espúrias no parser multipart |
+| Submissão validada de `.7z` | Aceita upload autenticado com sessão em partes, suporta arquivos acima de 50 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato; no modo fragmentado, o cliente divide o pacote em blocos levemente abaixo de 8 MiB e envia cada chunk como `application/octet-stream`, evitando a sobrecarga multipart que vinha provocando falhas de transporte (`fetch failed`) no domínio publicado |
 | Acompanhamento em tempo real | Exibe estágio, progresso, mensagens, stdout e stderr resumidos por job via stream SSE autenticado |
 | Histórico filtrável | Mantém jobs anteriores disponíveis para inspeção e retomada operacional |
 | Visualização de correlação | Mostra nós, relações e tabela associada ao job selecionado |
@@ -56,7 +56,7 @@ Durante o processamento, o backend sincroniza o status do job, captura logs prog
 
 | Etapa | Resultado esperado |
 | --- | --- |
-| Submissão em partes | Job criado e enfileirado com parâmetros do operador; o cliente faz verificação prévia, divide arquivos grandes em partes seguras com margem abaixo do teto rígido de 8 MiB e suporta lotes sequenciais acima de 50 MB no domínio publicado |
+| Submissão em partes | Job criado e enfileirado com parâmetros do operador; o cliente faz verificação prévia, divide arquivos grandes em partes seguras com margem abaixo do teto rígido de 8 MiB e envia cada bloco via `application/octet-stream`, reduzindo a chance de falhas de transporte em uploads grandes no domínio publicado |
 | Stream SSE autenticado | Progresso, estágio, snapshots do job e logs atualizados na interface |
 | Consolidação | Grafo, tabela, resumo, artefatos e estado final persistidos |
 | Pós-processamento | Notificação enviada e commit realizado quando aplicável |
@@ -71,7 +71,7 @@ A página principal agrega métricas, formulário de submissão, painel de ativi
 | Área da interface | Conteúdo |
 | --- | --- |
 | Hero operacional | Contexto do pipeline, perfil atual, estado do stream SSE e métricas resumidas |
-| Nova submissão | Upload `.7z` em lote com verificação prévia, foco analítico, contador de capacidade restante, progresso por arquivo e mensagens claras de erro |
+| Nova submissão | Upload `.7z` em lote com verificação prévia, foco analítico, contador de capacidade restante, indicador do tamanho máximo efetivo por parte, progresso por arquivo e mensagens claras de erro |
 | Atividade imediata | Estado do job ativo, snapshots em tempo real e ações administrativas condicionadas ao papel |
 | Histórico | Lista de jobs com seleção, status, progresso e recorte temporal |
 | Detalhe do job | Resumo, correlação, eventos, logs, commit e artefatos |
@@ -94,7 +94,7 @@ A autenticação, os helpers internos e os segredos injetados pela plataforma j�
 
 ## Validação e testes
 
-A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas, o fluxo de logout e o backfill de jobs concluídos sem artefatos multi-função. Os testes do frontend exercitam a submissão em lote com verificação prévia, a atualização do histórico, a exposição de exportações, o erro explícito de limite, a nova mensagem agregada de falha operacional da fila e a experiência de triagem para perfis não administrativos.
+A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas, o fluxo de logout e o backfill de jobs concluídos sem artefatos multi-função. Os testes do frontend exercitam a submissão em lote com verificação prévia, a atualização do histórico, a exposição de exportações, o erro explícito de limite, a nova mensagem agregada de falha operacional da fila, a telemetria por etapa (`sessão`, `parte`, `conclusão`) e um cenário de integração em que um `.7z` grande é enviado pela interface com retry real de chunk após falha transitória de transporte.
 
 Além da suíte automatizada, a aplicação foi verificada com compilação TypeScript limpa e servidor de desenvolvimento saudável. A prévia visual do dashboard confirma o funcionamento da identidade visual, da aba comparativa e do layout principal.
 
@@ -103,8 +103,8 @@ Além da suíte automatizada, a aplicação foi verificada com compilação Type
 | `server/analysis.router.test.ts` | Submissão, listagem, detalhe, restrição administrativa e retomada de sincronização |
 | `server/analysis.service.test.ts` | Backfill de jobs concluídos sem `function_flows` e geração multi-função a partir de `TraceFcnCall.M1` |
 | `server/auth.logout.test.ts` | Limpeza do cookie de sessão e resposta do logout |
-| `client/src/lib/analysisUpload.test.ts` | Particionamento seguro de arquivos grandes em blocos abaixo do teto rígido do backend |
-| `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico, erro de limite, mensagem operacional agregada da fila, modo de triagem e exibição de exportações |
+| `client/src/lib/analysisUpload.test.ts` | Particionamento seguro e transporte bruto (`application/octet-stream`) de arquivos grandes em blocos abaixo do teto rígido do backend |
+| `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico, erro de limite, mensagem operacional agregada da fila, telemetria por etapa, cenário de upload grande com retry de chunk, modo de triagem e exibição de exportações |
 
 ## Integração com GitHub
 

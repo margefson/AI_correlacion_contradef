@@ -2,7 +2,8 @@ import { z } from "zod";
 
 export const GATEWAY_SINGLE_REQUEST_MAX_BYTES = 30 * 1024 * 1024;
 export const CHUNK_UPLOAD_HARD_MAX_BYTES = 8 * 1024 * 1024;
-export const CHUNK_UPLOAD_SAFE_MAX_BYTES = CHUNK_UPLOAD_HARD_MAX_BYTES - 256 * 1024;
+export const CHUNK_UPLOAD_SAFE_MARGIN_BYTES = 1 * 1024 * 1024;
+export const CHUNK_UPLOAD_SAFE_MAX_BYTES = CHUNK_UPLOAD_HARD_MAX_BYTES - CHUNK_UPLOAD_SAFE_MARGIN_BYTES;
 export const OPERATIONAL_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024;
 
 export const jobStatusSchema = z.enum(["queued", "running", "completed", "failed", "cancelled"]);

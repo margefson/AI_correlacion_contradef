@@ -49,3 +49,9 @@
 - [x] Exibir alertas visuais para reconexão automática do stream SSE e jobs potencialmente travados
 - [x] Consolidar métricas agregadas por amostra e por função para apoiar priorização operacional
 - [x] Corrigir a inconsistência entre o particionamento anunciado na interface e o limite real aceito no backend, para que uploads como `Full-Execution-Sample-1.7z` não falhem indevidamente por partes acima de 8 MB
+- [x] Corrigir a falha `fetch failed` durante o envio em partes de arquivos `.7z` grandes, identificando e eliminando a causa real no transporte ou na remontagem da sessão
+- [x] Adicionar um teste de integração cobrindo o envio real de um `.7z` grande pela interface
+- [x] Exibir na fila, antes do envio, o tamanho máximo efetivo permitido por parte no modo fragmentado
+- [x] Implementar telemetria de falhas por etapa (`sessão`, `parte`, `conclusão`) para facilitar diagnóstico operacional do upload
+- [x] Investigar e corrigir a causa real do `fetch failed` no upload em partes no backend/transporte (não apenas mitigar no cliente), com evidência em `server/analysisHttp.ts` ou infraestrutura relacionada
+- [x] Adicionar cobertura de teste para o caminho real de falha de rede/transporte e validar recuperação completa ponta a ponta, incluindo backend/session/chunk/complete

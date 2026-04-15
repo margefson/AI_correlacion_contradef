@@ -52,9 +52,12 @@ describe("analysisUpload", () => {
       }
 
       if (url.includes("/api/analysis/upload-sessions/") && url.endsWith("/chunks")) {
-        const formData = init?.body as FormData;
-        const chunk = formData.get("chunk");
-        observedChunkSizes.push(chunk instanceof File ? chunk.size : 0);
+        const chunk = init?.body as Blob;
+        observedChunkSizes.push(chunk instanceof Blob ? chunk.size : 0);
+        expect(init?.headers).toMatchObject({
+          "Content-Type": "application/octet-stream",
+          "x-chunk-index": expect.any(String),
+        });
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
 

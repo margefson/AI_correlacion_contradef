@@ -9,6 +9,7 @@ const mockState = vi.hoisted(() => ({
   jobs: [] as Array<Record<string, any>>,
   details: {} as Record<string, any>,
   authUserRole: "admin" as "admin" | "user",
+  useRealUpload: false,
   inspectAnalysisArchive: vi.fn(async (file: File) => ({
     ok: true,
     message: "Assinatura 7z validada. Upload pronto para análise.",
@@ -79,13 +80,19 @@ vi.mock("@/_core/hooks/useAuth", () => ({
   }),
 }));
 
-vi.mock("@/lib/analysisUpload", () => ({
-  MAX_ARCHIVE_BYTES: 64 * 1024 * 1024,
-  GATEWAY_SINGLE_REQUEST_MAX_BYTES: 30 * 1024 * 1024,
-  MAX_BATCH_UPLOAD_FILES: 10,
-  inspectAnalysisArchive: (file: File) => mockState.inspectAnalysisArchive(file),
-  uploadAnalysisArchiveBatch: (input: unknown, options: unknown) => mockState.uploadAnalysisArchiveBatch(input, options),
-}));
+vi.mock("@/lib/analysisUpload", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/analysisUpload")>("@/lib/analysisUpload");
+
+  return {
+    ...actual,
+    inspectAnalysisArchive: (file: File) => (
+      mockState.useRealUpload ? actual.inspectAnalysisArchive(file) : mockState.inspectAnalysisArchive(file)
+    ),
+    uploadAnalysisArchiveBatch: (input: unknown, options: unknown) => (
+      mockState.useRealUpload ? actual.uploadAnalysisArchiveBatch(input as any, options as any) : mockState.uploadAnalysisArchiveBatch(input, options)
+    ),
+  };
+});
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -124,7 +131,22 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+import {
+  CHUNK_UPLOAD_HARD_MAX_BYTES,
+  CHUNK_UPLOAD_MAX_BYTES,
+} from "@/lib/analysisUpload";
 import Home from "./Home";
+
+const SEVEN_Z_SIGNATURE = new Uint8Array([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]);
+
+function createSevenZipFile(sizeBytes: number, name = "Full-Execution-Sample-1.7z") {
+  const content = new Uint8Array(sizeBytes);
+  content.set(SEVEN_Z_SIGNATURE, 0);
+  return new File([content], name, {
+    type: "application/x-7z-compressed",
+    lastModified: 1713225600000,
+  });
+}
 
 describe("Home dashboard", () => {
   beforeEach(() => {
@@ -148,6 +170,7 @@ describe("Home dashboard", () => {
 
     vi.stubGlobal("EventSource", MockEventSource as unknown as typeof EventSource);
     mockState.authUserRole = "admin";
+    mockState.useRealUpload = false;
 
     mockState.inspectAnalysisArchive.mockImplementation(async (file: File) => ({
       ok: true,
@@ -317,6 +340,79 @@ describe("Home dashboard", () => {
           onFileSuccess: expect.any(Function),
         }),
       );
+    });
+  });
+
+  it("cobre o envio real de um .7z grande pela interface, exibindo limite por parte e telemetria operacional", async () => {
+    const user = userEvent.setup();
+    mockState.useRealUpload = true;
+
+    const file = createSevenZipFile(38 * 1024 * 1024);
+    let chunkAttempt = 0;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+
+      if (url.endsWith("/api/analysis/upload-sessions")) {
+        return new Response(JSON.stringify({
+          uploadId: "upload-real-1",
+          archiveName: file.name,
+          totalBytes: file.size,
+          chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+          totalChunks: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES),
+          maxArchiveBytes: 64 * 1024 * 1024,
+          directTransportMaxBytes: 30 * 1024 * 1024,
+          focusFunction: "IsDebuggerPresent",
+          receivedChunkIndexes: [],
+          updatedAt: Date.now(),
+        }), { status: 200 });
+      }
+
+      if (url.includes("/api/analysis/upload-sessions/") && url.endsWith("/chunks")) {
+        const chunk = init?.body as Blob;
+        const chunkSize = chunk instanceof Blob ? chunk.size : 0;
+        expect(chunkSize).toBeLessThan(CHUNK_UPLOAD_HARD_MAX_BYTES);
+        expect(chunkSize).toBeLessThanOrEqual(CHUNK_UPLOAD_MAX_BYTES);
+        expect(init?.headers).toMatchObject({
+          "Content-Type": "application/octet-stream",
+          "x-chunk-index": expect.any(String),
+        });
+
+        chunkAttempt += 1;
+        if (chunkAttempt === 1) {
+          throw new Error("fetch failed");
+        }
+
+        return new Response(JSON.stringify({
+          uploadId: "upload-real-1",
+          receivedChunks: Math.min(chunkAttempt - 1, Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES)),
+          totalChunks: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES),
+        }), { status: 200 });
+      }
+
+      if (url.endsWith("/complete")) {
+        return new Response(JSON.stringify({ jobId: "job-upload-real-1" }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    render(<Home />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/máximo efetivo por parte/i)).toBeTruthy();
+      expect(screen.getByText(/teto rígido do parser/i)).toBeTruthy();
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/telemetria de falhas/i).length).toBeGreaterThan(0);
+      expect(chunkAttempt).toBeGreaterThan(1);
+      expect(screen.getByText(/job job-upload-real-1 criado com sucesso/i)).toBeTruthy();
     });
   });
 
