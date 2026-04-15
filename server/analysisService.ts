@@ -181,6 +181,322 @@ async function readArtifactText(filePath: string, limit = MAX_SUMMARY_CONTEXT_LE
   return content.length > limit ? `${content.slice(-limit)}\n\n[conteúdo truncado]` : content;
 }
 
+type TraceFcnCallEntry = {
+  lineNumber: number;
+  threadId: string;
+  targetAddress: string;
+  modulePath: string;
+  moduleName: string;
+  symbol: string;
+  displaySymbol: string;
+  rawLine: string;
+};
+
+const TRACE_FCNCALL_LINE_REGEX = /^([0-9a-fA-F]+)\s+T\[(\d+)\]\s+(.+):([^:\r\n]+)$/;
+
+function sanitizeSlug(input: string) {
+  return input
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "funcao";
+}
+
+function escapeMermaidLabel(input: string) {
+  return input.replace(/"/g, "'").replace(/[<>`]/g, "").trim() || "sem_rotulo";
+}
+
+function deriveModuleName(modulePath: string) {
+  const normalized = modulePath.replace(/\\/g, "/");
+  const filename = path.basename(normalized);
+  return filename || modulePath;
+}
+
+async function walkFilesRecursive(rootDir: string): Promise<string[]> {
+  const discovered: string[] = [];
+  const queue = [rootDir];
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift();
+    if (!currentDir) continue;
+
+    const entries = await fs.readdir(currentDir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        queue.push(fullPath);
+      } else if (entry.isFile()) {
+        discovered.push(fullPath);
+      }
+    }
+  }
+
+  return discovered;
+}
+
+async function findTraceFcnCallFile(jobId: string) {
+  const extractedRoot = path.join(DEFAULT_PIPELINE_REPOSITORY, "data", "jobs_api", jobId, "extracted");
+  const files = await walkFilesRecursive(extractedRoot).catch(() => []);
+  return files.find((filePath) => /tracefcncall\.m1\.cdf$/i.test(path.basename(filePath))) ?? null;
+}
+
+async function parseTraceFcnCallEntries(traceFilePath: string): Promise<TraceFcnCallEntry[]> {
+  const raw = await fs.readFile(traceFilePath, "utf-8");
+  const lines = raw.split(/\r?\n/);
+  const entries: TraceFcnCallEntry[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index]?.trim();
+    if (!rawLine) continue;
+
+    const matched = rawLine.match(TRACE_FCNCALL_LINE_REGEX);
+    if (!matched) continue;
+
+    const [, targetAddress, threadId, modulePathRaw, symbolRaw] = matched;
+    const modulePath = modulePathRaw.trim();
+    const symbol = symbolRaw.trim();
+    if (!symbol) continue;
+
+    entries.push({
+      lineNumber: index + 1,
+      threadId,
+      targetAddress,
+      modulePath,
+      moduleName: deriveModuleName(modulePath),
+      symbol,
+      displaySymbol: symbol,
+      rawLine,
+    });
+  }
+
+  return entries;
+}
+
+function buildFunctionFlowPayload(functionName: string, entries: TraceFcnCallEntry[]) {
+  const occurrences = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.displaySymbol === functionName);
+
+  const previousCounts = new Map<string, number>();
+  const nextCounts = new Map<string, number>();
+  const modules = new Set<string>();
+  const threads = new Set<string>();
+  const flow: Array<Record<string, unknown>> = [];
+
+  for (const occurrence of occurrences) {
+    const currentEntry = occurrence.entry;
+    const previousEntry = [...entries.slice(0, occurrence.index)].reverse().find((candidate) => candidate.threadId === currentEntry.threadId);
+    const nextEntry = entries.slice(occurrence.index + 1).find((candidate) => candidate.threadId === currentEntry.threadId);
+
+    modules.add(currentEntry.moduleName);
+    threads.add(currentEntry.threadId);
+
+    if (previousEntry) {
+      previousCounts.set(previousEntry.displaySymbol, (previousCounts.get(previousEntry.displaySymbol) ?? 0) + 1);
+      flow.push({
+        source: previousEntry.displaySymbol,
+        target: functionName,
+        relation: "precedes_call",
+        weight: previousCounts.get(previousEntry.displaySymbol),
+        evidence: `Linha ${previousEntry.lineNumber} antecede ${functionName} na thread ${currentEntry.threadId}`,
+      });
+    }
+
+    if (nextEntry) {
+      nextCounts.set(nextEntry.displaySymbol, (nextCounts.get(nextEntry.displaySymbol) ?? 0) + 1);
+      flow.push({
+        source: functionName,
+        target: nextEntry.displaySymbol,
+        relation: "calls_next",
+        weight: nextCounts.get(nextEntry.displaySymbol),
+        evidence: `${functionName} é seguido por ${nextEntry.displaySymbol} na linha ${nextEntry.lineNumber}`,
+      });
+    }
+  }
+
+  const nodes = new Map<string, { id: string; label: string; kind: string; metadata?: Record<string, unknown> }>();
+  nodes.set(functionName, {
+    id: functionName,
+    label: functionName,
+    kind: "focus_function",
+    metadata: {
+      modules: Array.from(modules),
+      threads: Array.from(threads),
+      occurrences: occurrences.length,
+    },
+  });
+
+  for (const name of Array.from(previousCounts.keys())) {
+    nodes.set(name, { id: name, label: name, kind: "previous_function" });
+  }
+  for (const name of Array.from(nextCounts.keys())) {
+    if (!nodes.has(name)) {
+      nodes.set(name, { id: name, label: name, kind: "next_function" });
+    }
+  }
+
+  const uniqueEdges = new Map<string, { source: string; target: string; relation: string; weight: number; evidence: string }>();
+  for (const [source, weight] of Array.from(previousCounts.entries())) {
+    uniqueEdges.set(`${source}->${functionName}`, {
+      source,
+      target: functionName,
+      relation: "precedes_call",
+      weight,
+      evidence: `${source} antecede ${functionName} em ${weight} ocorrência(s).`,
+    });
+  }
+  for (const [target, weight] of Array.from(nextCounts.entries())) {
+    uniqueEdges.set(`${functionName}->${target}`, {
+      source: functionName,
+      target,
+      relation: "calls_next",
+      weight,
+      evidence: `${functionName} é seguido por ${target} em ${weight} ocorrência(s).`,
+    });
+  }
+
+  return {
+    functionName,
+    generatedAt: new Date().toISOString(),
+    summary: {
+      totalOccurrences: occurrences.length,
+      modules: Array.from(modules),
+      threads: Array.from(threads),
+      previousFunctions: previousCounts.size,
+      nextFunctions: nextCounts.size,
+    },
+    nodes: Array.from(nodes.values()),
+    edges: Array.from(uniqueEdges.values()),
+    flow,
+    occurrences: occurrences.slice(0, 250).map(({ entry, index }) => ({
+      ordinal: index + 1,
+      lineNumber: entry.lineNumber,
+      threadId: entry.threadId,
+      targetAddress: entry.targetAddress,
+      modulePath: entry.modulePath,
+      rawLine: entry.rawLine,
+    })),
+  };
+}
+
+function buildFunctionFlowMermaid(payload: ReturnType<typeof buildFunctionFlowPayload>) {
+  const lines = [
+    "flowchart LR",
+    `  focus[\"${escapeMermaidLabel(payload.functionName)}\"]:::focus`,
+  ];
+
+  for (const edge of payload.edges) {
+    const sourceId = `node_${sanitizeSlug(edge.source)}`;
+    const targetId = edge.target === payload.functionName ? "focus" : `node_${sanitizeSlug(edge.target)}`;
+    const sourceLabel = escapeMermaidLabel(edge.source);
+    const targetLabel = escapeMermaidLabel(edge.target);
+
+    if (edge.source !== payload.functionName) {
+      lines.push(`  ${sourceId}[\"${sourceLabel}\"]:::neighbor`);
+      lines.push(`  ${sourceId} -->|${edge.weight}| ${targetId}`);
+    } else {
+      lines.push(`  ${targetId}[\"${targetLabel}\"]:::neighbor`);
+      lines.push(`  focus -->|${edge.weight}| ${targetId}`);
+    }
+  }
+
+  lines.push("  classDef focus fill:#0891b2,stroke:#67e8f9,color:#ecfeff,stroke-width:2px;");
+  lines.push("  classDef neighbor fill:#0f172a,stroke:#334155,color:#e2e8f0;");
+  return `${lines.join("\n")}\n`;
+}
+
+async function generateFunctionFlowArtifacts(jobId: string): Promise<LegacyArtifactPayload[]> {
+  const traceFilePath = await findTraceFcnCallFile(jobId);
+  if (!traceFilePath) return [];
+
+  const entries = await parseTraceFcnCallEntries(traceFilePath);
+  const uniqueFunctions = Array.from(new Set(entries.map((entry) => entry.displaySymbol))).sort((left, right) => left.localeCompare(right, "pt-BR"));
+  if (uniqueFunctions.length === 0) return [];
+
+  const jobRoot = path.join(DEFAULT_PIPELINE_REPOSITORY, "data", "jobs_api", jobId);
+  const outputRoot = path.join(jobRoot, "output", "function_flows");
+  await fs.mkdir(outputRoot, { recursive: true });
+
+  const generatedArtifacts: LegacyArtifactPayload[] = [];
+  const generatedIndex: Array<{ functionName: string; slug: string; occurrenceCount: number; jsonRelativePath: string; pngRelativePath: string | null }> = [];
+
+  for (const functionName of uniqueFunctions) {
+    const payload = buildFunctionFlowPayload(functionName, entries);
+    const slug = sanitizeSlug(functionName);
+    const functionDir = path.join(outputRoot, slug);
+    await fs.mkdir(functionDir, { recursive: true });
+
+    const jsonPath = path.join(functionDir, `fluxo_${slug}.json`);
+    const mmdPath = path.join(functionDir, `fluxo_${slug}.mmd`);
+    const pngPath = path.join(functionDir, `fluxo_${slug}.png`);
+
+    await fs.writeFile(jsonPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
+    await fs.writeFile(mmdPath, buildFunctionFlowMermaid(payload), "utf-8");
+
+    let pngExists = false;
+    try {
+      await execFileAsync("manus-render-diagram", [mmdPath, pngPath]);
+      pngExists = true;
+    } catch (error) {
+      console.warn(`[Analysis] Falha ao renderizar fluxo PNG para ${functionName}:`, error);
+    }
+
+    const jsonRelativePath = path.relative(jobRoot, jsonPath);
+    const mmdRelativePath = path.relative(jobRoot, mmdPath);
+    generatedArtifacts.push({
+      path: jsonPath,
+      relative_path: jsonRelativePath,
+      size_bytes: (await fs.stat(jsonPath)).size,
+    });
+    generatedArtifacts.push({
+      path: mmdPath,
+      relative_path: mmdRelativePath,
+      size_bytes: (await fs.stat(mmdPath)).size,
+    });
+
+    if (pngExists) {
+      const pngRelativePath = path.relative(jobRoot, pngPath);
+      generatedArtifacts.push({
+        path: pngPath,
+        relative_path: pngRelativePath,
+        size_bytes: (await fs.stat(pngPath)).size,
+      });
+      generatedIndex.push({
+        functionName,
+        slug,
+        occurrenceCount: payload.summary.totalOccurrences,
+        jsonRelativePath,
+        pngRelativePath,
+      });
+    } else {
+      generatedIndex.push({
+        functionName,
+        slug,
+        occurrenceCount: payload.summary.totalOccurrences,
+        jsonRelativePath,
+        pngRelativePath: null,
+      });
+    }
+  }
+
+  const indexPath = path.join(outputRoot, "function_flow_index.json");
+  const indexPayload = {
+    generatedAt: new Date().toISOString(),
+    sourceTraceFile: traceFilePath,
+    totalFunctions: generatedIndex.length,
+    functions: generatedIndex,
+  };
+  await fs.writeFile(indexPath, `${JSON.stringify(indexPayload, null, 2)}\n`, "utf-8");
+  generatedArtifacts.push({
+    path: indexPath,
+    relative_path: path.relative(jobRoot, indexPath),
+    size_bytes: (await fs.stat(indexPath)).size,
+  });
+
+  return generatedArtifacts;
+}
+
 async function maybeMirrorArtifact(jobId: string, artifact: LegacyArtifactPayload, shouldMirror: boolean) {
   if (!shouldMirror) {
     return {
@@ -638,7 +954,8 @@ export async function syncAnalysisJob(jobId: string) {
     });
 
     await synchronizeEvents(jobId, eventsPayload.events || []);
-    await synchronizeArtifacts(jobId, artifactsPayload.artifacts || [], shouldMirrorArtifacts);
+    const generatedFunctionArtifacts = mappedStatus === "completed" ? await generateFunctionFlowArtifacts(jobId) : [];
+    await synchronizeArtifacts(jobId, [...(artifactsPayload.artifacts || []), ...generatedFunctionArtifacts], shouldMirrorArtifacts);
 
     if (mappedStatus === "completed") {
       stopJobPolling(jobId);
@@ -677,7 +994,9 @@ export async function syncActiveAnalysisJobs() {
 
 export async function loadCorrelationGraph(jobId: string): Promise<CorrelationGraph | null> {
   const artifacts = await listAnalysisArtifacts(jobId);
-  const jsonArtifact = artifacts.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".json"));
+  const jsonArtifact = artifacts.find(
+    (artifact) => artifact.relativePath.toLowerCase().endsWith(".json") && !artifact.relativePath.includes("output/function_flows/"),
+  ) ?? artifacts.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".json"));
   if (!jsonArtifact?.sourcePath) return null;
 
   try {

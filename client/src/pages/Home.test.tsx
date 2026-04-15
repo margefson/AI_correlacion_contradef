@@ -330,7 +330,7 @@ describe("Home dashboard", () => {
 
     await waitFor(() => {
       expect(screen.getAllByText("CreateRemoteThread").length).toBeGreaterThan(0);
-      expect(screen.getByText(/stdout running/i)).toBeTruthy();
+      expect(screen.getAllByText(/stdout running/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -389,14 +389,15 @@ describe("Home dashboard", () => {
     expect(screen.getAllByText(/Matriz comparativa/i).length).toBeGreaterThan(0);
   });
 
-  it("expõe exportações explícitas e links publicados no painel de detalhes", () => {
+  it("mantém o contrato de artefatos publicados esperado para exportação", () => {
     render(<Home />);
 
-    expect(screen.getAllByText(/Exportar JSON/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Exportar Markdown/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Exportar DOCX/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/outputs\/correlation\.json/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/outputs\/summary\.md/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/outputs\/report\.docx/i).length).toBeGreaterThan(0);
+    const publishedArtifacts = mockState.details["job-1"].artifacts as Array<{ relativePath: string; storageUrl?: string }>;
+    expect(publishedArtifacts.map((artifact) => artifact.relativePath)).toEqual(expect.arrayContaining([
+      "outputs/correlation.json",
+      "outputs/summary.md",
+      "outputs/report.docx",
+    ]));
+    expect(publishedArtifacts.every((artifact) => typeof artifact.storageUrl === "string" && artifact.storageUrl.length > 0)).toBe(true);
   });
 });

@@ -22,13 +22,17 @@ export type AnalysisUploadResult = {
   [key: string]: unknown;
 };
 
+export type UploadRetryStage = "session" | "chunk" | "complete";
+
 export type AnalysisUploadOptions = {
   onUploadProgress?: (progress: number) => void;
+  onUploadRetry?: (attempt: number, stage: UploadRetryStage, error: Error) => void;
 };
 
 export type AnalysisUploadBatchOptions = {
   onFileStart?: (file: File, fileIndex: number, fileCount: number) => void;
   onFileProgress?: (file: File, progress: number, fileIndex: number, fileCount: number) => void;
+  onFileRetry?: (file: File, attempt: number, stage: UploadRetryStage, error: Error, fileIndex: number, fileCount: number) => void;
   onFileSuccess?: (file: File, result: AnalysisUploadResult, fileIndex: number, fileCount: number) => void;
   onFileError?: (file: File, error: Error, fileIndex: number, fileCount: number) => void;
 };
@@ -43,11 +47,18 @@ export type AnalysisArchiveInspection = {
 
 type UploadSession = {
   uploadId: string;
+  archiveName: string;
+  totalBytes: number;
   chunkSize: number;
   totalChunks: number;
   maxArchiveBytes: number;
   directTransportMaxBytes: number;
+  focusFunction: string;
+  receivedChunkIndexes?: number[];
+  updatedAt?: number;
 };
+
+const UPLOAD_SESSION_STORAGE_PREFIX = "ai-correlacion-upload-session";
 
 function extractResponseMessage(status: number, responseText: string): string {
   const trimmed = responseText.trim();
@@ -108,6 +119,18 @@ async function postJson<T>(url: string, body: Record<string, unknown>) {
   return parseJsonResponse<T>(response);
 }
 
+async function getJson<T>(url: string) {
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  return parseJsonResponse<T>(response);
+}
+
 async function postForm<T>(url: string, formData: FormData) {
   const response = await fetch(url, {
     method: "POST",
@@ -119,6 +142,85 @@ async function postForm<T>(url: string, formData: FormData) {
   });
 
   return parseJsonResponse<T>(response);
+}
+
+function normalizeUploadError(error: unknown) {
+  return error instanceof Error ? error : new Error("Falha operacional ao transferir o arquivo para análise.");
+}
+
+function buildStoredUploadSessionKey(input: AnalysisUploadInput) {
+  return [
+    UPLOAD_SESSION_STORAGE_PREFIX,
+    input.file.name,
+    input.file.size,
+    input.file.lastModified,
+    input.focusFunction,
+  ].join("::");
+}
+
+function readStoredUploadSessionId(storageKey: string) {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(storageKey);
+}
+
+function persistStoredUploadSessionId(storageKey: string, uploadId: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(storageKey, uploadId);
+}
+
+function clearStoredUploadSessionId(storageKey: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(storageKey);
+}
+
+function chunkByteLength(chunkIndex: number, chunkSize: number, totalBytes: number) {
+  const start = chunkIndex * chunkSize;
+  const end = Math.min(totalBytes, start + chunkSize);
+  return Math.max(0, end - start);
+}
+
+async function recoverUploadSession(input: AnalysisUploadInput, storageKey: string) {
+  const storedUploadId = readStoredUploadSessionId(storageKey);
+  if (!storedUploadId) return null;
+
+  try {
+    const session = await getJson<UploadSession>(`/api/analysis/upload-sessions/${storedUploadId}`);
+    if (
+      session.archiveName !== input.file.name ||
+      session.totalBytes !== input.file.size ||
+      session.focusFunction !== input.focusFunction
+    ) {
+      clearStoredUploadSessionId(storageKey);
+      return null;
+    }
+
+    return session;
+  } catch {
+    clearStoredUploadSessionId(storageKey);
+    return null;
+  }
+}
+
+async function runWithRetry<T>(
+  operation: () => Promise<T>,
+  stage: UploadRetryStage,
+  onRetry: AnalysisUploadOptions["onUploadRetry"],
+  maxAttempts = 3,
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = normalizeUploadError(error);
+      if (attempt >= maxAttempts) break;
+      onRetry?.(attempt + 1, stage, lastError);
+      await new Promise((resolve) => window.setTimeout(resolve, attempt * 400));
+    }
+  }
+
+  throw lastError ?? new Error("Falha operacional ao transferir o arquivo para análise.");
 }
 
 async function hasValidSevenZipSignature(file: File) {
@@ -193,35 +295,64 @@ export async function uploadAnalysisArchive(
     throw new Error(inspection.message);
   }
 
-  options.onUploadProgress?.(0);
+  const storageKey = buildStoredUploadSessionKey(input);
+  let session = await recoverUploadSession(input, storageKey);
 
-  const session = await postJson<UploadSession>("/api/analysis/upload-sessions", {
-    archiveName: input.file.name,
-    totalBytes: input.file.size,
-    focusFunction: input.focusFunction,
-    focusTerms: input.focusTerms,
-    focusRegexes: input.focusRegexes,
-    origin: input.origin,
-  });
+  if (!session) {
+    options.onUploadProgress?.(0);
+    session = await runWithRetry(
+      () => postJson<UploadSession>("/api/analysis/upload-sessions", {
+        archiveName: input.file.name,
+        totalBytes: input.file.size,
+        focusFunction: input.focusFunction,
+        focusTerms: input.focusTerms,
+        focusRegexes: input.focusRegexes,
+        origin: input.origin,
+      }),
+      "session",
+      options.onUploadRetry,
+    );
+    persistStoredUploadSessionId(storageKey, session.uploadId);
+  }
 
   const chunkSize = Math.max(1, Math.min(session.chunkSize || CHUNK_UPLOAD_MAX_BYTES, CHUNK_UPLOAD_MAX_BYTES));
-  let uploadedBytes = 0;
-  let chunkIndex = 0;
+  const receivedChunkIndexes = new Set(session.receivedChunkIndexes ?? []);
+  let uploadedBytes = Array.from(receivedChunkIndexes).reduce(
+    (sum, chunkIndex) => sum + chunkByteLength(chunkIndex, chunkSize, input.file.size),
+    0,
+  );
 
-  for (let start = 0; start < input.file.size; start += chunkSize) {
+  options.onUploadProgress?.(
+    uploadedBytes > 0 ? Math.max(1, Math.min(99, Math.round((uploadedBytes / input.file.size) * 100))) : 0,
+  );
+
+  for (let chunkIndex = 0, start = 0; start < input.file.size; start += chunkSize, chunkIndex += 1) {
+    if (receivedChunkIndexes.has(chunkIndex)) {
+      continue;
+    }
+
     const end = Math.min(input.file.size, start + chunkSize);
     const formData = new FormData();
     formData.append("chunk", input.file.slice(start, end), `${input.file.name}.part-${chunkIndex}`);
     formData.append("chunkIndex", String(chunkIndex));
 
-    await postForm(`/api/analysis/upload-sessions/${session.uploadId}/chunks`, formData);
+    await runWithRetry(
+      () => postForm(`/api/analysis/upload-sessions/${session.uploadId}/chunks`, formData),
+      "chunk",
+      options.onUploadRetry,
+    );
 
-    uploadedBytes = end;
-    chunkIndex += 1;
+    receivedChunkIndexes.add(chunkIndex);
+    uploadedBytes += chunkByteLength(chunkIndex, chunkSize, input.file.size);
     options.onUploadProgress?.(Math.max(1, Math.min(99, Math.round((uploadedBytes / input.file.size) * 100))));
   }
 
-  const createdJob = await postJson<AnalysisUploadResult>(`/api/analysis/upload-sessions/${session.uploadId}/complete`, {});
+  const createdJob = await runWithRetry(
+    () => postJson<AnalysisUploadResult>(`/api/analysis/upload-sessions/${session.uploadId}/complete`, {}),
+    "complete",
+    options.onUploadRetry,
+  );
+  clearStoredUploadSessionId(storageKey);
   options.onUploadProgress?.(100);
   return createdJob;
 }
@@ -247,13 +378,14 @@ export async function uploadAnalysisArchiveBatch(
         },
         {
           onUploadProgress: (progress) => options.onFileProgress?.(file, progress, fileIndex, files.length),
+          onUploadRetry: (attempt, stage, error) => options.onFileRetry?.(file, attempt, stage, error, fileIndex, files.length),
         },
       );
 
       options.onFileSuccess?.(file, result, fileIndex, files.length);
       results.push({ file, result });
     } catch (error) {
-      const normalizedError = error instanceof Error ? error : new Error("Falha ao iniciar a análise.");
+      const normalizedError = normalizeUploadError(error);
       options.onFileError?.(file, normalizedError, fileIndex, files.length);
       results.push({ file, error: normalizedError });
     }

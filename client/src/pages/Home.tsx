@@ -31,6 +31,7 @@ import {
   MAX_ARCHIVE_BYTES,
   MAX_BATCH_UPLOAD_FILES,
   uploadAnalysisArchiveBatch,
+  type UploadRetryStage,
 } from "@/lib/analysisUpload";
 import { trpc } from "@/lib/trpc";
 import {
@@ -55,6 +56,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type StatusValue = "all" | "queued" | "running" | "completed" | "failed" | "cancelled";
+type JobSortValue = "newest" | "oldest" | "progress_desc" | "status";
 
 type GraphNode = {
   id: string;
@@ -156,6 +158,19 @@ function uploadQueueStatusClasses(status: UploadQueueStatus) {
   }
 }
 
+function uploadRetryStageLabel(stage: UploadRetryStage) {
+  switch (stage) {
+    case "session":
+      return "retomando a sessão segura de upload";
+    case "chunk":
+      return "reenviando a parte interrompida";
+    case "complete":
+      return "confirmando a criação final do job";
+    default:
+      return "retomando a transferência";
+  }
+}
+
 function formatDateTime(value?: Date | string | number | null) {
   if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
@@ -224,6 +239,7 @@ export default function Home() {
   const [sampleNameFilter, setSampleNameFilter] = useState("");
   const [focusFilter, setFocusFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusValue>("all");
+  const [jobSort, setJobSort] = useState<JobSortValue>("newest");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [compareJobId, setCompareJobId] = useState<string | null>(null);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
@@ -336,13 +352,43 @@ export default function Home() {
   const selectedDetail = (liveDetail ?? detailQuery.data) as any;
   const compareDetail = compareDetailQuery.data as any;
   const activeJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
+  const sortedJobs = useMemo(() => {
+    const statusOrder: Record<string, number> = {
+      running: 0,
+      queued: 1,
+      failed: 2,
+      completed: 3,
+      cancelled: 4,
+    };
+
+    const timestampValue = (job: Record<string, any>) => {
+      const raw = job.updatedAt ?? job.updated_at ?? job.createdAt ?? job.created_at;
+      const value = raw ? new Date(raw).getTime() : 0;
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    return [...jobs].sort((left, right) => {
+      if (jobSort === "oldest") return timestampValue(left) - timestampValue(right);
+      if (jobSort === "progress_desc") {
+        const progressDiff = Number(right.progress ?? 0) - Number(left.progress ?? 0);
+        if (progressDiff !== 0) return progressDiff;
+        return timestampValue(right) - timestampValue(left);
+      }
+      if (jobSort === "status") {
+        const statusDiff = (statusOrder[String(left.status)] ?? 99) - (statusOrder[String(right.status)] ?? 99);
+        if (statusDiff !== 0) return statusDiff;
+        return timestampValue(right) - timestampValue(left);
+      }
+      return timestampValue(right) - timestampValue(left);
+    });
+  }, [jobSort, jobs]);
 
   useEffect(() => {
-    const firstJobId = jobs[0]?.jobId;
+    const firstJobId = sortedJobs[0]?.jobId;
     if (!selectedJobId && firstJobId) {
       setSelectedJobId(firstJobId);
     }
-  }, [jobs, selectedJobId]);
+  }, [selectedJobId, sortedJobs]);
 
   useEffect(() => {
     if (jobs.length === 0) {
@@ -379,14 +425,84 @@ export default function Home() {
     };
   }, [activeJobs.length, jobs]);
 
-  const jsonArtifact = selectedDetail?.artifacts?.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".json"));
-  const markdownArtifact = selectedDetail?.artifacts?.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".md") || artifact.relativePath.toLowerCase().endsWith(".markdown"));
-  const docxArtifact = selectedDetail?.artifacts?.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".docx"));
+  const aggregatedMetrics = useMemo(() => {
+    const sampleCounts = new Map<string, number>();
+    const functionCounts = new Map<string, number>();
+    const stalledJobs = jobs.filter((job) => {
+      if (!["queued", "running"].includes(String(job.status))) return false;
+      const reference = job.updatedAt ?? job.updated_at ?? job.lastEventAt ?? job.createdAt ?? job.created_at;
+      const timestamp = reference ? new Date(reference).getTime() : Number.NaN;
+      return Number.isFinite(timestamp) && Date.now() - timestamp > 10 * 60 * 1000;
+    });
+
+    for (const job of jobs) {
+      const sampleName = String(job.sampleName ?? job.sample_name ?? "Sem amostra definida").trim() || "Sem amostra definida";
+      const focusName = String(job.focusFunction ?? job.focus_function ?? "Sem função declarada").trim() || "Sem função declarada";
+      sampleCounts.set(sampleName, (sampleCounts.get(sampleName) ?? 0) + 1);
+      functionCounts.set(focusName, (functionCounts.get(focusName) ?? 0) + 1);
+    }
+
+    const sortEntries = (entries: Map<string, number>) => Array.from(entries.entries()).sort((left, right) => {
+      if (right[1] !== left[1]) return right[1] - left[1];
+      return left[0].localeCompare(right[0], "pt-BR");
+    });
+
+    return {
+      distinctSamples: sampleCounts.size,
+      distinctFunctions: functionCounts.size,
+      topSample: sortEntries(sampleCounts)[0] ?? null,
+      topFunction: sortEntries(functionCounts)[0] ?? null,
+      stalledJobs: stalledJobs.slice(0, 3),
+    };
+  }, [jobs]);
+
+  const primaryArtifacts = (selectedDetail?.artifacts ?? []).filter(
+    (artifact: any) => !artifact.relativePath.includes("output/function_flows/"),
+  );
+  const jsonArtifact = primaryArtifacts.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".json"));
+  const markdownArtifact = primaryArtifacts.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".md") || artifact.relativePath.toLowerCase().endsWith(".markdown"));
+  const docxArtifact = primaryArtifacts.find((artifact: any) => artifact.relativePath.toLowerCase().endsWith(".docx"));
+  const functionFlowGroups = useMemo(() => {
+    const prettifyFlowName = (slug: string) => slug
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+
+    type FunctionFlowGroup = {
+      slug: string;
+      title: string;
+      pngArtifact?: any;
+      jsonArtifact?: any;
+      mmdArtifact?: any;
+    };
+
+    const grouped = new Map<string, FunctionFlowGroup>();
+
+    for (const artifact of selectedDetail?.artifacts ?? []) {
+      const matched = artifact.relativePath.match(/function_flows\/([^/]+)\/fluxo_[^/]+\.(png|json|mmd)$/i);
+      if (!matched) continue;
+
+      const [, slug, extension] = matched;
+      const current: FunctionFlowGroup = grouped.get(slug) ?? {
+        slug,
+        title: prettifyFlowName(slug),
+      };
+
+      if (extension.toLowerCase() === "png") current.pngArtifact = artifact;
+      if (extension.toLowerCase() === "json") current.jsonArtifact = artifact;
+      if (extension.toLowerCase() === "mmd") current.mmdArtifact = artifact;
+
+      grouped.set(slug, current);
+    }
+
+    return Array.from(grouped.values()).sort((left, right) => left.title.localeCompare(right.title, "pt-BR"));
+  }, [selectedDetail?.artifacts]);
   const graphNodes = (selectedDetail?.graph?.nodes ?? []) as GraphNode[];
   const graphEdges = (selectedDetail?.graph?.edges ?? []) as GraphEdge[];
   const compareGraphNodes = (compareDetail?.graph?.nodes ?? []) as GraphNode[];
   const compareGraphEdges = (compareDetail?.graph?.edges ?? []) as GraphEdge[];
-  const compareCandidates = jobs.filter((job) => job.jobId !== selectedJobId);
+  const compareCandidates = sortedJobs.filter((job) => job.jobId !== selectedJobId);
   const comparisonSummary = useMemo(() => {
     if (!selectedDetail?.job || !compareDetail?.job) return null;
 
@@ -495,12 +611,7 @@ export default function Home() {
     }
 
     const focusFunctionValue = focusFunction.trim();
-    if (!focusFunctionValue) {
-      const message = "Informe uma função de interesse antes de iniciar a fila de análise.";
-      setSubmissionError(message);
-      toast.error(message);
-      return;
-    }
+    const effectiveFocusFunction = focusFunctionValue || "TraceFcnCall.M1::ALL_FUNCTIONS";
 
     const pendingItems = readyUploadItems;
     if (pendingItems.length === 0) {
@@ -520,7 +631,7 @@ export default function Home() {
       const results = await uploadAnalysisArchiveBatch(
         {
           files: pendingItems.map((item) => item.file),
-          focusFunction: focusFunctionValue,
+          focusFunction: effectiveFocusFunction,
           focusTerms: parseCommaSeparated(focusTermsInput),
           focusRegexes: parseCommaSeparated(focusRegexesInput),
           origin: window.location.origin,
@@ -545,6 +656,14 @@ export default function Home() {
               status: "uploading",
               progress,
               message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${formatPercent(progress)} transferido para o backend web.`,
+            }));
+          },
+          onFileRetry: (file, attempt, stage, error, fileIndex, totalFiles) => {
+            const queueId = buildUploadQueueId(file);
+            updateUploadQueueItem(queueId, (item) => ({
+              ...item,
+              status: "uploading",
+              message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${uploadRetryStageLabel(stage)} (tentativa ${attempt}/3) após falha transitória. ${error.message}`,
             }));
           },
           onFileSuccess: (file, result, fileIndex, totalFiles) => {
@@ -576,7 +695,16 @@ export default function Home() {
       const failedCount = results.filter((entry) => entry.error).length;
 
       if (successfulJobIds.length === 0) {
-        throw new Error("Nenhum arquivo elegível conseguiu iniciar análise. Revise as mensagens da fila e tente novamente.");
+        const failureMessages = results
+          .map((entry) => entry.error?.message?.trim())
+          .filter((message): message is string => Boolean(message))
+          .slice(0, 3);
+
+        throw new Error(
+          failureMessages.length > 0
+            ? `Nenhum arquivo elegível conseguiu iniciar análise. ${failureMessages.join(" | ")}`
+            : "Nenhum arquivo elegível conseguiu iniciar análise. Revise as mensagens da fila e tente novamente.",
+        );
       }
 
       setUploadProgress(100);
@@ -691,6 +819,52 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Cobertura operacional</div>
+                        <div className="mt-2 text-lg font-medium text-white">{aggregatedMetrics.distinctSamples} amostras · {aggregatedMetrics.distinctFunctions} focos registrados</div>
+                      </div>
+                      <RefreshCcw className="h-4 w-4 text-cyan-200" />
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Amostra mais recorrente</div>
+                        <div className="mt-2 font-medium text-white">{aggregatedMetrics.topSample?.[0] ?? "Sem dados suficientes"}</div>
+                        <div className="mt-1 text-slate-400">{aggregatedMetrics.topSample ? `${aggregatedMetrics.topSample[1]} job(s) correlacionados` : "Aguardando histórico consolidado."}</div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Função mais recorrente</div>
+                        <div className="mt-2 font-medium text-white">{aggregatedMetrics.topFunction?.[0] ?? "Sem dados suficientes"}</div>
+                        <div className="mt-1 text-slate-400">{aggregatedMetrics.topFunction ? `${aggregatedMetrics.topFunction[1]} ocorrência(s) no histórico` : "Aguardando histórico consolidado."}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`rounded-2xl border p-4 ${streamStatus === "degraded" || aggregatedMetrics.stalledJobs.length > 0 ? "border-amber-400/20 bg-amber-500/10" : "border-emerald-400/20 bg-emerald-500/10"}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Alertas de acompanhamento</div>
+                        <div className="mt-2 text-lg font-medium text-white">
+                          {streamStatus === "degraded" || aggregatedMetrics.stalledJobs.length > 0 ? "Atenção operacional requerida" : "Telemetria e fila dentro do esperado"}
+                        </div>
+                      </div>
+                      <Clock3 className={streamStatus === "degraded" || aggregatedMetrics.stalledJobs.length > 0 ? "h-4 w-4 text-amber-200" : "h-4 w-4 text-emerald-200"} />
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm leading-6 text-slate-200">
+                      <div>
+                        {streamStatus === "degraded"
+                          ? `O stream SSE está em reconexão automática. ${streamError ?? "O cliente seguirá tentando restabelecer o canal sem interromper a tela atual."}`
+                          : "O stream SSE segue saudável, com snapshots válidos e atualização contínua do painel."}
+                      </div>
+                      <div>
+                        {aggregatedMetrics.stalledJobs.length > 0
+                          ? `Há ${aggregatedMetrics.stalledJobs.length} job(s) com possível travamento operacional há mais de 10 minutos: ${aggregatedMetrics.stalledJobs.map((job: any) => job.sampleName || job.jobId).join(", ")}.`
+                          : "Nenhum job ativo aparenta estar travado com base na última atualização observada."}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
             </Card>
 
@@ -767,7 +941,7 @@ export default function Home() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px_auto]">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px_220px_auto]">
                     <Input
                       value={sampleNameFilter}
                       onChange={(event) => setSampleNameFilter(event.target.value)}
@@ -793,6 +967,17 @@ export default function Home() {
                         <SelectItem value="cancelled">Cancelled</SelectItem>
                       </SelectContent>
                     </Select>
+                    <Select value={jobSort} onValueChange={(value) => setJobSort(value as JobSortValue)}>
+                      <SelectTrigger className="border-white/10 bg-slate-950/60 text-slate-100">
+                        <SelectValue placeholder="Ordenação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="newest">Mais recentes primeiro</SelectItem>
+                        <SelectItem value="oldest">Mais antigos primeiro</SelectItem>
+                        <SelectItem value="progress_desc">Maior progresso primeiro</SelectItem>
+                        <SelectItem value="status">Agrupar por status</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="outline"
                       className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
@@ -813,7 +998,7 @@ export default function Home() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {jobs.map((job) => (
+                        {sortedJobs.map((job) => (
                           <TableRow
                             key={job.jobId}
                             className="cursor-pointer border-white/10 hover:bg-cyan-500/5"
@@ -1010,7 +1195,7 @@ export default function Home() {
                         className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
                       />
                       <p className="text-sm leading-6 text-slate-400">
-                        Esse valor é usado tanto para a submissão quanto para a organização do histórico e das notificações ao final do job.
+                        Esse valor é usado tanto para a submissão quanto para a organização do histórico e das notificações ao final do job. Se o campo ficar vazio, a aplicação solicita a análise completa do pacote para gerar fluxos por função.
                       </p>
                     </div>
                   </div>
@@ -1093,7 +1278,7 @@ export default function Home() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="queue" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <TabsContent value="queue" forceMount className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
               <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
                 <CardHeader>
                   <CardTitle className="text-white">Fila e sincronização em tempo real</CardTitle>
@@ -1571,6 +1756,61 @@ export default function Home() {
                         )
                       ))}
                     </div>
+                    {functionFlowGroups.length > 0 ? (
+                      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-4">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="text-sm font-medium text-white">Fluxos gerados por função</div>
+                            <div className="mt-1 text-sm text-slate-400">
+                              Cada função encontrada em <code className="rounded bg-black/30 px-1 py-0.5 text-slate-200">TraceFcnCall.M1</code> recebe artefatos dedicados no padrão legado: PNG, JSON estrutural e Mermaid.
+                            </div>
+                          </div>
+                          <div className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-emerald-200">
+                            {functionFlowGroups.length} funções
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {functionFlowGroups.map((flow) => (
+                            <div key={flow.slug} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                              <div className="text-sm font-medium text-white">{flow.title}</div>
+                              <div className="mt-1 text-xs text-slate-500">Slug técnico: {flow.slug}</div>
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {flow.pngArtifact?.storageUrl ? (
+                                  <a
+                                    href={flow.pngArtifact.storageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-100 transition hover:border-cyan-300/40 hover:bg-cyan-500/15"
+                                  >
+                                    Abrir PNG
+                                  </a>
+                                ) : null}
+                                {flow.jsonArtifact?.storageUrl ? (
+                                  <a
+                                    href={flow.jsonArtifact.storageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-white/15 bg-white/[0.05] px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.08]"
+                                  >
+                                    JSON estrutural
+                                  </a>
+                                ) : null}
+                                {flow.mmdArtifact?.storageUrl ? (
+                                  <a
+                                    href={flow.mmdArtifact.storageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-white/15 bg-white/[0.05] px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.08]"
+                                  >
+                                    Mermaid
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {selectedDetail?.artifacts?.map((artifact: any) => (
                       <a
                         key={artifact.id}

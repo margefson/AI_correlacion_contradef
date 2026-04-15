@@ -46,6 +46,21 @@ type UploadSessionMeta = {
   receivedChunkIndexes: number[];
 };
 
+function buildUploadSessionResponse(meta: UploadSessionMeta) {
+  return {
+    uploadId: meta.uploadId,
+    archiveName: meta.archiveName,
+    totalBytes: meta.totalBytes,
+    chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+    totalChunks: meta.totalChunks,
+    maxArchiveBytes: OPERATIONAL_ARCHIVE_MAX_BYTES,
+    directTransportMaxBytes: DIRECT_MULTIPART_TRANSPORT_MAX_BYTES,
+    focusFunction: meta.focusFunction,
+    receivedChunkIndexes: meta.receivedChunkIndexes,
+    updatedAt: meta.updatedAt,
+  };
+}
+
 function parseListField(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean);
@@ -245,6 +260,31 @@ export function registerAnalysisHttpRoutes(app: Express) {
     });
   });
 
+  app.get("/api/analysis/upload-sessions/:uploadId", async (req, res) => {
+    const user = await resolveAuthenticatedUser(req, res);
+    if (!user) return;
+
+    await cleanupExpiredUploadSessions();
+
+    const uploadId = typeof req.params.uploadId === "string" ? req.params.uploadId.trim() : "";
+    if (!uploadId) {
+      return respondJsonError(res, 400, "Identificador de sessão de upload ausente.", "MISSING_UPLOAD_ID");
+    }
+
+    let meta: UploadSessionMeta;
+    try {
+      meta = await readUploadSession(uploadId);
+    } catch {
+      return respondJsonError(res, 404, "A sessão de upload informada não foi encontrada ou expirou.", "UPLOAD_SESSION_NOT_FOUND");
+    }
+
+    if (meta.createdByUserId !== user.id) {
+      return respondJsonError(res, 403, "Esta sessão de upload pertence a outro usuário autenticado.", "UPLOAD_SESSION_FORBIDDEN");
+    }
+
+    return res.status(200).json(buildUploadSessionResponse(meta));
+  });
+
   app.post("/api/analysis/upload-sessions", async (req, res) => {
     const user = await resolveAuthenticatedUser(req, res);
     if (!user) return;
@@ -300,13 +340,7 @@ export function registerAnalysisHttpRoutes(app: Express) {
 
     await writeUploadSession(meta);
 
-    return res.status(200).json({
-      uploadId,
-      chunkSize: CHUNK_UPLOAD_MAX_BYTES,
-      totalChunks,
-      maxArchiveBytes: OPERATIONAL_ARCHIVE_MAX_BYTES,
-      directTransportMaxBytes: DIRECT_MULTIPART_TRANSPORT_MAX_BYTES,
-    });
+    return res.status(200).json(buildUploadSessionResponse(meta));
   });
 
   app.post("/api/analysis/upload-sessions/:uploadId/chunks", (req, res) => {
