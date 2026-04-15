@@ -1,6 +1,12 @@
-export const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
-export const GATEWAY_SINGLE_REQUEST_MAX_BYTES = 30 * 1024 * 1024;
-export const CHUNK_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+import {
+  CHUNK_UPLOAD_HARD_MAX_BYTES,
+  CHUNK_UPLOAD_SAFE_MAX_BYTES,
+  GATEWAY_SINGLE_REQUEST_MAX_BYTES,
+  OPERATIONAL_ARCHIVE_MAX_BYTES,
+} from "../../../shared/analysis";
+
+export { GATEWAY_SINGLE_REQUEST_MAX_BYTES, OPERATIONAL_ARCHIVE_MAX_BYTES as MAX_ARCHIVE_BYTES };
+export const CHUNK_UPLOAD_MAX_BYTES = CHUNK_UPLOAD_SAFE_MAX_BYTES;
 export const MAX_BATCH_UPLOAD_FILES = 10;
 
 const SEVEN_Z_SIGNATURE = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c] as const;
@@ -68,7 +74,7 @@ function extractResponseMessage(status: number, responseText: string): string {
       return "Sua sessão expirou. Faça login novamente antes de enviar o arquivo.";
     }
     if (status === 413) {
-      return `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB suportado pela aplicação atual.`;
+      return `O arquivo excede o limite operacional de ${Math.round(OPERATIONAL_ARCHIVE_MAX_BYTES / (1024 * 1024))} MB suportado pela aplicação atual.`;
     }
     return "O backend não retornou uma mensagem legível para esta submissão.";
   }
@@ -230,7 +236,7 @@ async function hasValidSevenZipSignature(file: File) {
 }
 
 export async function inspectAnalysisArchive(file: File): Promise<AnalysisArchiveInspection> {
-  const remainingBytes = Math.max(0, MAX_ARCHIVE_BYTES - file.size);
+  const remainingBytes = Math.max(0, OPERATIONAL_ARCHIVE_MAX_BYTES - file.size);
   const usesChunkedTransport = file.size > GATEWAY_SINGLE_REQUEST_MAX_BYTES;
   const chunkCount = Math.max(1, Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES));
 
@@ -254,10 +260,10 @@ export async function inspectAnalysisArchive(file: File): Promise<AnalysisArchiv
     };
   }
 
-  if (file.size > MAX_ARCHIVE_BYTES) {
+  if (file.size > OPERATIONAL_ARCHIVE_MAX_BYTES) {
     return {
       ok: false,
-      message: `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB suportado pela aplicação atual.`,
+      message: `O arquivo excede o limite operacional de ${Math.round(OPERATIONAL_ARCHIVE_MAX_BYTES / (1024 * 1024))} MB suportado pela aplicação atual.`,
       remainingBytes,
       usesChunkedTransport,
       chunkCount,
@@ -315,7 +321,7 @@ export async function uploadAnalysisArchive(
     persistStoredUploadSessionId(storageKey, session.uploadId);
   }
 
-  const chunkSize = Math.max(1, Math.min(session.chunkSize || CHUNK_UPLOAD_MAX_BYTES, CHUNK_UPLOAD_MAX_BYTES));
+  const chunkSize = Math.max(1, Math.min(session.chunkSize || CHUNK_UPLOAD_MAX_BYTES, CHUNK_UPLOAD_HARD_MAX_BYTES - 1));
   const receivedChunkIndexes = new Set(session.receivedChunkIndexes ?? []);
   let uploadedBytes = Array.from(receivedChunkIndexes).reduce(
     (sum, chunkIndex) => sum + chunkByteLength(chunkIndex, chunkSize, input.file.size),

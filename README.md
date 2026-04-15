@@ -22,7 +22,7 @@ A experiência foi desenhada para manter o operador dentro de um único fluxo de
 
 | Capacidade entregue | Descrição |
 | --- | --- |
-| Submissão validada de `.7z` | Aceita upload autenticado com sessão em partes, suporta arquivos acima de 50 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato |
+| Submissão validada de `.7z` | Aceita upload autenticado com sessão em partes, suporta arquivos acima de 50 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato; no modo fragmentado, o cliente divide o pacote em blocos levemente abaixo de 8 MiB para evitar rejeições espúrias no parser multipart |
 | Acompanhamento em tempo real | Exibe estágio, progresso, mensagens, stdout e stderr resumidos por job via stream SSE autenticado |
 | Histórico filtrável | Mantém jobs anteriores disponíveis para inspeção e retomada operacional |
 | Visualização de correlação | Mostra nós, relações e tabela associada ao job selecionado |
@@ -56,7 +56,7 @@ Durante o processamento, o backend sincroniza o status do job, captura logs prog
 
 | Etapa | Resultado esperado |
 | --- | --- |
-| Submissão em partes | Job criado e enfileirado com parâmetros do operador; o cliente faz verificação prévia, divide arquivos grandes em partes seguras e suporta lotes sequenciais acima de 50 MB no domínio publicado |
+| Submissão em partes | Job criado e enfileirado com parâmetros do operador; o cliente faz verificação prévia, divide arquivos grandes em partes seguras com margem abaixo do teto rígido de 8 MiB e suporta lotes sequenciais acima de 50 MB no domínio publicado |
 | Stream SSE autenticado | Progresso, estágio, snapshots do job e logs atualizados na interface |
 | Consolidação | Grafo, tabela, resumo, artefatos e estado final persistidos |
 | Pós-processamento | Notificação enviada e commit realizado quando aplicável |
@@ -103,6 +103,7 @@ Além da suíte automatizada, a aplicação foi verificada com compilação Type
 | `server/analysis.router.test.ts` | Submissão, listagem, detalhe, restrição administrativa e retomada de sincronização |
 | `server/analysis.service.test.ts` | Backfill de jobs concluídos sem `function_flows` e geração multi-função a partir de `TraceFcnCall.M1` |
 | `server/auth.logout.test.ts` | Limpeza do cookie de sessão e resposta do logout |
+| `client/src/lib/analysisUpload.test.ts` | Particionamento seguro de arquivos grandes em blocos abaixo do teto rígido do backend |
 | `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico, erro de limite, mensagem operacional agregada da fila, modo de triagem e exibição de exportações |
 
 ## Integração com GitHub

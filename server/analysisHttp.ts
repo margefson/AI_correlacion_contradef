@@ -4,13 +4,17 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import multer from "multer";
+import {
+  CHUNK_UPLOAD_HARD_MAX_BYTES,
+  CHUNK_UPLOAD_SAFE_MAX_BYTES,
+  GATEWAY_SINGLE_REQUEST_MAX_BYTES as DIRECT_MULTIPART_TRANSPORT_MAX_BYTES,
+  OPERATIONAL_ARCHIVE_MAX_BYTES,
+} from "../shared/analysis";
 import { getAnalysisJobDetail, startAnalysisJobFromArchive } from "./analysisService";
 import { listAnalysisJobs } from "./db";
 import { sdk } from "./_core/sdk";
 
-export const DIRECT_MULTIPART_TRANSPORT_MAX_BYTES = 30 * 1024 * 1024;
-export const CHUNK_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
-export const OPERATIONAL_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024;
+export const CHUNK_UPLOAD_MAX_BYTES = CHUNK_UPLOAD_SAFE_MAX_BYTES;
 
 const UPLOAD_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 const UPLOAD_SESSION_ROOT = path.join(os.tmpdir(), "ai-correlacion-upload-sessions");
@@ -26,7 +30,7 @@ const directUpload = multer({
 const chunkUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: CHUNK_UPLOAD_MAX_BYTES,
+    fileSize: CHUNK_UPLOAD_HARD_MAX_BYTES,
     files: 1,
   },
 });
@@ -51,7 +55,7 @@ function buildUploadSessionResponse(meta: UploadSessionMeta) {
     uploadId: meta.uploadId,
     archiveName: meta.archiveName,
     totalBytes: meta.totalBytes,
-    chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+    chunkSize: CHUNK_UPLOAD_SAFE_MAX_BYTES,
     totalChunks: meta.totalChunks,
     maxArchiveBytes: OPERATIONAL_ARCHIVE_MAX_BYTES,
     directTransportMaxBytes: DIRECT_MULTIPART_TRANSPORT_MAX_BYTES,
@@ -322,7 +326,7 @@ export function registerAnalysisHttpRoutes(app: Express) {
     }
 
     const uploadId = randomUUID();
-    const totalChunks = Math.max(1, Math.ceil(totalBytes / CHUNK_UPLOAD_MAX_BYTES));
+    const totalChunks = Math.max(1, Math.ceil(totalBytes / CHUNK_UPLOAD_SAFE_MAX_BYTES));
     const meta: UploadSessionMeta = {
       uploadId,
       archiveName,
@@ -350,7 +354,7 @@ export function registerAnalysisHttpRoutes(app: Express) {
           return respondJsonError(
             res,
             413,
-            `Cada parte do upload em lote deve permanecer abaixo de ${Math.round(CHUNK_UPLOAD_MAX_BYTES / (1024 * 1024))} MB.`,
+            `Cada parte do upload em lote deve permanecer abaixo de ${Math.round(CHUNK_UPLOAD_HARD_MAX_BYTES / (1024 * 1024))} MB.`,
             "CHUNK_TOO_LARGE",
           );
         }
