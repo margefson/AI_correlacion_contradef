@@ -334,6 +334,37 @@ describe("Home dashboard", () => {
     });
   });
 
+  it("mostra falha operacional agregada quando os arquivos válidos não conseguem abrir jobs", async () => {
+    const user = userEvent.setup();
+    mockState.uploadAnalysisArchiveBatch.mockImplementationOnce(async (input?: any, options?: any) => {
+      const files = (input?.files ?? []) as File[];
+      const file = files[0]!;
+      const error = new Error("Backend indisponível temporariamente.");
+
+      options?.onFileStart?.(file, 0, files.length);
+      options?.onFileError?.(file, error, 0, files.length);
+
+      return [{ file, error }];
+    });
+
+    render(<Home />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["fake-binary"], "sample.7z", { type: "application/x-7z-compressed" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(mockState.inspectAnalysisArchive).toHaveBeenCalledWith(file);
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/os arquivos válidos da fila não conseguiram iniciar análise/i)).toBeTruthy();
+      expect(screen.getAllByText(/Backend indisponível temporariamente\./i).length).toBeGreaterThan(0);
+    });
+  });
+
   it("expõe erro explícito quando o backend rejeita o upload por limite", async () => {
     const user = userEvent.setup();
     mockState.uploadAnalysisArchiveBatch.mockRejectedValueOnce(new Error("O arquivo excede o limite operacional de 64 MB por arquivo."));

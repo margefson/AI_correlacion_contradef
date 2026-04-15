@@ -27,6 +27,7 @@ A experiência foi desenhada para manter o operador dentro de um único fluxo de
 | Histórico filtrável | Mantém jobs anteriores disponíveis para inspeção e retomada operacional |
 | Visualização de correlação | Mostra nós, relações e tabela associada ao job selecionado |
 | Comparação entre jobs | Contrasta amostras, função focal, densidade do grafo e artefatos compartilhados entre execuções |
+| Fluxos multi-função | Gera artefatos dedicados por função encontrada em `TraceFcnCall.M1`, incluindo índice consolidado e links por função no dashboard |
 | Resumo interpretativo | Consolida a correlação em linguagem legível por operador |
 | Perfis operacionais | Restringe sincronizações forçadas e retomada manual a administradores, mantendo analistas em modo de triagem |
 | Notificação e commit | Aciona alerta operacional e registra resultado no repositório configurado |
@@ -51,7 +52,7 @@ O desenho também separa claramente o que é **persistência de metadados** do q
 
 O fluxo operacional começa com o envio de um pacote `.7z` e a indicação da função de interesse. O backend valida o arquivo, registra um novo job e repassa a execução para o pipeline legado, preservando o identificador do job e a trilha de estados no banco da aplicação.
 
-Durante o processamento, o backend sincroniza o status do job, captura logs progressivos, registra eventos e atualiza artefatos intermediários ou finais. A interface principal consome snapshots autenticados via SSE em `/api/analysis/stream`, reduzindo dependência de polling contínuo para refletir a evolução do job quase em tempo real. Quando a execução é concluída, o serviço consolida a correlação, publica os arquivos, gera o resumo interpretativo, envia a notificação operacional e executa o commit dos resultados no repositório configurado.
+Durante o processamento, o backend sincroniza o status do job, captura logs progressivos, registra eventos e atualiza artefatos intermediários ou finais. A interface principal consome snapshots autenticados via SSE em `/api/analysis/stream`, reduzindo dependência de polling contínuo para refletir a evolução do job quase em tempo real. Quando a execução é concluída, o serviço consolida a correlação, publica os arquivos, gera o resumo interpretativo, envia a notificação operacional e executa o commit dos resultados no repositório configurado. Para jobs já concluídos em versões anteriores, a retomada administrativa agora também re-sincroniza execuções que ainda não possuem `function_flows`, permitindo backfill dos fluxos por função sem reenviar a amostra.
 
 | Etapa | Resultado esperado |
 | --- | --- |
@@ -74,6 +75,7 @@ A página principal agrega métricas, formulário de submissão, painel de ativi
 | Atividade imediata | Estado do job ativo, snapshots em tempo real e ações administrativas condicionadas ao papel |
 | Histórico | Lista de jobs com seleção, status, progresso e recorte temporal |
 | Detalhe do job | Resumo, correlação, eventos, logs, commit e artefatos |
+| Fluxos por função | Cartões dedicados para cada função encontrada no `TraceFcnCall.M1`, com links para PNG, JSON estrutural e Mermaid quando disponíveis |
 | Comparação | Contraste entre jobs para cruzar amostras, foco analítico e artefatos compartilhados |
 | Exportações | Links explícitos para JSON, Markdown, DOCX e demais saídas |
 
@@ -92,15 +94,16 @@ A autenticação, os helpers internos e os segredos injetados pela plataforma j�
 
 ## Validação e testes
 
-A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas e o fluxo de logout. Os testes do frontend exercitam a submissão em lote com verificação prévia, a atualização do histórico, a exposição de exportações, o erro explícito de limite e a experiência de triagem para perfis não administrativos.
+A validação atual cobre tanto a camada de backend quanto a camada de interface. Os testes do servidor verificam os procedimentos centrais de análise, a separação entre permissões autenticadas e administrativas, o fluxo de logout e o backfill de jobs concluídos sem artefatos multi-função. Os testes do frontend exercitam a submissão em lote com verificação prévia, a atualização do histórico, a exposição de exportações, o erro explícito de limite, a nova mensagem agregada de falha operacional da fila e a experiência de triagem para perfis não administrativos.
 
 Além da suíte automatizada, a aplicação foi verificada com compilação TypeScript limpa e servidor de desenvolvimento saudável. A prévia visual do dashboard confirma o funcionamento da identidade visual, da aba comparativa e do layout principal.
 
 | Suíte | Cobertura principal |
 | --- | --- |
 | `server/analysis.router.test.ts` | Submissão, listagem, detalhe, restrição administrativa e retomada de sincronização |
+| `server/analysis.service.test.ts` | Backfill de jobs concluídos sem `function_flows` e geração multi-função a partir de `TraceFcnCall.M1` |
 | `server/auth.logout.test.ts` | Limpeza do cookie de sessão e resposta do logout |
-| `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico, erro de limite, modo de triagem e exibição de exportações |
+| `client/src/pages/Home.test.tsx` | Submissão via UI, seleção no histórico, erro de limite, mensagem operacional agregada da fila, modo de triagem e exibição de exportações |
 
 ## Integração com GitHub
 
@@ -144,6 +147,6 @@ A base do projeto já contém a separação entre cliente, servidor, schema e do
 
 ## Estado atual
 
-Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão autenticada em partes com suporte operacional acima de 50 MB no domínio publicado, verificação prévia do pacote `.7z`, fila em lote com validação individual, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, perfis operacionais e capacidade de versionamento operacional.
+Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão autenticada em partes com suporte operacional acima de 50 MB no domínio publicado, verificação prévia do pacote `.7z`, fila em lote com validação individual, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, navegação por fluxos multi-função derivados de `TraceFcnCall.M1`, perfis operacionais e capacidade de versionamento operacional.
 
 Os próximos incrementos naturais, caso desejados, seriam expandir filtros avançados do histórico, aumentar a profundidade das visualizações do grafo, enriquecer métricas operacionais e sofisticar ainda mais as regras comparativas entre execuções.

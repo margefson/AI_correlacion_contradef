@@ -38,11 +38,11 @@
 - [x] Criar fila de uploads em lote com validação individual por arquivo
 - [x] Atualizar documentação operacional e testes para o novo fluxo de upload ampliado
 - [x] Commitar e enviar todas as mudanças finais no GitHub após validação completa
-- [ ] Corrigir o caso em que a fila mostra "Nenhum arquivo elegível conseguiu iniciar análise" mesmo havendo arquivo válido selecionado
-- [ ] Expandir o pipeline para mapear todas as funções presentes em `contradef.2956.TraceFcnCall.M1.cdf` e gerar um artefato de fluxo correspondente para cada função
-- [ ] Adaptar a aplicação web para expor e navegar pelos fluxos gerados por função, no mesmo padrão visual do exemplo legado informado pelo usuário
-- [ ] Implementar todas as sugestões de acompanhamento restantes associadas ao novo fluxo multi-função
-- [ ] Atualizar testes, documentação operacional e versionamento GitHub após a expansão multi-função
+- [x] Corrigir o caso em que a fila mostra "Nenhum arquivo elegível conseguiu iniciar análise" mesmo havendo arquivo válido selecionado
+- [x] Expandir o pipeline para mapear todas as funções presentes em `contradef.2956.TraceFcnCall.M1.cdf` e gerar um artefato de fluxo correspondente para cada função
+- [x] Adaptar a aplicação web para expor e navegar pelos fluxos gerados por função, no mesmo padrão visual do exemplo legado informado pelo usuário
+- [x] Implementar os acompanhamentos do fluxo multi-função: mensagem operacional clara da fila, retomada/backfill de jobs concluídos, exposição dos cartões por função, ordenação, alertas visuais e métricas agregadas
+- [ ] Atualizar testes, documentação operacional e checkpoint final após a expansão multi-função
 - [x] Implementar retomada automática de upload interrompido com reenvio transparente de sessão e partes
 - [x] Refinar filtros avançados, ordenação e comparação guiada entre jobs no painel operacional
 - [x] Concluir os acompanhamentos operacionais imediatos do painel: retomada real de upload, ordenação, alertas visuais e métricas agregadas

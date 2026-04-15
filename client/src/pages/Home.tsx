@@ -702,8 +702,8 @@ export default function Home() {
 
         throw new Error(
           failureMessages.length > 0
-            ? `Nenhum arquivo elegível conseguiu iniciar análise. ${failureMessages.join(" | ")}`
-            : "Nenhum arquivo elegível conseguiu iniciar análise. Revise as mensagens da fila e tente novamente.",
+            ? `Os arquivos válidos da fila não conseguiram iniciar análise. ${failureMessages.join(" | ")}`
+            : "Os arquivos válidos da fila não conseguiram iniciar análise. Revise as mensagens individuais e tente novamente.",
         );
       }
 

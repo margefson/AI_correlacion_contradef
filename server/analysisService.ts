@@ -241,6 +241,30 @@ async function findTraceFcnCallFile(jobId: string) {
   return files.find((filePath) => /tracefcncall\.m1\.cdf$/i.test(path.basename(filePath))) ?? null;
 }
 
+async function jobNeedsFunctionFlowBackfill(jobId: string) {
+  const existingArtifacts = await listAnalysisArtifacts(jobId);
+  if (existingArtifacts.some((artifact) => artifact.relativePath.toLowerCase().includes("function_flows/"))) {
+    return false;
+  }
+
+  const persistedIndexPath = path.join(
+    DEFAULT_PIPELINE_REPOSITORY,
+    "data",
+    "jobs_api",
+    jobId,
+    "output",
+    "function_flows",
+    "function_flow_index.json",
+  );
+
+  const persistedIndexExists = await fs.access(persistedIndexPath).then(() => true).catch(() => false);
+  if (persistedIndexExists) {
+    return false;
+  }
+
+  return Boolean(await findTraceFcnCallFile(jobId));
+}
+
 async function parseTraceFcnCallEntries(traceFilePath: string): Promise<TraceFcnCallEntry[]> {
   const raw = await fs.readFile(traceFilePath, "utf-8");
   const lines = raw.split(/\r?\n/);
@@ -982,14 +1006,30 @@ export async function syncAnalysisJob(jobId: string) {
 
 export async function syncActiveAnalysisJobs() {
   const jobs = await listAnalysisJobs({ limit: 100 });
-  const activeJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
-  for (const job of activeJobs) {
-    startJobPolling(job.jobId);
+  const jobsToSync = [] as typeof jobs;
+
+  for (const job of jobs) {
+    if (job.status === "queued" || job.status === "running") {
+      jobsToSync.push(job);
+      continue;
+    }
+
+    if (job.status === "completed" && await jobNeedsFunctionFlowBackfill(job.jobId)) {
+      jobsToSync.push(job);
+    }
+  }
+
+  for (const job of jobsToSync) {
+    if (job.status === "queued" || job.status === "running") {
+      startJobPolling(job.jobId);
+    }
+
     await syncAnalysisJob(job.jobId).catch((error) => {
-      console.warn(`[Analysis] Falha ao sincronizar job ativo ${job.jobId}:`, error);
+      console.warn(`[Analysis] Falha ao sincronizar job ${job.jobId}:`, error);
     });
   }
-  return activeJobs.length;
+
+  return jobsToSync.length;
 }
 
 export async function loadCorrelationGraph(jobId: string): Promise<CorrelationGraph | null> {
