@@ -4,7 +4,7 @@ import { getAnalysisJobDetail, startAnalysisJobFromArchive } from "./analysisSer
 import { listAnalysisJobs } from "./db";
 import { sdk } from "./_core/sdk";
 
-export const MULTIPART_TRANSPORT_MAX_BYTES = 500 * 1024 * 1024;
+export const MULTIPART_TRANSPORT_MAX_BYTES = 30 * 1024 * 1024;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -142,7 +142,7 @@ export function registerAnalysisHttpRoutes(app: Express) {
           return respondJsonError(
             res,
             413,
-            `O arquivo excede o limite de transporte de ${Math.round(MULTIPART_TRANSPORT_MAX_BYTES / (1024 * 1024))} MB aceito pelo gateway web.`,
+            `O arquivo excede o limite operacional de ${Math.round(MULTIPART_TRANSPORT_MAX_BYTES / (1024 * 1024))} MB aceito pelo domínio publicado.`,
             "FILE_TOO_LARGE",
           );
         }

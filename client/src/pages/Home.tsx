@@ -373,7 +373,7 @@ export default function Home() {
       return;
     }
     if (selectedFile.size > MAX_ARCHIVE_BYTES) {
-      const message = `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB aceito pelo backend web.`;
+      const message = `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB aceito pelo domínio publicado.`;
       setSubmissionError(message);
       toast.error(message);
       return;
@@ -742,7 +742,7 @@ export default function Home() {
                           className="border-white/10 bg-slate-950/70 text-slate-100 file:text-slate-200"
                         />
                         <p className="mt-3 text-sm text-slate-400">
-                          Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB. O envio agora usa upload multipart, evitando a sobrecarga do transporte em base64 e retornando JSON explícito em caso de falha.
+                          Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB no domínio publicado. O envio usa upload multipart, mas o gateway externo bloqueia arquivos maiores antes de o endpoint JSON processar a requisição.
                         </p>
                         {selectedFile ? (
                           <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">

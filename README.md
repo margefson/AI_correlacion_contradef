@@ -22,7 +22,7 @@ A experiência foi desenhada para manter o operador dentro de um único fluxo de
 
 | Capacidade entregue | Descrição |
 | --- | --- |
-| Submissão validada de `.7z` | Aceita upload multipart autenticado, rejeita formato inválido e retorna erros JSON explícitos para limite, sessão e contrato |
+| Submissão validada de `.7z` | Aceita upload multipart autenticado até 30 MB no domínio publicado, rejeita formato inválido e retorna erros explícitos para limite, sessão e contrato |
 | Acompanhamento em tempo real | Exibe estágio, progresso, mensagens, stdout e stderr resumidos por job via stream SSE autenticado |
 | Histórico filtrável | Mantém jobs anteriores disponíveis para inspeção e retomada operacional |
 | Visualização de correlação | Mostra nós, relações e tabela associada ao job selecionado |
@@ -55,7 +55,7 @@ Durante o processamento, o backend sincroniza o status do job, captura logs prog
 
 | Etapa | Resultado esperado |
 | --- | --- |
-| Submissão multipart | Job criado e enfileirado com parâmetros do operador e erros JSON previsíveis |
+| Submissão multipart | Job criado e enfileirado com parâmetros do operador; acima de 30 MB no domínio publicado, o envio deve ser bloqueado preventivamente no cliente |
 | Stream SSE autenticado | Progresso, estágio, snapshots do job e logs atualizados na interface |
 | Consolidação | Grafo, tabela, resumo, artefatos e estado final persistidos |
 | Pós-processamento | Notificação enviada e commit realizado quando aplicável |
@@ -144,6 +144,6 @@ A base do projeto já contém a separação entre cliente, servidor, schema e do
 
 ## Estado atual
 
-Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão multipart controlada, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, perfis operacionais e capacidade de versionamento operacional.
+Neste momento, a aplicação já entrega o núcleo funcional solicitado: integração com o que já existia, submissão multipart controlada com limite operacional de 30 MB no domínio publicado, acompanhamento em tempo real via SSE, leitura de logs, visualização de correlação, histórico, comparação entre execuções, resumo por LLM, exportações explícitas, perfis operacionais e capacidade de versionamento operacional.
 
 Os próximos incrementos naturais, caso desejados, seriam expandir filtros avançados do histórico, aumentar a profundidade das visualizações do grafo, enriquecer métricas operacionais e sofisticar ainda mais as regras comparativas entre execuções.

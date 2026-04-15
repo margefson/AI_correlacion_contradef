@@ -31,3 +31,4 @@
 - [x] Substituir o polling principal por atualização em tempo real via SSE para eventos e progresso dos jobs
 - [x] Implementar controle de acesso por papéis para triagem operacional e ações administrativas
 - [x] Implementar tela de comparação entre jobs para cruzar amostras, funções e artefatos analisados
+- [x] Corrigir o caso remanescente em que o upload recebe uma página HTML inesperada em vez de JSON no endpoint esperado

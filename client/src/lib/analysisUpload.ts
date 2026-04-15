@@ -1,4 +1,4 @@
-export const MAX_ARCHIVE_BYTES = 40 * 1024 * 1024;
+export const MAX_ARCHIVE_BYTES = 30 * 1024 * 1024;
 
 export type AnalysisUploadInput = {
   file: File;
@@ -24,6 +24,9 @@ function extractResponseMessage(status: number, responseText: string): string {
     if (status === 401) {
       return "Sua sessão expirou. Faça login novamente antes de enviar o arquivo.";
     }
+    if (status === 413) {
+      return `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB aceito pelo domínio publicado.`;
+    }
     return "O backend não retornou uma mensagem legível para esta submissão.";
   }
 
@@ -35,6 +38,9 @@ function extractResponseMessage(status: number, responseText: string): string {
   }
 
   if (trimmed.startsWith("<")) {
+    if (status === 413) {
+      return `O arquivo excede o limite operacional de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB aceito pelo domínio publicado. O gateway interrompeu o upload antes de o endpoint JSON processar a requisição.`;
+    }
     return "O servidor devolveu uma página HTML inesperada em vez de JSON. A requisição não foi processada pelo endpoint de upload esperado.";
   }
 

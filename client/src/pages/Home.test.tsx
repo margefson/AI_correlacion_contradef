@@ -58,7 +58,7 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 }));
 
 vi.mock("@/lib/analysisUpload", () => ({
-  MAX_ARCHIVE_BYTES: 40 * 1024 * 1024,
+  MAX_ARCHIVE_BYTES: 30 * 1024 * 1024,
   uploadAnalysisArchive: (input: unknown, options: unknown) => mockState.uploadAnalysisArchive(input, options),
 }));
 
@@ -282,7 +282,7 @@ describe("Home dashboard", () => {
 
   it("expõe erro explícito quando o backend rejeita o upload por limite", async () => {
     const user = userEvent.setup();
-    mockState.uploadAnalysisArchive.mockRejectedValueOnce(new Error("O arquivo excede o limite operacional de 40 MB aceito pelo backend web."));
+    mockState.uploadAnalysisArchive.mockRejectedValueOnce(new Error("O arquivo excede o limite operacional de 30 MB aceito pelo domínio publicado."));
 
     render(<Home />);
 
@@ -293,6 +293,21 @@ describe("Home dashboard", () => {
     await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
 
     expect(await screen.findByText(/excede o limite operacional/i)).toBeTruthy();
+  });
+
+  it("bloqueia no cliente arquivos acima do limite publicado antes de chamar o upload", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["fake-binary"], "oversized-sample.7z", { type: "application/x-7z-compressed" });
+    Object.defineProperty(file, "size", { value: 31 * 1024 * 1024 });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+
+    expect(await screen.findByText(/30 MB aceito pelo domínio publicado/i)).toBeTruthy();
+    expect(mockState.uploadAnalysisArchive).not.toHaveBeenCalled();
   });
 
   it("expõe orientação de triagem para o perfil não administrativo e mantém a matriz comparativa disponível", () => {
