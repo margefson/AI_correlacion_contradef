@@ -14,7 +14,12 @@
 - [x] Construir uma interface visual elegante e sofisticada para upload, monitoramento em tempo real, histórico e resultados
 - [x] Escrever testes de backend e frontend para fluxos críticos da plataforma
 - [x] Atualizar README e documentação operacional da aplicação web
-- [ ] Validar a aplicação ponta a ponta e versionar tudo no GitHub
+- [x] Validar a aplicação ponta a ponta e versionar tudo no GitHub
 - [x] Adicionar validação no backend web para rejeitar uploads não-.7z, base64 inválido e arquivos acima do limite esperado antes de submeter ao pipeline
 - [x] Integrar leitura, persistência e exposição de logs progressivos via stdout/stderr do pipeline durante o polling
 - [x] Escrever testes de frontend para submissão, histórico e detalhamento de jobs
+- [x] Versionar a aplicação validada no repositório GitHub `margefson/AI_correlacion_contradef` com commit final do código web
+- [x] Renovar a autenticação do GitHub CLI após falha por código expirado e concluir o push para `margefson/AI_correlacion_contradef`
+- [x] Avaliar e, se viável, concluir o push final usando token temporário válido apenas para esta sessão do GitHub
+- [x] Corrigir definitivamente o erro de runtime do cookie/logout no servidor (`COOKIE_NAME`) e revalidar a aplicação após o ajuste final
+- [x] Executar e registrar uma validação final ponta a ponta cobrindo submissão, acompanhamento em tempo real, artefatos/exportações, histórico e push/versionamento antes da entrega final
