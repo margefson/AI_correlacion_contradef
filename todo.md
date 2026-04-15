@@ -37,4 +37,4 @@
 - [x] Exibir contador visual de tamanho restante antes do envio do arquivo
 - [x] Criar fila de uploads em lote com validação individual por arquivo
 - [x] Atualizar documentação operacional e testes para o novo fluxo de upload ampliado
-- [ ] Commitar e enviar todas as mudanças finais no GitHub após validação completa
+- [x] Commitar e enviar todas as mudanças finais no GitHub após validação completa
