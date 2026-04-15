@@ -33,6 +33,8 @@ const chunkUploadRaw = express.raw({
   limit: CHUNK_UPLOAD_HARD_MAX_BYTES,
 });
 
+type UploadCompletionStatus = "open" | "finalizing" | "completed" | "failed";
+
 type UploadSessionMeta = {
   uploadId: string;
   archiveName: string;
@@ -46,7 +48,12 @@ type UploadSessionMeta = {
   createdAt: number;
   updatedAt: number;
   receivedChunkIndexes: number[];
+  completionStatus: UploadCompletionStatus;
+  finalizedJobId?: string;
+  completionError?: string | null;
 };
+
+const runningUploadFinalizations = new Map<string, Promise<void>>();
 
 function buildUploadSessionResponse(meta: UploadSessionMeta) {
   return {
@@ -60,6 +67,9 @@ function buildUploadSessionResponse(meta: UploadSessionMeta) {
     focusFunction: meta.focusFunction,
     receivedChunkIndexes: meta.receivedChunkIndexes,
     updatedAt: meta.updatedAt,
+    completionStatus: meta.completionStatus,
+    finalizedJobId: meta.finalizedJobId ?? null,
+    completionError: meta.completionError ?? null,
   };
 }
 
@@ -207,6 +217,78 @@ function normalizeReceivedChunkIndexes(indexes: number[], totalChunks: number) {
   return Array.from(new Set(indexes.filter((index) => Number.isInteger(index) && index >= 0 && index < totalChunks))).sort((a, b) => a - b);
 }
 
+async function finalizeUploadSession(uploadId: string, userId: number) {
+  const running = runningUploadFinalizations.get(uploadId);
+  if (running) return running;
+
+  const finalizePromise = (async () => {
+    let meta = await readUploadSession(uploadId);
+    if (meta.createdByUserId !== userId) {
+      throw new Error("Esta sessão de upload pertence a outro usuário autenticado.");
+    }
+
+    const missingChunkIndexes = Array.from({ length: meta.totalChunks }, (_, index) => index).filter(
+      (index) => !meta.receivedChunkIndexes.includes(index),
+    );
+
+    if (missingChunkIndexes.length > 0) {
+      meta.updatedAt = Date.now();
+      meta.completionStatus = "failed";
+      meta.completionError = "Ainda existem partes pendentes neste upload em lote. Reenvie as partes faltantes antes de concluir.";
+      await writeUploadSession(meta);
+      return;
+    }
+
+    try {
+      const buffers: Buffer[] = [];
+      let totalBufferBytes = 0;
+
+      for (let index = 0; index < meta.totalChunks; index += 1) {
+        const chunkBuffer = await fs.readFile(path.join(sessionChunkDirectory(uploadId), chunkFilename(index)));
+        buffers.push(chunkBuffer);
+        totalBufferBytes += chunkBuffer.length;
+      }
+
+      if (totalBufferBytes !== meta.totalBytes) {
+        meta.updatedAt = Date.now();
+        meta.completionStatus = "failed";
+        meta.completionError = "O arquivo remontado não corresponde ao tamanho original informado na sessão.";
+        await writeUploadSession(meta);
+        return;
+      }
+
+      const createdJob = await startAnalysisJobFromArchive({
+        archiveName: meta.archiveName,
+        archiveBuffer: Buffer.concat(buffers, totalBufferBytes),
+        focusFunction: meta.focusFunction,
+        focusTerms: meta.focusTerms,
+        focusRegexes: meta.focusRegexes,
+        origin: meta.origin,
+        createdByUserId: userId,
+      });
+
+      meta = await readUploadSession(uploadId).catch(() => meta);
+      meta.updatedAt = Date.now();
+      meta.completionStatus = "completed";
+      meta.finalizedJobId = typeof createdJob?.jobId === "string" ? createdJob.jobId : uploadId;
+      meta.completionError = null;
+      await writeUploadSession(meta);
+      await fs.rm(sessionChunkDirectory(uploadId), { recursive: true, force: true });
+    } catch (caught) {
+      meta = await readUploadSession(uploadId).catch(() => meta);
+      meta.updatedAt = Date.now();
+      meta.completionStatus = "failed";
+      meta.completionError = extractMessage(caught);
+      await writeUploadSession(meta);
+    }
+  })().finally(() => {
+    runningUploadFinalizations.delete(uploadId);
+  });
+
+  runningUploadFinalizations.set(uploadId, finalizePromise);
+  return finalizePromise;
+}
+
 async function buildStreamSnapshot(selectedJobId?: string) {
   const jobs = await listAnalysisJobs({ limit: 50 });
   const detail = selectedJobId ? await getAnalysisJobDetail(selectedJobId).catch(() => null) : null;
@@ -342,6 +424,9 @@ export function registerAnalysisHttpRoutes(app: Express) {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       receivedChunkIndexes: [],
+      completionStatus: "open",
+      finalizedJobId: undefined,
+      completionError: null,
     };
 
     await writeUploadSession(meta);
@@ -400,6 +485,11 @@ export function registerAnalysisHttpRoutes(app: Express) {
 
       meta.updatedAt = Date.now();
       meta.receivedChunkIndexes = normalizeReceivedChunkIndexes([...meta.receivedChunkIndexes, chunkIndex], meta.totalChunks);
+      if (meta.completionStatus !== "completed") {
+        meta.completionStatus = "open";
+        meta.completionError = null;
+        meta.finalizedJobId = undefined;
+      }
       await writeUploadSession(meta);
 
       return res.status(200).json({
@@ -430,6 +520,10 @@ export function registerAnalysisHttpRoutes(app: Express) {
       return respondJsonError(res, 403, "Esta sessão de upload pertence a outro usuário autenticado.", "UPLOAD_SESSION_FORBIDDEN");
     }
 
+    if (meta.completionStatus === "completed" && meta.finalizedJobId) {
+      return res.status(200).json({ jobId: meta.finalizedJobId });
+    }
+
     const missingChunkIndexes = Array.from({ length: meta.totalChunks }, (_, index) => index).filter(
       (index) => !meta.receivedChunkIndexes.includes(index),
     );
@@ -444,42 +538,15 @@ export function registerAnalysisHttpRoutes(app: Express) {
       );
     }
 
-    try {
-      const buffers: Buffer[] = [];
-      let totalBufferBytes = 0;
-
-      for (let index = 0; index < meta.totalChunks; index += 1) {
-        const chunkBuffer = await fs.readFile(path.join(sessionChunkDirectory(uploadId), chunkFilename(index)));
-        buffers.push(chunkBuffer);
-        totalBufferBytes += chunkBuffer.length;
-      }
-
-      if (totalBufferBytes !== meta.totalBytes) {
-        return respondJsonError(
-          res,
-          400,
-          "O arquivo remontado não corresponde ao tamanho original informado na sessão.",
-          "ARCHIVE_SIZE_MISMATCH",
-          { expectedBytes: meta.totalBytes, receivedBytes: totalBufferBytes },
-        );
-      }
-
-      const createdJob = await startAnalysisJobFromArchive({
-        archiveName: meta.archiveName,
-        archiveBuffer: Buffer.concat(buffers, totalBufferBytes),
-        focusFunction: meta.focusFunction,
-        focusTerms: meta.focusTerms,
-        focusRegexes: meta.focusRegexes,
-        origin: meta.origin,
-        createdByUserId: user.id,
-      });
-
-      await removeUploadSession(uploadId);
-      return res.status(200).json(createdJob);
-    } catch (caught) {
-      const message = extractMessage(caught);
-      return respondJsonError(res, mapErrorStatus(message), message, "UPLOAD_COMPLETION_FAILED");
+    if (meta.completionStatus !== "finalizing") {
+      meta.updatedAt = Date.now();
+      meta.completionStatus = "finalizing";
+      meta.completionError = null;
+      await writeUploadSession(meta);
+      void finalizeUploadSession(uploadId, user.id);
     }
+
+    return res.status(202).json(buildUploadSessionResponse(meta));
   });
 
   app.post("/api/analysis/upload", (req, res) => {

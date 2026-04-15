@@ -55,3 +55,4 @@
 - [x] Implementar telemetria de falhas por etapa (`sessão`, `parte`, `conclusão`) para facilitar diagnóstico operacional do upload
 - [x] Investigar e corrigir a causa real do `fetch failed` no upload em partes no backend/transporte (não apenas mitigar no cliente), com evidência em `server/analysisHttp.ts` ou infraestrutura relacionada
 - [x] Adicionar cobertura de teste para o caminho real de falha de rede/transporte e validar recuperação completa ponta a ponta, incluindo backend/session/chunk/complete
+- [x] Corrigir a falha de rede na etapa de conclusão do upload fragmentado (`complete`) para arquivos `.7z` grandes no domínio publicado, garantindo fechamento confiável da sessão e retomada segura quando todas as partes já tiverem sido enviadas

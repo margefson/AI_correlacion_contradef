@@ -72,6 +72,8 @@ export type AnalysisArchiveInspection = {
   chunkCount: number;
 };
 
+type UploadCompletionStatus = "open" | "finalizing" | "completed" | "failed";
+
 type UploadSession = {
   uploadId: string;
   archiveName: string;
@@ -83,6 +85,9 @@ type UploadSession = {
   focusFunction: string;
   receivedChunkIndexes?: number[];
   updatedAt?: number;
+  completionStatus?: UploadCompletionStatus;
+  finalizedJobId?: string | null;
+  completionError?: string | null;
 };
 
 const UPLOAD_SESSION_STORAGE_PREFIX = "ai-correlacion-upload-session";
@@ -192,6 +197,14 @@ function normalizeUploadError(error: unknown, stage?: UploadRetryStage) {
   return new Error("Falha operacional ao transferir o arquivo para análise.");
 }
 
+function isAnalysisUploadResult(value: unknown): value is AnalysisUploadResult {
+  return !!value && typeof value === "object" && typeof (value as AnalysisUploadResult).jobId === "string";
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function buildStoredUploadSessionKey(input: AnalysisUploadInput) {
   return [
     UPLOAD_SESSION_STORAGE_PREFIX,
@@ -272,6 +285,65 @@ async function runWithRetry<T>(
   }
 
   throw lastError ?? new Error("Falha operacional ao transferir o arquivo para análise.");
+}
+
+async function waitForUploadCompletion(
+  uploadId: string,
+  initialSession: UploadSession | null,
+  options: AnalysisUploadOptions,
+): Promise<AnalysisUploadResult> {
+  let session = initialSession;
+
+  for (let pollAttempt = 0; pollAttempt < 90; pollAttempt += 1) {
+    if (session?.completionStatus === "completed" && session.finalizedJobId) {
+      return { jobId: session.finalizedJobId };
+    }
+
+    if (session?.completionStatus === "failed") {
+      throw new Error(session.completionError?.trim() || "A sessão de upload falhou ao concluir o arquivo remontado.");
+    }
+
+    await sleep(pollAttempt === 0 ? 300 : 700);
+    session = await runWithRetry(
+      () => getJson<UploadSession>(`/api/analysis/upload-sessions/${uploadId}`),
+      "complete",
+      options.onUploadRetry,
+      options.onUploadStageFailure,
+      2,
+    );
+  }
+
+  throw new Error("A sessão de upload permaneceu em finalização por tempo demais. Tente retomar o envio usando a sessão persistida.");
+}
+
+async function finalizeUploadCompletion(
+  session: UploadSession,
+  input: AnalysisUploadInput,
+  storageKey: string,
+  options: AnalysisUploadOptions,
+): Promise<AnalysisUploadResult> {
+  const attemptFinalize = async () => {
+    try {
+      const completionResponse = await postJson<AnalysisUploadResult | UploadSession>(
+        `/api/analysis/upload-sessions/${session.uploadId}/complete`,
+        {},
+      );
+
+      if (isAnalysisUploadResult(completionResponse)) {
+        return completionResponse;
+      }
+
+      return waitForUploadCompletion(session.uploadId, completionResponse, options);
+    } catch (error) {
+      const recoveredSession = await recoverUploadSession(input, storageKey);
+      if (recoveredSession?.completionStatus === "finalizing" || recoveredSession?.completionStatus === "completed") {
+        return waitForUploadCompletion(recoveredSession.uploadId, recoveredSession, options);
+      }
+      throw error;
+    }
+  };
+
+  return runWithRetry(attemptFinalize, "complete", options.onUploadRetry, options.onUploadStageFailure);
 }
 
 async function hasValidSevenZipSignature(file: File) {
@@ -367,6 +439,12 @@ export async function uploadAnalysisArchive(
     persistStoredUploadSessionId(storageKey, session.uploadId);
   }
 
+  if (session.completionStatus === "completed" && session.finalizedJobId) {
+    clearStoredUploadSessionId(storageKey);
+    options.onUploadProgress?.(100);
+    return { jobId: session.finalizedJobId };
+  }
+
   const chunkSize = Math.max(1, Math.min(session.chunkSize || CHUNK_UPLOAD_MAX_BYTES, CHUNK_UPLOAD_HARD_MAX_BYTES - 1));
   const receivedChunkIndexes = new Set(session.receivedChunkIndexes ?? []);
   let uploadedBytes = Array.from(receivedChunkIndexes).reduce(
@@ -398,12 +476,7 @@ export async function uploadAnalysisArchive(
     options.onUploadProgress?.(Math.max(1, Math.min(99, Math.round((uploadedBytes / input.file.size) * 100))));
   }
 
-  const createdJob = await runWithRetry(
-    () => postJson<AnalysisUploadResult>(`/api/analysis/upload-sessions/${session.uploadId}/complete`, {}),
-    "complete",
-    options.onUploadRetry,
-    options.onUploadStageFailure,
-  );
+  const createdJob = await finalizeUploadCompletion(session, input, storageKey, options);
   clearStoredUploadSessionId(storageKey);
   options.onUploadProgress?.(100);
   return createdJob;
