@@ -130,7 +130,12 @@ function fileToBase64(file: File) {
         reject(new Error("Não foi possível ler o arquivo selecionado."));
         return;
       }
-      resolve(reader.result);
+      const normalized = reader.result.includes(",") ? reader.result.split(",").pop() : reader.result;
+      if (!normalized) {
+        reject(new Error("Falha ao extrair o conteúdo binário do arquivo selecionado."));
+        return;
+      }
+      resolve(normalized);
     };
     reader.onerror = () => reject(new Error("Falha ao processar o arquivo selecionado."));
     reader.readAsDataURL(file);

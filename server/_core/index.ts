@@ -27,12 +27,15 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+const UPLOAD_REQUEST_LIMIT_MB = 64;
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // O arquivo bruto pode ter até 40 MB, mas o transporte em base64 cresce ~33%.
+  // Mantemos uma margem segura para o payload JSON da mutation sem relaxar demais o limite.
+  app.use(express.json({ limit: `${UPLOAD_REQUEST_LIMIT_MB}mb` }));
+  app.use(express.urlencoded({ limit: `${UPLOAD_REQUEST_LIMIT_MB}mb`, extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // tRPC API

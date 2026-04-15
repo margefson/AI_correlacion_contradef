@@ -23,3 +23,4 @@
 - [x] Avaliar e, se viável, concluir o push final usando token temporário válido apenas para esta sessão do GitHub
 - [x] Corrigir definitivamente o erro de runtime do cookie/logout no servidor (`COOKIE_NAME`) e revalidar a aplicação após o ajuste final
 - [x] Executar e registrar uma validação final ponta a ponta cobrindo submissão, acompanhamento em tempo real, artefatos/exportações, histórico e push/versionamento antes da entrega final
+- [x] Corrigir o erro de submissão que retorna HTML em vez de JSON ao clicar em `Iniciar análise` com um arquivo `.7z`
