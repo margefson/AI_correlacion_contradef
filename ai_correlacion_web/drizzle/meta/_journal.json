@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1776207285369,
+      "tag": "0000_cynical_reptil",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1776207510854,
+      "tag": "0001_magenta_smasher",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1776208163703,
+      "tag": "0002_yielding_norrin_radd",
+      "breakpoints": true
+    }
+  ]
+}
