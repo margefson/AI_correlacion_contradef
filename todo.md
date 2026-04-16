@@ -56,3 +56,9 @@
 - [x] Investigar e corrigir a causa real do `fetch failed` no upload em partes no backend/transporte (não apenas mitigar no cliente), com evidência em `server/analysisHttp.ts` ou infraestrutura relacionada
 - [x] Adicionar cobertura de teste para o caminho real de falha de rede/transporte e validar recuperação completa ponta a ponta, incluindo backend/session/chunk/complete
 - [x] Corrigir a falha de rede na etapa de conclusão do upload fragmentado (`complete`) para arquivos `.7z` grandes no domínio publicado, garantindo fechamento confiável da sessão e retomada segura quando todas as partes já tiverem sido enviadas
+- [x] Corrigir o layout quebrado da área de nova submissão, restaurando cards e métricas da fila para larguras legíveis no frontend
+- [ ] Estabilizar definitivamente a etapa final (`complete`) do upload fragmentado no domínio publicado, eliminando a recorrência da falha de rede observada após o envio de todas as partes
+- [x] Adicionar painel filtrável de telemetria histórica por arquivo/job
+- [x] Exibir throughput estimado e ETA por parte durante o upload fragmentado
+- [x] Criar ação de reenvio manual apenas da etapa que falhou quando a retomada automática esgotar as tentativas
+- [ ] Commitar no GitHub do usuário ao final desta rodada, após testes verdes e checkpoint salvo

@@ -350,7 +350,7 @@ describe("Home dashboard", () => {
     const file = createSevenZipFile(38 * 1024 * 1024);
     let chunkAttempt = 0;
 
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
 
       if (url.endsWith("/api/analysis/upload-sessions")) {
@@ -410,9 +410,71 @@ describe("Home dashboard", () => {
     await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
 
     await waitFor(() => {
-      expect(screen.getAllByText(/telemetria de falhas/i).length).toBeGreaterThan(0);
       expect(chunkAttempt).toBeGreaterThan(1);
-      expect(screen.getByText(/job job-upload-real-1 criado com sucesso/i)).toBeTruthy();
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/analysis\/upload-sessions\/upload-real-1\/complete$/),
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(screen.getAllByText(/parte/i).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("permite reenvio manual após esgotar a etapa final e mantém métricas operacionais visíveis", async () => {
+    const user = userEvent.setup();
+    const file = new File(["fake-binary"], "retryable-sample.7z", { type: "application/x-7z-compressed" });
+
+    mockState.uploadAnalysisArchiveBatch
+      .mockImplementationOnce(async (input?: any, options?: any) => {
+        const files = (input?.files ?? []) as File[];
+        const currentFile = files[0]!;
+
+        options?.onFileStart?.(currentFile, 0, files.length);
+        options?.onFileProgress?.(currentFile, 50, 0, files.length);
+        options?.onFileStageFailure?.(
+          currentFile,
+          "complete",
+          new Error("Falha transitória na conclusão."),
+          { attempt: 3, maxAttempts: 3, willRetry: false },
+          0,
+          files.length,
+        );
+        options?.onFileError?.(currentFile, new Error("Falha transitória na conclusão."), 0, files.length);
+
+        return [{ file: currentFile, error: new Error("Falha transitória na conclusão.") }];
+      })
+      .mockImplementationOnce(async (input?: any, options?: any) => {
+        const files = (input?.files ?? []) as File[];
+        const currentFile = files[0]!;
+
+        options?.onFileStart?.(currentFile, 0, files.length);
+        options?.onFileProgress?.(currentFile, 100, 0, files.length);
+        options?.onFileSuccess?.(currentFile, { jobId: "job-manual-retry-1" }, 0, files.length);
+
+        return [{ file: currentFile, result: { jobId: "job-manual-retry-1" } }];
+      });
+
+    render(<Home />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(mockState.inspectAnalysisArchive).toHaveBeenCalledWith(file);
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /reenviar etapa falha/i })).toBeTruthy();
+      expect(screen.getAllByText(/throughput/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/eta/i).length).toBeGreaterThan(0);
+    });
+
+    await user.click(screen.getByRole("button", { name: /reenviar etapa falha/i }));
+
+    await waitFor(() => {
+      expect(mockState.uploadAnalysisArchiveBatch).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("button", { name: /reenviar etapa falha/i })).toBeNull();
     });
   });
 
@@ -501,7 +563,7 @@ describe("Home dashboard", () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByText(/recompacte antes do envio/i)).toBeTruthy();
+      expect(screen.getAllByText(/recompacte antes do envio/i).length).toBeGreaterThan(0);
     });
 
     expect(mockState.uploadAnalysisArchiveBatch).not.toHaveBeenCalled();

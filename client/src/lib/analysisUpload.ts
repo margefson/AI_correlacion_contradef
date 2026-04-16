@@ -151,6 +151,18 @@ async function postJson<T>(url: string, body: Record<string, unknown>) {
   return parseJsonResponse<T>(response);
 }
 
+async function postWithoutBody<T>(url: string) {
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  return parseJsonResponse<T>(response);
+}
+
 async function getJson<T>(url: string) {
   const response = await fetch(url, {
     method: "GET",
@@ -324,9 +336,8 @@ async function finalizeUploadCompletion(
 ): Promise<AnalysisUploadResult> {
   const attemptFinalize = async () => {
     try {
-      const completionResponse = await postJson<AnalysisUploadResult | UploadSession>(
+      const completionResponse = await postWithoutBody<AnalysisUploadResult | UploadSession>(
         `/api/analysis/upload-sessions/${session.uploadId}/complete`,
-        {},
       );
 
       if (isAnalysisUploadResult(completionResponse)) {

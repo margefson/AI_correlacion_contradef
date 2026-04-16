@@ -100,6 +100,14 @@ type UploadQueueItem = {
   maxPartBytes: number;
   failureTelemetry: UploadStageTelemetry;
   jobId?: string;
+  bytesTransferred: number;
+  estimatedThroughputBps?: number;
+  estimatedEtaSeconds?: number | null;
+  startedAt?: number;
+  lastProgressAt?: number;
+  lastProgressBytes?: number;
+  lastFailedStage?: UploadRetryStage | null;
+  allowManualRetry?: boolean;
 };
 
 function statusClasses(status?: string | null) {
@@ -212,6 +220,19 @@ function formatBytes(value?: number | null) {
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function formatEtaSeconds(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "calculando";
+  if (value < 60) return `${Math.ceil(value)} s`;
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.ceil(value % 60);
+  return `${minutes} min ${seconds.toString().padStart(2, "0")} s`;
+}
+
+function formatThroughput(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "—";
+  return `${formatBytes(value)}/s`;
+}
+
 function parseCommaSeparated(value: string) {
   return value
     .split(",")
@@ -265,6 +286,7 @@ export default function Home() {
   const [liveDetail, setLiveDetail] = useState<any | null>(null);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("offline");
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [telemetryFilter, setTelemetryFilter] = useState("");
 
   const isAdmin = auth.user?.role === "admin";
   const isSubmittingJob = submitPhase !== "idle";
@@ -553,6 +575,11 @@ export default function Home() {
       chunk: accumulator.chunk + item.failureTelemetry.chunk,
       complete: accumulator.complete + item.failureTelemetry.complete,
     }), createEmptyUploadStageTelemetry());
+    const aggregateThroughputBps = uploadQueue.reduce((sum, item) => sum + (item.estimatedThroughputBps ?? 0), 0);
+    const activeEtaCandidates = uploadQueue
+      .map((item) => item.estimatedEtaSeconds)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
+    const manualRetryCount = uploadQueue.filter((item) => item.allowManualRetry).length;
 
     return {
       totalFiles,
@@ -562,8 +589,34 @@ export default function Home() {
       activeFiles,
       averageProgress,
       failureTelemetry,
+      aggregateThroughputBps,
+      longestEtaSeconds: activeEtaCandidates.length > 0 ? Math.max(...activeEtaCandidates) : null,
+      manualRetryCount,
     };
   }, [uploadQueue]);
+
+  const filteredTelemetryItems = useMemo(() => {
+    const normalizedFilter = telemetryFilter.trim().toLowerCase();
+    const sorted = [...uploadQueue].sort((left, right) => {
+      const leftStamp = left.lastProgressAt ?? left.startedAt ?? 0;
+      const rightStamp = right.lastProgressAt ?? right.startedAt ?? 0;
+      return rightStamp - leftStamp;
+    });
+
+    if (!normalizedFilter) return sorted;
+
+    return sorted.filter((item) => {
+      const haystack = [
+        item.file.name,
+        item.jobId ?? "",
+        item.lastFailedStage ?? "",
+        item.message,
+        uploadQueueStatusLabel(item.status),
+      ].join(" ").toLowerCase();
+      return haystack.includes(normalizedFilter);
+    });
+  }, [telemetryFilter, uploadQueue]);
+
 
   const readyUploadItems = useMemo(
     () => uploadQueue.filter((item) => item.status === "validated" || item.status === "error"),
@@ -601,6 +654,14 @@ export default function Home() {
           usesChunkedTransport: inspection.usesChunkedTransport,
           maxPartBytes: inspection.usesChunkedTransport ? CHUNK_UPLOAD_MAX_BYTES : GATEWAY_SINGLE_REQUEST_MAX_BYTES,
           failureTelemetry: createEmptyUploadStageTelemetry(),
+          bytesTransferred: 0,
+          estimatedThroughputBps: undefined,
+          estimatedEtaSeconds: null,
+          startedAt: undefined,
+          lastProgressAt: undefined,
+          lastProgressBytes: undefined,
+          lastFailedStage: null,
+          allowManualRetry: false,
         } satisfies UploadQueueItem;
       }),
     );
@@ -624,26 +685,9 @@ export default function Home() {
     ? graphEdges.filter((edge) => edge.source === highlightedNodeId || edge.target === highlightedNodeId)
     : graphEdges;
 
-  async function handleSubmitJob() {
-    if (!auth.isAuthenticated) {
-      const message = "Sua sessão não está ativa. Faça login novamente antes de iniciar a análise.";
-      setSubmissionError(message);
-      toast.error(message);
-      return;
-    }
-
+  async function submitUploadFiles(files: File[]) {
     const focusFunctionValue = focusFunction.trim();
     const effectiveFocusFunction = focusFunctionValue || "TraceFcnCall.M1::ALL_FUNCTIONS";
-
-    const pendingItems = readyUploadItems;
-    if (pendingItems.length === 0) {
-      const message = uploadQueue.length === 0
-        ? "Selecione um ou mais pacotes .7z antes de iniciar a análise."
-        : "Não há arquivos elegíveis para envio. Revise os itens bloqueados ou adicione novos arquivos à fila.";
-      setSubmissionError(message);
-      toast.error(message);
-      return;
-    }
 
     try {
       setSubmissionError(null);
@@ -652,7 +696,7 @@ export default function Home() {
 
       const results = await uploadAnalysisArchiveBatch(
         {
-          files: pendingItems.map((item) => item.file),
+          files,
           focusFunction: effectiveFocusFunction,
           focusTerms: parseCommaSeparated(focusTermsInput),
           focusRegexes: parseCommaSeparated(focusRegexesInput),
@@ -661,30 +705,63 @@ export default function Home() {
         {
           onFileStart: (file, fileIndex, totalFiles) => {
             const queueId = buildUploadQueueId(file);
+            const startedAt = Date.now();
             setActiveUploadLabel(file.name);
             updateUploadQueueItem(queueId, (item) => ({
               ...item,
               status: "uploading",
               progress: 0,
+              bytesTransferred: 0,
+              estimatedThroughputBps: undefined,
+              estimatedEtaSeconds: item.usesChunkedTransport ? Math.max(1, item.chunkCount * 2) : null,
+              startedAt,
+              lastProgressAt: startedAt,
+              lastProgressBytes: 0,
+              lastFailedStage: null,
+              allowManualRetry: false,
               message: `Arquivo ${fileIndex + 1} de ${totalFiles}: preparando envio seguro em partes.`,
             }));
           },
           onFileProgress: (file, progress, fileIndex, totalFiles) => {
             const queueId = buildUploadQueueId(file);
+            const now = Date.now();
+            const bytesTransferred = Math.min(file.size, Math.round((Math.max(0, progress) / 100) * file.size));
             setActiveUploadLabel(file.name);
             setUploadProgress(progress);
-            updateUploadQueueItem(queueId, (item) => ({
-              ...item,
-              status: "uploading",
-              progress,
-              message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${formatPercent(progress)} transferido para o backend web.`,
-            }));
+            updateUploadQueueItem(queueId, (item) => {
+              const previousBytes = item.lastProgressBytes ?? 0;
+              const previousTime = item.lastProgressAt ?? item.startedAt ?? now;
+              const elapsedSeconds = Math.max(0.001, (now - previousTime) / 1000);
+              const deltaBytes = Math.max(0, bytesTransferred - previousBytes);
+              const estimatedThroughputBps = deltaBytes > 0
+                ? deltaBytes / elapsedSeconds
+                : item.estimatedThroughputBps;
+              const remainingBytes = Math.max(0, file.size - bytesTransferred);
+              const estimatedEtaSeconds = estimatedThroughputBps && estimatedThroughputBps > 0
+                ? remainingBytes / estimatedThroughputBps
+                : item.estimatedEtaSeconds ?? null;
+
+              return {
+                ...item,
+                status: "uploading",
+                progress,
+                bytesTransferred,
+                estimatedThroughputBps,
+                estimatedEtaSeconds,
+                lastProgressAt: now,
+                lastProgressBytes: bytesTransferred,
+                allowManualRetry: false,
+                message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${formatPercent(progress)} transferido para o backend web.`,
+              };
+            });
           },
           onFileRetry: (file, attempt, stage, error, fileIndex, totalFiles) => {
             const queueId = buildUploadQueueId(file);
             updateUploadQueueItem(queueId, (item) => ({
               ...item,
               status: "uploading",
+              lastFailedStage: stage,
+              allowManualRetry: false,
               message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${uploadRetryStageLabel(stage)} (tentativa ${attempt}/3) após falha transitória. ${error.message}`,
             }));
           },
@@ -696,9 +773,11 @@ export default function Home() {
                 ...item.failureTelemetry,
                 [stage]: item.failureTelemetry[stage] + 1,
               },
+              lastFailedStage: stage,
+              allowManualRetry: !context.willRetry,
               message: context.willRetry
                 ? `Arquivo ${fileIndex + 1} de ${totalFiles}: ${uploadRetryStageLabel(stage)} após falha transitória. ${error.message}`
-                : item.message,
+                : `Arquivo ${fileIndex + 1} de ${totalFiles}: a etapa ${stage === "session" ? "de sessão" : stage === "chunk" ? "de parte" : "de conclusão"} esgotou as tentativas automáticas. Você pode acionar o reenvio manual desta etapa.`,
             }));
           },
           onFileSuccess: (file, result, fileIndex, totalFiles) => {
@@ -708,6 +787,13 @@ export default function Home() {
               ...item,
               status: "completed",
               progress: 100,
+              bytesTransferred: file.size,
+              estimatedThroughputBps: item.estimatedThroughputBps,
+              estimatedEtaSeconds: 0,
+              lastProgressAt: Date.now(),
+              lastProgressBytes: file.size,
+              lastFailedStage: null,
+              allowManualRetry: false,
               message: `Arquivo ${fileIndex + 1} de ${totalFiles}: job ${result.jobId} criado com sucesso e entregue à fila operacional.`,
               jobId: result.jobId,
             }));
@@ -717,7 +803,9 @@ export default function Home() {
             updateUploadQueueItem(queueId, (item) => ({
               ...item,
               status: "error",
-              progress: 0,
+              progress: item.lastFailedStage === "complete" ? Math.max(item.progress, 99) : item.progress,
+              estimatedEtaSeconds: item.lastFailedStage === "complete" ? 0 : item.estimatedEtaSeconds,
+              allowManualRetry: true,
               message: `Arquivo ${fileIndex + 1} de ${totalFiles}: ${error.message}`,
             }));
           },
@@ -767,6 +855,34 @@ export default function Home() {
       setUploadProgress(0);
       setActiveUploadLabel(null);
     }
+  }
+
+  async function handleRetryFailedUpload(queueId: string) {
+    const targetItem = uploadQueue.find((item) => item.id === queueId);
+    if (!targetItem || isSubmittingJob) return;
+
+    await submitUploadFiles([targetItem.file]);
+  }
+
+  async function handleSubmitJob() {
+    if (!auth.isAuthenticated) {
+      const message = "Sua sessão não está ativa. Faça login novamente antes de iniciar a análise.";
+      setSubmissionError(message);
+      toast.error(message);
+      return;
+    }
+
+    const pendingItems = readyUploadItems;
+    if (pendingItems.length === 0) {
+      const message = uploadQueue.length === 0
+        ? "Selecione um ou mais pacotes .7z antes de iniciar a análise."
+        : "Não há arquivos elegíveis para envio. Revise os itens bloqueados ou adicione novos arquivos à fila.";
+      setSubmissionError(message);
+      toast.error(message);
+      return;
+    }
+
+    await submitUploadFiles(pendingItems.map((item) => item.file));
   }
 
   const canSubmitUploadQueue = auth.isAuthenticated && readyUploadItems.length > 0 && !isSubmittingJob;
@@ -1154,42 +1270,41 @@ export default function Home() {
                             Limite operacional atual: {Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB por arquivo. Arquivos acima de {Math.round(GATEWAY_SINGLE_REQUEST_MAX_BYTES / (1024 * 1024))} MB são enviados em partes seguras para contornar o limite por requisição do domínio publicado. Cada parte fragmentada usa até {Math.round(CHUNK_UPLOAD_MAX_BYTES / (1024 * 1024))} MB, abaixo do teto rígido de {Math.round(CHUNK_UPLOAD_HARD_MAX_BYTES / (1024 * 1024))} MB do parser multipart. Cada rodada aceita até {MAX_BATCH_UPLOAD_FILES} arquivos .7z.
                           </p>
 
-                        <div className="mt-4 grid gap-3 md:grid-cols-4">
-                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Fila atual</div>
                             <div className="mt-2 text-2xl font-semibold text-white">{queueSummary.totalFiles}</div>
-                            <p className="mt-1 text-slate-400">{formatBytes(queueSummary.totalBytes)} preparados para validação e envio.</p>
+                            <p className="mt-1 break-words text-slate-400">{formatBytes(queueSummary.totalBytes)} preparados para validação e envio.</p>
                           </div>
-                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Concluídos</div>
                             <div className="mt-2 text-2xl font-semibold text-white">{queueSummary.completedFiles}</div>
-                            <p className="mt-1 text-slate-400">{queueSummary.invalidFiles} item(ns) bloqueado(s) na checagem prévia.</p>
+                            <p className="mt-1 break-words text-slate-400">{queueSummary.invalidFiles} bloqueado(s) · {queueSummary.manualRetryCount} apto(s) a reenvio manual.</p>
                           </div>
-                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
-                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Progresso médio</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{formatPercent(queueSummary.averageProgress)}</div>
-                            <p className="mt-1 text-slate-400">{queueSummary.completedFiles > 0 ? "Fila com entregas concluídas." : "Sem uploads concluídos até agora."}</p>
+                          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Throughput agregado</div>
+                            <div className="mt-2 text-2xl font-semibold text-white">{formatThroughput(queueSummary.aggregateThroughputBps)}</div>
+                            <p className="mt-1 break-words text-slate-400">ETA operacional da fila ativa: {formatEtaSeconds(queueSummary.longestEtaSeconds)}.</p>
                           </div>
-                          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Telemetria de falhas</div>
-                            <div className="mt-2 text-sm font-medium text-white">sessão {queueSummary.failureTelemetry.session} · parte {queueSummary.failureTelemetry.chunk} · conclusão {queueSummary.failureTelemetry.complete}</div>
-                            <p className="mt-1 text-slate-400">Contagem acumulada das falhas observadas antes do sucesso ou da interrupção final.</p>
+                            <div className="mt-2 break-words text-sm font-medium text-white">sessão {queueSummary.failureTelemetry.session} · parte {queueSummary.failureTelemetry.chunk} · conclusão {queueSummary.failureTelemetry.complete}</div>
+                            <p className="mt-1 break-words text-slate-400">Contagem acumulada das falhas observadas antes do sucesso ou da interrupção final.</p>
                           </div>
-
                         </div>
                         {uploadQueue.length > 0 ? (
                           <div className="mt-4 space-y-3">
                             {uploadQueue.map((item) => (
                               <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
                                 <div className="flex flex-wrap items-start justify-between gap-3">
-                                  <div>
-                                    <div className="flex items-center gap-2 font-medium text-white">
-                                      <FileArchive className="h-4 w-4 text-cyan-300" /> {item.file.name}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 break-all font-medium text-white">
+                                      <FileArchive className="h-4 w-4 shrink-0 text-cyan-300" /> {item.file.name}
                                     </div>
-                                    <p className="mt-2 text-xs text-slate-400">
+                                    <p className="mt-2 break-words text-xs text-slate-400">
                                       {formatBytes(item.file.size)} · restante até o teto: {item.remainingBytes > 0 ? formatBytes(item.remainingBytes) : "0 B"} · {item.usesChunkedTransport ? `${item.chunkCount} parte(s) seguras` : "envio direto"}
                                     </p>
-                                    <p className="mt-1 text-xs text-slate-500">
+                                    <p className="mt-1 break-words text-xs text-slate-500">
                                       {item.usesChunkedTransport
                                         ? `Máximo efetivo por parte: ${formatBytes(item.maxPartBytes)} · teto rígido do parser: ${formatBytes(CHUNK_UPLOAD_HARD_MAX_BYTES)}`
                                         : `Limite do envio direto por requisição: ${formatBytes(item.maxPartBytes)}`}
@@ -1197,9 +1312,31 @@ export default function Home() {
                                   </div>
                                   <Badge className={uploadQueueStatusClasses(item.status)}>{uploadQueueStatusLabel(item.status)}</Badge>
                                 </div>
-                                <p className={`mt-3 leading-6 ${item.status === "invalid" || item.status === "error" ? "text-rose-200" : "text-slate-300"}`}>
+                                <p className={`mt-3 break-words leading-6 ${item.status === "invalid" || item.status === "error" ? "text-rose-200" : "text-slate-300"}`}>
                                   {item.message}
                                 </p>
+                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                  <div className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+                                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Progresso</div>
+                                    <div className="mt-1 text-sm font-medium text-white">{formatPercent(item.progress)}</div>
+                                    <div className="text-xs text-slate-400">{formatBytes(item.bytesTransferred)} transferidos</div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+                                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Throughput</div>
+                                    <div className="mt-1 text-sm font-medium text-white">{formatThroughput(item.estimatedThroughputBps)}</div>
+                                    <div className="text-xs text-slate-400">Estimativa por variação recente do envio</div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+                                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">ETA</div>
+                                    <div className="mt-1 text-sm font-medium text-white">{formatEtaSeconds(item.estimatedEtaSeconds)}</div>
+                                    <div className="text-xs text-slate-400">Último estágio com falha: {item.lastFailedStage ? item.lastFailedStage : "nenhum"}</div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2">
+                                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Ação manual</div>
+                                    <div className="mt-1 text-sm font-medium text-white">{item.allowManualRetry ? "Disponível" : "Automática"}</div>
+                                    <div className="text-xs text-slate-400">Use apenas quando a retomada automática esgotar as tentativas.</div>
+                                  </div>
+                                </div>
                                 {(item.failureTelemetry.session > 0 || item.failureTelemetry.chunk > 0 || item.failureTelemetry.complete > 0) ? (
                                   <div className="mt-3 rounded-lg border border-amber-400/15 bg-amber-500/10 px-3 py-2 text-xs leading-6 text-amber-100">
                                     Telemetria de falhas do arquivo: sessão {item.failureTelemetry.session} · parte {item.failureTelemetry.chunk} · conclusão {item.failureTelemetry.complete}
@@ -1208,6 +1345,21 @@ export default function Home() {
                                 <div className="mt-3">
                                   <Progress value={item.progress} className="h-2 bg-cyan-950/40" />
                                 </div>
+                                {item.allowManualRetry ? (
+                                  <div className="mt-3 flex flex-wrap justify-end gap-3">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={isSubmittingJob}
+                                      className="border-amber-400/30 bg-amber-500/10 text-amber-50 hover:bg-amber-500/20"
+                                      onClick={() => {
+                                        void handleRetryFailedUpload(item.id);
+                                      }}
+                                    >
+                                      <RefreshCcw className="mr-2 h-4 w-4" /> Reenviar etapa falha
+                                    </Button>
+                                  </div>
+                                ) : null}
                               </div>
                             ))}
                           </div>
@@ -1325,6 +1477,39 @@ export default function Home() {
                   <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
                     <p className="font-medium text-white">3. Consolidação operacional</p>
                     <p>Ao concluir, a plataforma gera resumo por LLM, envia notificação ao proprietário e prepara o commit dos artefatos no repositório configurado.</p>
+                  </div>
+                  <Separator className="bg-white/10" />
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">Telemetria histórica de uploads</p>
+                        <p className="text-xs text-slate-500">Filtre por arquivo, job, estágio ou texto da última mensagem operacional.</p>
+                      </div>
+                      <div className="text-xs text-slate-400">{filteredTelemetryItems.length} registro(s) visível(is)</div>
+                    </div>
+                    <Input
+                      value={telemetryFilter}
+                      onChange={(event) => setTelemetryFilter(event.target.value)}
+                      placeholder="Filtrar por arquivo, job, estágio ou mensagem"
+                      className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
+                    />
+                    <div className="space-y-3">
+                      {filteredTelemetryItems.length > 0 ? filteredTelemetryItems.slice(0, 8).map((item) => (
+                        <div key={`telemetry-${item.id}`} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-xs leading-6 text-slate-300">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium text-white">{item.file.name}</span>
+                            <Badge className={uploadQueueStatusClasses(item.status)}>{uploadQueueStatusLabel(item.status)}</Badge>
+                          </div>
+                          <p className="mt-2 break-words text-slate-400">{item.jobId ? `Job ${item.jobId}` : "Job ainda não criado"} · último estágio sensível: {item.lastFailedStage ?? "nenhum"}</p>
+                          <p className="mt-2 break-words text-slate-300">{item.message}</p>
+                          <p className="mt-2 text-amber-100">sessão {item.failureTelemetry.session} · parte {item.failureTelemetry.chunk} · conclusão {item.failureTelemetry.complete}</p>
+                        </div>
+                      )) : (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-4 text-xs text-slate-400">
+                          A telemetria histórica aparecerá aqui assim que a fila registrar validações, retries, falhas ou conclusões de upload.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
