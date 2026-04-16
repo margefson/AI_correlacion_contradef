@@ -920,7 +920,7 @@ export async function startAnalysisJobFromArchive(input: StartAnalysisJobArchive
   });
 
   startJobPolling(pipelineJob.job_id);
-  await syncAnalysisJob(pipelineJob.job_id).catch((error) => {
+  void syncAnalysisJob(pipelineJob.job_id).catch((error) => {
     console.warn("[Analysis] Sincronização inicial falhou:", error);
   });
 

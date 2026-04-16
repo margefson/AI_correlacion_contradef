@@ -261,4 +261,70 @@ describe("analysis service", () => {
     expect(serviceState.mockStoragePut).toHaveBeenCalled();
     expect(serviceState.artifacts["job-completed-ready"]).toHaveLength(1);
   });
+
+  it("retorna o job sem aguardar a sincronização inicial com o pipeline", async () => {
+    const { startAnalysisJobFromArchive } = await import("./analysisService");
+
+    let releaseStatusResponse: (() => void) | null = null;
+    const statusBlocked = new Promise<Response>((resolve) => {
+      releaseStatusResponse = () => resolve(jsonResponse({ state: "queued", progress: 0, stage: "submitted", message: "Aguardando pipeline." }));
+    });
+
+    serviceState.mockCreateAnalysisJob.mockImplementationOnce(async (input: any) => {
+      serviceState.jobs[input.jobId] = {
+        ...input,
+        createdAt: new Date("2026-04-15T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-15T00:00:00.000Z"),
+      };
+      return serviceState.jobs[input.jobId];
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+      const href = String(url);
+
+      if (href.endsWith("/jobs/upload")) {
+        return jsonResponse({
+          job_id: "job-async-sync",
+          status_url: "http://pipeline.test/job-async-sync/status",
+          events_url: "http://pipeline.test/job-async-sync/events",
+          artifacts_url: "http://pipeline.test/job-async-sync/artifacts",
+        });
+      }
+      if (href.endsWith("/job-async-sync/status")) {
+        return statusBlocked;
+      }
+      if (href.endsWith("/job-async-sync/events")) {
+        return jsonResponse({ job_id: "job-async-sync", events: [] });
+      }
+      if (href.endsWith("/job-async-sync/artifacts")) {
+        return jsonResponse({ job_id: "job-async-sync", artifacts: [] });
+      }
+      if (href.endsWith("/job-async-sync/stdout")) {
+        return jsonResponse({ job_id: "job-async-sync", stdout: "" });
+      }
+      if (href.endsWith("/job-async-sync/stderr")) {
+        return jsonResponse({ job_id: "job-async-sync", stderr: "" });
+      }
+
+      throw new Error(`URL não mockada no teste: ${href}`);
+    }));
+
+    const result = await Promise.race([
+      startAnalysisJobFromArchive({
+        archiveName: "Full-Execution-Sample-1.7z",
+        archiveBuffer: Buffer.from("mock-archive"),
+        focusFunction: "TraceFcnCall.M1::ALL_FUNCTIONS",
+        focusTerms: ["TraceFcnCall.M1::ALL_FUNCTIONS"],
+        focusRegexes: [],
+        createdByUserId: "user-1",
+        origin: "https://aicorrelweb-3jmyrznp.manus.space",
+      }),
+      new Promise((resolve) => setTimeout(() => resolve("timeout"), 50)),
+    ]);
+
+    expect(result).not.toBe("timeout");
+    expect(result).toMatchObject({ jobId: "job-async-sync", stage: "submitted", status: "queued" });
+
+    releaseStatusResponse?.();
+  });
 });

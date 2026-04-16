@@ -68,3 +68,8 @@
 - [ ] Investigar e mitigar os resets de conexão no stream SSE (`/api/analysis/stream`) quando o fluxo de upload grande está em andamento
 - [ ] Garantir que a etapa `complete` consiga recuperar a sessão persistida mesmo após falha de rede e polling interrompido no domínio publicado
 - [ ] Corrigir o 404 recorrente em produção na sessão `4b5db8f7-fc4d-49d1-930b-5dcee6b208bc`, onde `POST /complete` e `GET /api/analysis/upload-sessions/:uploadId` continuam falhando após 99% do envio do `.7z`
+- [ ] Adicionar teste automatizado cobrindo ausência do arquivo de sessão local com recuperação real via storage compartilhado para `GET` da sessão e `/complete`
+- [ ] Corrigir o novo caso de produção do uploadId `9342692b-2b68-4bfe-b016-aeb76f4e6eb6`, no qual `GET /api/analysis/upload-sessions/:uploadId` e `POST /complete` continuam retornando 404 após 99% do envio
+- [x] Corrigir o loop de finalização prolongada na etapa `complete`, em que o upload fica em 99% e o job não é criado no domínio publicado
+- [ ] Exibir telemetria e diagnóstico mais úteis no frontend durante a finalização do upload, incluindo motivo, tempo em finalização e estado retornado pela sessão
+- [x] Adicionar teste de regressão para garantir que a criação do job retorne sem aguardar a sincronização inicial com o pipeline
