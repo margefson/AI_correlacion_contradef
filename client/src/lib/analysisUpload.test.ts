@@ -85,4 +85,75 @@ describe("analysisUpload", () => {
     expect(Math.max(...observedChunkSizes)).toBeLessThanOrEqual(CHUNK_UPLOAD_MAX_BYTES);
     expect(fetchSpy).toHaveBeenCalled();
   });
+
+  it("recupera a etapa complete com fallback idempotente por GET quando o POST final falha", async () => {
+    const file = createSevenZipFile(38 * 1024 * 1024, "Complete-Fallback.7z");
+    let postCompleteAttempts = 0;
+    let getCompleteAttempts = 0;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/analysis/upload-sessions") && method === "POST") {
+        return new Response(JSON.stringify({
+          uploadId: "upload-complete-fallback",
+          archiveName: file.name,
+          totalBytes: file.size,
+          chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+          totalChunks: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES),
+          maxArchiveBytes: 64 * 1024 * 1024,
+          directTransportMaxBytes: 30 * 1024 * 1024,
+          focusFunction: "all-functions",
+          receivedChunkIndexes: [],
+          updatedAt: Date.now(),
+          completionStatus: "open",
+        }), { status: 200 });
+      }
+
+      if (url.includes("/api/analysis/upload-sessions/") && url.endsWith("/chunks") && method === "POST") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      if (url.endsWith("/api/analysis/upload-sessions/upload-complete-fallback") && method === "GET") {
+        return new Response(JSON.stringify({
+          uploadId: "upload-complete-fallback",
+          archiveName: file.name,
+          totalBytes: file.size,
+          chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+          totalChunks: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES),
+          maxArchiveBytes: 64 * 1024 * 1024,
+          directTransportMaxBytes: 30 * 1024 * 1024,
+          focusFunction: "all-functions",
+          receivedChunkIndexes: Array.from({ length: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES) }, (_, index) => index),
+          updatedAt: Date.now(),
+          completionStatus: "open",
+        }), { status: 200 });
+      }
+
+      if (url.endsWith("/api/analysis/upload-sessions/upload-complete-fallback/complete") && method === "POST") {
+        postCompleteAttempts += 1;
+        throw new Error("fetch failed");
+      }
+
+      if (url.endsWith("/api/analysis/upload-sessions/upload-complete-fallback/complete") && method === "GET") {
+        getCompleteAttempts += 1;
+        return new Response(JSON.stringify({ jobId: "job-fallback-complete" }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url} (${method})`);
+    });
+
+    const result = await uploadAnalysisArchive({
+      file,
+      focusFunction: "all-functions",
+      focusTerms: [],
+      focusRegexes: [],
+      origin: "https://example.com",
+    });
+
+    expect(result).toEqual({ jobId: "job-fallback-complete" });
+    expect(postCompleteAttempts).toBeGreaterThan(0);
+    expect(getCompleteAttempts).toBeGreaterThan(0);
+  });
 });

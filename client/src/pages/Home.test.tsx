@@ -419,6 +419,89 @@ describe("Home dashboard", () => {
     });
   });
 
+  it("recupera a conclusão do upload quando o POST /complete falha e o fallback GET assume a finalização", async () => {
+    mockState.useRealUpload = true;
+    const user = userEvent.setup();
+    const file = createSevenZipFile(38 * 1024 * 1024, "complete-fallback-home.7z");
+    let completePostAttempts = 0;
+    let completeGetAttempts = 0;
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/api/analysis/upload-sessions") && method === "POST") {
+        return new Response(JSON.stringify({
+          uploadId: "upload-complete-home",
+          archiveName: file.name,
+          totalBytes: file.size,
+          chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+          totalChunks: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES),
+          maxArchiveBytes: 64 * 1024 * 1024,
+          directTransportMaxBytes: 30 * 1024 * 1024,
+          focusFunction: "IsDebuggerPresent",
+          receivedChunkIndexes: [],
+          updatedAt: Date.now(),
+          completionStatus: "open",
+        }), { status: 200 });
+      }
+
+      if (url.includes("/api/analysis/upload-sessions/upload-complete-home/chunks") && method === "POST") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      if (url.endsWith("/api/analysis/upload-sessions/upload-complete-home") && method === "GET") {
+        return new Response(JSON.stringify({
+          uploadId: "upload-complete-home",
+          archiveName: file.name,
+          totalBytes: file.size,
+          chunkSize: CHUNK_UPLOAD_MAX_BYTES,
+          totalChunks: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES),
+          maxArchiveBytes: 64 * 1024 * 1024,
+          directTransportMaxBytes: 30 * 1024 * 1024,
+          focusFunction: "IsDebuggerPresent",
+          receivedChunkIndexes: Array.from({ length: Math.ceil(file.size / CHUNK_UPLOAD_MAX_BYTES) }, (_, index) => index),
+          updatedAt: Date.now(),
+          completionStatus: "open",
+        }), { status: 200 });
+      }
+
+      if (url.endsWith("/api/analysis/upload-sessions/upload-complete-home/complete") && method === "POST") {
+        completePostAttempts += 1;
+        throw new Error("fetch failed");
+      }
+
+      if (url.endsWith("/api/analysis/upload-sessions/upload-complete-home/complete") && method === "GET") {
+        completeGetAttempts += 1;
+        return new Response(JSON.stringify({ jobId: "job-complete-fallback-home" }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url} (${method})`);
+    });
+
+    render(<Home />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText(new RegExp(file.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")).length).toBeGreaterThan(0);
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);
+
+    await waitFor(() => {
+      expect(completePostAttempts).toBeGreaterThan(0);
+      expect(completeGetAttempts).toBeGreaterThan(0);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/analysis\/upload-sessions\/upload-complete-home\/complete$/),
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+
+    mockState.useRealUpload = false;
+  });
+
   it("permite reenvio manual após esgotar a etapa final e mantém métricas operacionais visíveis", async () => {
     const user = userEvent.setup();
     const file = new File(["fake-binary"], "retryable-sample.7z", { type: "application/x-7z-compressed" });
@@ -459,7 +542,7 @@ describe("Home dashboard", () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(mockState.inspectAnalysisArchive).toHaveBeenCalledWith(file);
+      expect(screen.getAllByText(new RegExp(file.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")).length).toBeGreaterThan(0);
     });
 
     await user.click(screen.getAllByRole("button", { name: /iniciar análise/i })[0]!);

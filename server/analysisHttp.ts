@@ -500,7 +500,7 @@ export function registerAnalysisHttpRoutes(app: Express) {
     });
   });
 
-  app.post("/api/analysis/upload-sessions/:uploadId/complete", async (req, res) => {
+  const handleCompleteUploadSession = async (req: express.Request, res: express.Response) => {
     const user = await resolveAuthenticatedUser(req, res);
     if (!user) return;
 
@@ -547,7 +547,11 @@ export function registerAnalysisHttpRoutes(app: Express) {
     }
 
     return res.status(202).json(buildUploadSessionResponse(meta));
-  });
+  };
+
+  app.post("/api/analysis/upload-sessions/:uploadId/complete", handleCompleteUploadSession);
+  app.get("/api/analysis/upload-sessions/:uploadId/complete", handleCompleteUploadSession);
+
 
   app.post("/api/analysis/upload", (req, res) => {
     directUpload.single("archive")(req, res, async (error) => {

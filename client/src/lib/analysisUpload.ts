@@ -328,6 +328,11 @@ async function waitForUploadCompletion(
   throw new Error("A sessão de upload permaneceu em finalização por tempo demais. Tente retomar o envio usando a sessão persistida.");
 }
 
+function sessionHasAllChunks(session: UploadSession | null | undefined) {
+  if (!session) return false;
+  return (session.receivedChunkIndexes?.length ?? 0) >= session.totalChunks;
+}
+
 async function finalizeUploadCompletion(
   session: UploadSession,
   input: AnalysisUploadInput,
@@ -350,6 +355,19 @@ async function finalizeUploadCompletion(
       if (recoveredSession?.completionStatus === "finalizing" || recoveredSession?.completionStatus === "completed") {
         return waitForUploadCompletion(recoveredSession.uploadId, recoveredSession, options);
       }
+
+      if (sessionHasAllChunks(recoveredSession)) {
+        const fallbackCompletion = await getJson<AnalysisUploadResult | UploadSession>(
+          `/api/analysis/upload-sessions/${session.uploadId}/complete`,
+        );
+
+        if (isAnalysisUploadResult(fallbackCompletion)) {
+          return fallbackCompletion;
+        }
+
+        return waitForUploadCompletion(session.uploadId, fallbackCompletion, options);
+      }
+
       throw error;
     }
   };
