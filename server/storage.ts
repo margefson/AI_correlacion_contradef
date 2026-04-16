@@ -75,13 +75,15 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
-export async function storagePut(
+async function uploadToStorage(
   relKey: string,
   data: Buffer | Uint8Array | string,
-  contentType = "application/octet-stream"
+  contentType = "application/octet-stream",
+  preserveKey = false,
 ): Promise<{ key: string; url: string }> {
   const { baseUrl, apiKey } = getStorageConfig();
-  const key = appendHashSuffix(normalizeKey(relKey));
+  const normalized = normalizeKey(relKey);
+  const key = preserveKey ? normalized : appendHashSuffix(normalized);
   const uploadUrl = buildUploadUrl(baseUrl, key);
   const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
   const response = await fetch(uploadUrl, {
@@ -100,6 +102,22 @@ export async function storagePut(
   return { key, url };
 }
 
+export async function storagePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  return uploadToStorage(relKey, data, contentType, false);
+}
+
+export async function storagePutExact(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  return uploadToStorage(relKey, data, contentType, true);
+}
+
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
@@ -107,4 +125,16 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),
   };
+}
+
+export async function storageRead(relKey: string): Promise<Buffer> {
+  const { url } = await storageGet(relKey);
+  const response = await fetch(url, { method: "GET" });
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(
+      `Storage read failed (${response.status} ${response.statusText}): ${message}`
+    );
+  }
+  return Buffer.from(await response.arrayBuffer());
 }

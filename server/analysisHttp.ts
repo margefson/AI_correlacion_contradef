@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import express from "express";
 import multer from "multer";
@@ -14,11 +13,13 @@ import {
 import { getAnalysisJobDetail, startAnalysisJobFromArchive } from "./analysisService";
 import { listAnalysisJobs } from "./db";
 import { sdk } from "./_core/sdk";
+import { storagePutExact, storageRead } from "./storage";
 
 export const CHUNK_UPLOAD_MAX_BYTES = CHUNK_UPLOAD_SAFE_MAX_BYTES;
 
 const UPLOAD_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
-const UPLOAD_SESSION_ROOT = path.join(os.tmpdir(), "ai-correlacion-upload-sessions");
+const UPLOAD_SESSION_ROOT = path.join(process.cwd(), ".upload-session-cache");
+const UPLOAD_SESSION_STORAGE_ROOT = "analysis-upload-sessions";
 
 const directUpload = multer({
   storage: multer.memoryStorage(),
@@ -176,6 +177,14 @@ function sessionChunkDirectory(uploadId: string) {
   return path.join(sessionDirectory(uploadId), "chunks");
 }
 
+function sessionStorageMetaKey(uploadId: string) {
+  return `${UPLOAD_SESSION_STORAGE_ROOT}/${uploadId}/session.json`;
+}
+
+function sessionStorageChunkKey(uploadId: string, chunkIndex: number) {
+  return `${UPLOAD_SESSION_STORAGE_ROOT}/${uploadId}/chunks/${chunkFilename(chunkIndex)}`;
+}
+
 async function ensureUploadSessionRoot() {
   await fs.mkdir(UPLOAD_SESSION_ROOT, { recursive: true });
 }
@@ -187,12 +196,27 @@ async function removeUploadSession(uploadId: string) {
 async function writeUploadSession(meta: UploadSessionMeta) {
   await ensureUploadSessionRoot();
   await fs.mkdir(sessionChunkDirectory(meta.uploadId), { recursive: true });
-  await fs.writeFile(sessionMetaPath(meta.uploadId), `${JSON.stringify(meta, null, 2)}\n`, "utf-8");
+  const raw = `${JSON.stringify(meta, null, 2)}\n`;
+  await fs.writeFile(sessionMetaPath(meta.uploadId), raw, "utf-8");
+  await storagePutExact(sessionStorageMetaKey(meta.uploadId), raw, "application/json");
 }
 
 async function readUploadSession(uploadId: string) {
-  const raw = await fs.readFile(sessionMetaPath(uploadId), "utf-8");
-  return JSON.parse(raw) as UploadSessionMeta;
+  try {
+    const raw = await fs.readFile(sessionMetaPath(uploadId), "utf-8");
+    return JSON.parse(raw) as UploadSessionMeta;
+  } catch (localError) {
+    try {
+      const raw = (await storageRead(sessionStorageMetaKey(uploadId))).toString("utf-8");
+      const parsed = JSON.parse(raw) as UploadSessionMeta;
+      await ensureUploadSessionRoot();
+      await fs.mkdir(sessionChunkDirectory(uploadId), { recursive: true });
+      await fs.writeFile(sessionMetaPath(uploadId), `${JSON.stringify(parsed, null, 2)}\n`, "utf-8");
+      return parsed;
+    } catch {
+      throw localError;
+    }
+  }
 }
 
 async function cleanupExpiredUploadSessions() {
@@ -244,7 +268,10 @@ async function finalizeUploadSession(uploadId: string, userId: number) {
       let totalBufferBytes = 0;
 
       for (let index = 0; index < meta.totalChunks; index += 1) {
-        const chunkBuffer = await fs.readFile(path.join(sessionChunkDirectory(uploadId), chunkFilename(index)));
+        const localPath = path.join(sessionChunkDirectory(uploadId), chunkFilename(index));
+        const chunkBuffer = await fs.readFile(localPath).catch(() => storageRead(sessionStorageChunkKey(uploadId, index)));
+        await fs.mkdir(sessionChunkDirectory(uploadId), { recursive: true });
+        await fs.writeFile(localPath, chunkBuffer).catch(() => undefined);
         buffers.push(chunkBuffer);
         totalBufferBytes += chunkBuffer.length;
       }
@@ -482,6 +509,7 @@ export function registerAnalysisHttpRoutes(app: Express) {
       const chunkPath = path.join(sessionChunkDirectory(uploadId), chunkFilename(chunkIndex));
       await fs.mkdir(sessionChunkDirectory(uploadId), { recursive: true });
       await fs.writeFile(chunkPath, chunkBuffer);
+      await storagePutExact(sessionStorageChunkKey(uploadId, chunkIndex), chunkBuffer, "application/octet-stream");
 
       meta.updatedAt = Date.now();
       meta.receivedChunkIndexes = normalizeReceivedChunkIndexes([...meta.receivedChunkIndexes, chunkIndex], meta.totalChunks);

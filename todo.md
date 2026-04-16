@@ -62,3 +62,9 @@
 - [x] Exibir throughput estimado e ETA por parte durante o upload fragmentado
 - [x] Criar ação de reenvio manual apenas da etapa que falhou quando a retomada automática esgotar as tentativas
 - [x] Commitar no GitHub do usuário ao final desta rodada, após testes verdes e checkpoint salvo
+- [ ] Validar a etapa `complete` com um upload fragmentado grande no domínio publicado após o fallback GET/polling e registrar evidência operacional antes de encerrar esta estabilização como definitiva
+- [ ] Confirmar com o usuário se o branch publicado `manus/upload-complete-fallback` atende ao versionamento final desejado no GitHub ou se ele prefere merge/push em outra referência
+- [ ] Corrigir o desaparecimento da sessão de upload no domínio publicado, evidenciado por `GET /api/analysis/upload-sessions/:uploadId` retornando 404 antes da conclusão
+- [ ] Investigar e mitigar os resets de conexão no stream SSE (`/api/analysis/stream`) quando o fluxo de upload grande está em andamento
+- [ ] Garantir que a etapa `complete` consiga recuperar a sessão persistida mesmo após falha de rede e polling interrompido no domínio publicado
+- [ ] Corrigir o 404 recorrente em produção na sessão `4b5db8f7-fc4d-49d1-930b-5dcee6b208bc`, onde `POST /complete` e `GET /api/analysis/upload-sessions/:uploadId` continuam falhando após 99% do envio do `.7z`
