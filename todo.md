@@ -61,4 +61,4 @@
 - [x] Adicionar painel filtrável de telemetria histórica por arquivo/job
 - [x] Exibir throughput estimado e ETA por parte durante o upload fragmentado
 - [x] Criar ação de reenvio manual apenas da etapa que falhou quando a retomada automática esgotar as tentativas
-- [ ] Commitar no GitHub do usuário ao final desta rodada, após testes verdes e checkpoint salvo
+- [x] Commitar no GitHub do usuário ao final desta rodada, após testes verdes e checkpoint salvo
