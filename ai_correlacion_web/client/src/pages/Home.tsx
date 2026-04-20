@@ -1,4 +1,3 @@
-import React from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,75 +26,59 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
-  ArrowUpRight,
-  CheckCircle2,
-  Clock3,
-  FileArchive,
-  FileJson2,
+  AlertTriangle,
+  ArrowRight,
+  BrainCircuit,
+  FileDown,
   FileSearch,
-  GitCommitHorizontal,
-  Link2,
-  Loader2,
+  Filter,
   Radar,
-  RefreshCcw,
+  ShieldAlert,
   ShieldCheck,
-  TerminalSquare,
+  Sparkles,
   UploadCloud,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type StatusValue = "all" | "queued" | "running" | "completed" | "failed" | "cancelled";
+type StatusFilter = "all" | "queued" | "running" | "completed" | "failed" | "cancelled";
+type LogType = "FunctionInterceptor" | "TraceFcnCall" | "TraceMemory" | "TraceInstructions" | "TraceDisassembly" | "Unknown";
+type PayloadRecord = Record<string, unknown>;
 
-type GraphNode = {
-  id: string;
-  label?: string;
-  kind?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type GraphEdge = {
-  source: string;
-  target: string;
-  relation?: string | null;
-  weight?: number | null;
-  evidence?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-function statusClasses(status?: string | null) {
+function statusVariant(status?: string) {
   switch (status) {
     case "completed":
-      return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20";
+      return "bg-emerald-500/15 text-emerald-300 border-emerald-400/25";
     case "running":
-      return "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/20";
+      return "bg-cyan-500/15 text-cyan-300 border-cyan-400/25";
     case "queued":
-      return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20";
+      return "bg-amber-500/15 text-amber-300 border-amber-400/25";
     case "failed":
-      return "bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20";
-    case "cancelled":
-      return "bg-zinc-500/20 text-zinc-300 ring-1 ring-zinc-400/20";
+      return "bg-rose-500/15 text-rose-300 border-rose-400/25";
     default:
-      return "bg-white/10 text-white ring-1 ring-white/10";
+      return "bg-zinc-500/15 text-zinc-300 border-zinc-400/25";
   }
 }
 
-function metricTone(kind: "primary" | "success" | "warning" | "neutral") {
-  if (kind === "success") return "from-emerald-500/20 via-emerald-500/5 to-transparent";
-  if (kind === "warning") return "from-amber-500/20 via-amber-500/5 to-transparent";
-  if (kind === "neutral") return "from-slate-500/20 via-slate-500/5 to-transparent";
-  return "from-cyan-500/25 via-indigo-500/10 to-transparent";
+function riskVariant(risk?: string) {
+  switch (risk) {
+    case "critical":
+      return "bg-rose-500/15 text-rose-300 border-rose-400/25";
+    case "high":
+      return "bg-amber-500/15 text-amber-300 border-amber-400/25";
+    case "medium":
+      return "bg-cyan-500/15 text-cyan-300 border-cyan-400/25";
+    default:
+      return "bg-emerald-500/15 text-emerald-300 border-emerald-400/25";
+  }
 }
 
-function formatDateTime(value?: Date | string | number | null) {
+function formatDate(value?: Date | string | number | null) {
   if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 function formatPercent(value?: number | null) {
@@ -107,19 +90,34 @@ function formatBytes(value?: number | null) {
   if (!value || value <= 0) return "—";
   const units = ["B", "KB", "MB", "GB"];
   let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
     size /= 1024;
-    unitIndex += 1;
+    index += 1;
   }
-  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+  return `${size.toFixed(size >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
-function parseCommaSeparated(value: string) {
+function calculateReductionPercent(original?: number | null, reduced?: number | null) {
+  if (!original || original <= 0 || typeof reduced !== "number") return 0;
+  return Math.max(0, Math.min(100, (1 - reduced / original) * 100));
+}
+
+function parseCsv(value: string) {
   return value
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function inferLogType(fileName: string): LogType {
+  const lowered = fileName.toLowerCase();
+  if (lowered.includes("functioninterceptor") || lowered.includes("function_interceptor")) return "FunctionInterceptor";
+  if (lowered.includes("tracefcncall") || lowered.includes("trace_fcn_call")) return "TraceFcnCall";
+  if (lowered.includes("tracememory") || lowered.includes("trace_memory")) return "TraceMemory";
+  if (lowered.includes("traceinstructions") || lowered.includes("trace_instructions")) return "TraceInstructions";
+  if (lowered.includes("tracedisassembly") || lowered.includes("trace_disassembly")) return "TraceDisassembly";
+  return "Unknown";
 }
 
 function fileToBase64(file: File) {
@@ -127,999 +125,587 @@ function fileToBase64(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== "string") {
-        reject(new Error("Não foi possível ler o arquivo selecionado."));
+        reject(new Error("Falha ao ler o arquivo selecionado."));
         return;
       }
       resolve(reader.result);
     };
-    reader.onerror = () => reject(new Error("Falha ao processar o arquivo selecionado."));
+    reader.onerror = () => reject(new Error("Falha ao converter o arquivo para base64."));
     reader.readAsDataURL(file);
   });
 }
 
-function buildGraphLayout(nodes: GraphNode[]) {
-  if (nodes.length === 0) return [] as Array<GraphNode & { x: number; y: number }>;
-  const centerX = 320;
-  const centerY = 190;
-  const radius = Math.min(140, 60 + nodes.length * 8);
-
-  return nodes.map((node, index) => {
-    if (index === 0) {
-      return { ...node, x: centerX, y: centerY };
-    }
-    const angle = ((index - 1) / Math.max(1, nodes.length - 1)) * Math.PI * 2 - Math.PI / 2;
-    return {
-      ...node,
-      x: centerX + Math.cos(angle) * radius,
-      y: centerY + Math.sin(angle) * radius,
-    };
-  });
+function asRecord(value: unknown): PayloadRecord {
+  if (!value || Array.isArray(value) || typeof value !== "object") return {};
+  return value as PayloadRecord;
 }
 
 export default function Home() {
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState("overview");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [focusFunction, setFocusFunction] = useState("IsDebuggerPresent");
-  const [focusTermsInput, setFocusTermsInput] = useState("IsDebuggerPresent, VirtualProtect, CreateRemoteThread");
-  const [focusRegexesInput, setFocusRegexesInput] = useState("Zw.*InformationProcess, Nt.*QuerySystemInformation");
-  const [sampleNameFilter, setSampleNameFilter] = useState("");
-  const [focusFilter, setFocusFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusValue>("all");
+  const [analysisName, setAnalysisName] = useState("Amostra Contradef - Sessão 1");
+  const [focusTerms, setFocusTerms] = useState("VirtualProtect, NtQueryInformationProcess, IsDebuggerPresent, Sleep");
+  const [focusRegexes, setFocusRegexes] = useState("VirtualProtect.*RW.*RX, Nt.*QueryInformationProcess");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sampleFilter, setSampleFilter] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
 
-  const listInput = useMemo(
-    () => ({
-      sampleName: sampleNameFilter.trim() || undefined,
-      focusFunction: focusFilter.trim() || undefined,
-      status: statusFilter === "all" ? undefined : [statusFilter],
-      limit: 50,
-    }),
-    [focusFilter, sampleNameFilter, statusFilter],
-  );
-
-  const jobsQuery = trpc.analysis.list.useQuery(listInput, {
-    refetchInterval: 4000,
+  const jobsQuery = trpc.analysis.list.useQuery({
+    sampleName: sampleFilter.trim() || undefined,
+    status: statusFilter === "all" ? undefined : [statusFilter],
+    limit: 50,
+  }, {
+    refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    if (!selectedJobId && jobsQuery.data?.length) {
+      setSelectedJobId(jobsQuery.data[0].jobId);
+    }
+  }, [jobsQuery.data, selectedJobId]);
 
   const detailQuery = trpc.analysis.detail.useQuery(
     { jobId: selectedJobId ?? "" },
     {
-      enabled: !!selectedJobId,
+      enabled: Boolean(selectedJobId),
+      refetchInterval: (query) => {
+        const status = query.state.data?.job.status;
+        return status === "running" || status === "queued" ? 4000 : false;
+      },
     },
   );
 
-  const resumeSyncMutation = trpc.analysis.resumeActiveSync.useMutation();
-  const syncJobMutation = trpc.analysis.sync.useMutation({
+  const reductionBaselineQuery = trpc.analysis.reductionBaseline.useQuery();
+
+  const submitMutation = trpc.analysis.submit.useMutation({
+    onSuccess: async (result) => {
+      toast.success("Análise iniciada com sucesso.");
+      await utils.analysis.list.invalidate();
+      if (result?.job?.jobId) {
+        setSelectedJobId(result.job.jobId);
+        await utils.analysis.detail.invalidate({ jobId: result.job.jobId });
+      }
+      setSelectedFiles([]);
+    },
     onError: (error) => {
-      toast.error(error.message || "Não foi possível sincronizar o job selecionado.");
+      toast.error(error.message);
     },
   });
 
-  const submitJobMutation = trpc.analysis.submit.useMutation({
-    onError: (error) => {
-      toast.error(error.message || "Falha ao iniciar a análise.");
-    },
-  });
+  const selectedDetail = detailQuery.data ?? null;
 
-  useEffect(() => {
-    resumeSyncMutation.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const firstJobId = jobsQuery.data?.[0]?.jobId;
-    if (!selectedJobId && firstJobId) {
-      setSelectedJobId(firstJobId);
-    }
-  }, [jobsQuery.data, selectedJobId]);
-
-  const jobs = jobsQuery.data ?? [];
-  const selectedDetail = detailQuery.data;
-  const activeJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
-
-  useEffect(() => {
-    if (!selectedJobId) return;
-    const status = detailQuery.data?.job?.status;
-    if (status !== "queued" && status !== "running") return;
-
-    const intervalId = window.setInterval(() => {
-      utils.analysis.detail.invalidate({ jobId: selectedJobId });
-    }, 3000);
-
-    return () => window.clearInterval(intervalId);
-  }, [detailQuery.data?.job?.status, selectedJobId, utils.analysis.detail]);
-
-  const metrics = useMemo(() => {
-    const total = jobs.length;
+  const dashboardMetrics = useMemo(() => {
+    const jobs = jobsQuery.data ?? [];
     const completed = jobs.filter((job) => job.status === "completed").length;
+    const running = jobs.filter((job) => job.status === "running").length;
     const failed = jobs.filter((job) => job.status === "failed").length;
-    const avgProgress = total > 0
-      ? Math.round(jobs.reduce((sum, job) => sum + (job.progress ?? 0), 0) / total)
+    const progressAverage = jobs.length
+      ? Math.round(jobs.reduce((sum, job) => sum + (job.progress ?? 0), 0) / jobs.length)
       : 0;
+    return { total: jobs.length, completed, running, failed, progressAverage };
+  }, [jobsQuery.data]);
 
-    return {
-      total,
-      completed,
-      failed,
-      active: activeJobs.length,
-      avgProgress,
-    };
-  }, [activeJobs.length, jobs]);
+  const filteredEvents = useMemo(() => {
+    const events = selectedDetail?.events ?? [];
+    const query = eventSearch.trim().toLowerCase();
+    if (!query) return events;
+    return events.filter((event) => {
+      const payload = JSON.stringify(event.payloadJson ?? {}).toLowerCase();
+      return `${event.eventType} ${event.stage ?? ""} ${event.message ?? ""} ${payload}`.toLowerCase().includes(query);
+    });
+  }, [eventSearch, selectedDetail?.events]);
 
-  const jsonArtifact = selectedDetail?.artifacts?.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".json"));
-  const markdownArtifact = selectedDetail?.artifacts?.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".md") || artifact.relativePath.toLowerCase().endsWith(".markdown"));
-  const docxArtifact = selectedDetail?.artifacts?.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".docx"));
-  const graphNodes = (selectedDetail?.graph?.nodes ?? []) as GraphNode[];
-  const graphEdges = (selectedDetail?.graph?.edges ?? []) as GraphEdge[];
-  const positionedNodes = useMemo(() => buildGraphLayout(graphNodes), [graphNodes]);
-  const selectedGraphNode = positionedNodes.find((node) => node.id === highlightedNodeId) ?? positionedNodes[0] ?? null;
-  const visibleEdges = highlightedNodeId
-    ? graphEdges.filter((edge) => edge.source === highlightedNodeId || edge.target === highlightedNodeId)
-    : graphEdges;
+  const selectedGraphNode = useMemo(() => {
+    return selectedDetail?.flowGraph.nodes.find((node) => node.id === selectedGraphNodeId) ?? null;
+  }, [selectedDetail?.flowGraph.nodes, selectedGraphNodeId]);
 
-  async function handleSubmitJob() {
-    if (!selectedFile) {
-      toast.error("Selecione um pacote .7z antes de iniciar a análise.");
-      return;
-    }
-    if (!selectedFile.name.toLowerCase().endsWith(".7z")) {
-      toast.error("A plataforma aceita apenas arquivos .7z nesta etapa.");
-      return;
-    }
-    if (selectedFile.size > 40 * 1024 * 1024) {
-      toast.error("O arquivo excede o limite de 40 MB suportado pelo orquestrador web.");
+  async function handleSubmit() {
+    if (!selectedFiles.length) {
+      toast.error("Selecione ao menos um log da Contradef.");
       return;
     }
 
-    const archiveBase64 = await fileToBase64(selectedFile);
-    const createdJob = await submitJobMutation.mutateAsync({
-      archiveName: selectedFile.name,
-      archiveBase64,
-      focusFunction: focusFunction.trim(),
-      focusTerms: parseCommaSeparated(focusTermsInput),
-      focusRegexes: parseCommaSeparated(focusRegexesInput),
-      origin: window.location.origin,
-    }) as { jobId: string } | undefined;
+    try {
+      const logFiles = await Promise.all(selectedFiles.map(async (file) => ({
+        fileName: file.name,
+        base64: await fileToBase64(file),
+        logType: inferLogType(file.name),
+      })));
 
-    if (!createdJob?.jobId) {
-      toast.error("A análise foi iniciada, mas o identificador do job não foi retornado corretamente.");
-      return;
+      await submitMutation.mutateAsync({
+        analysisName,
+        logFiles,
+        focusTerms: parseCsv(focusTerms),
+        focusRegexes: parseCsv(focusRegexes),
+        origin: window.location.origin,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível iniciar a análise.");
     }
-
-    toast.success("Job enviado para a fila de análise.");
-    setSelectedFile(null);
-    setSelectedJobId(createdJob.jobId);
-    setActiveTab("queue");
-    await resumeSyncMutation.mutateAsync();
-    await utils.analysis.list.invalidate();
-    await utils.analysis.detail.invalidate({ jobId: createdJob.jobId });
   }
 
   return (
     <DashboardLayout>
-      <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.16),_transparent_32%),linear-gradient(180deg,rgba(7,12,24,0.96),rgba(3,6,16,0.98))] text-slate-100 shadow-[0_30px_120px_rgba(6,12,28,0.55)]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(56,189,248,0.06),transparent_40%,rgba(14,165,233,0.08))]" />
-        <div className="container relative flex flex-col gap-8 py-8 lg:py-10">
-          <section className="grid gap-6 xl:grid-cols-[1.5fr_0.9fr]">
-            <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
-              <CardHeader className="space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-3 max-w-3xl">
-                    <Badge className="bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-300/20">
-                      Centro de comando analítico
+      <div className="space-y-6 text-foreground">
+        <section className="grid gap-6 xl:grid-cols-[1.4fr,0.9fr]">
+          <Card className="border-white/10 bg-slate-950/80 shadow-2xl shadow-cyan-950/20">
+            <CardHeader>
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge className="border-cyan-400/25 bg-cyan-500/10 text-cyan-300">Centro de análise Contradef</Badge>
+                <Badge variant="outline" className="border-white/10 text-zinc-300">Node.js + React + IA</Badge>
+              </div>
+              <CardTitle className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+                Plataforma web para redução, interpretação e acompanhamento de logs de malware evasivo
+              </CardTitle>
+              <CardDescription className="max-w-3xl text-base leading-7 text-zinc-300">
+                Envie os logs do Contradef, reduza o volume por heurística, acompanhe o fluxo do malware em timeline ou grafo e receba um veredito interpretável com suporte de LLM.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard icon={FileSearch} label="Análises registradas" value={String(dashboardMetrics.total)} helper="Histórico consultável pelo analista" />
+              <MetricCard icon={Activity} label="Execuções em andamento" value={String(dashboardMetrics.running)} helper="Atualização automática do status" />
+              <MetricCard icon={ShieldCheck} label="Concluídas" value={String(dashboardMetrics.completed)} helper="Jobs com veredito disponível" />
+              <MetricCard icon={Radar} label="Progresso médio" value={`${dashboardMetrics.progressAverage}%`} helper={dashboardMetrics.failed ? `${dashboardMetrics.failed} falha(s) registradas` : "Sem falhas registradas"} />
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-slate-950/80 shadow-xl shadow-slate-950/30">
+            <CardHeader>
+              <CardTitle className="text-xl">Submissão de logs</CardTitle>
+              <CardDescription>
+                O pipeline aceita múltiplos arquivos e infere automaticamente o tipo de log pelo nome do arquivo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-200">Nome da análise</label>
+                <Input value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} placeholder="Ex.: Sample-APT-01" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-200">Termos prioritários</label>
+                <Textarea value={focusTerms} onChange={(event) => setFocusTerms(event.target.value)} className="min-h-24" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-200">Regex heurístico complementar</label>
+                <Textarea value={focusRegexes} onChange={(event) => setFocusRegexes(event.target.value)} className="min-h-20" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-200">Arquivos de log</label>
+                <Input type="file" multiple accept=".log,.txt,.json,.csv" onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))} />
+                <div className="flex flex-wrap gap-2">
+                  {selectedFiles.length ? selectedFiles.map((file) => (
+                    <Badge key={file.name} variant="outline" className="border-white/10 bg-white/5 text-zinc-200">
+                      {file.name} · {inferLogType(file.name)}
                     </Badge>
-                    <CardTitle className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                      Integração em tempo real com o pipeline legado de correlação CDF
-                    </CardTitle>
-                    <CardDescription className="max-w-2xl text-base leading-7 text-slate-300">
-                      Envie pacotes 7z, acompanhe estágios, logs e artefatos em tempo real, visualize o fluxo de correlação e receba resumo interpretativo, notificação operacional e versionamento automático no repositório configurado.
-                    </CardDescription>
-                  </div>
-                  <div className="grid min-w-[230px] gap-3 rounded-2xl border border-cyan-400/10 bg-slate-950/60 p-4 shadow-inner shadow-cyan-950/30">
-                    <div className="flex items-center gap-3 text-sm text-slate-300">
-                      <ShieldCheck className="h-4 w-4 text-cyan-300" />
-                      Backend acoplado ao serviço Python existente
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-slate-300">
-                      <TerminalSquare className="h-4 w-4 text-cyan-300" />
-                      Captura contínua de stdout e stderr por job
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-slate-300">
-                      <GitCommitHorizontal className="h-4 w-4 text-cyan-300" />
-                      Commit e trilha operacional ao final do processamento
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    {
-                      title: "Jobs no histórico",
-                      value: String(metrics.total),
-                      caption: "Base pronta para auditoria e reaproveitamento de resultados.",
-                      icon: FileSearch,
-                      tone: "primary" as const,
-                    },
-                    {
-                      title: "Fila ativa",
-                      value: String(metrics.active),
-                      caption: "Sincronização contínua com o pipeline legado.",
-                      icon: Activity,
-                      tone: "warning" as const,
-                    },
-                    {
-                      title: "Concluídos",
-                      value: String(metrics.completed),
-                      caption: "Jobs com resumo e artefatos consolidados.",
-                      icon: CheckCircle2,
-                      tone: "success" as const,
-                    },
-                    {
-                      title: "Progresso médio",
-                      value: formatPercent(metrics.avgProgress),
-                      caption: metrics.failed > 0 ? `${metrics.failed} falha(s) observada(s) no histórico recente.` : "Sem falhas registradas entre os últimos itens listados.",
-                      icon: Radar,
-                      tone: "neutral" as const,
-                    },
-                  ].map((item) => (
-                    <div
-                      key={item.title}
-                      className={`rounded-2xl border border-white/10 bg-gradient-to-br ${metricTone(item.tone)} p-4 shadow-[0_20px_60px_rgba(2,6,23,0.35)]`}
-                    >
-                      <div className="mb-4 flex items-center justify-between">
-                        <span className="text-sm text-slate-300">{item.title}</span>
-                        <item.icon className="h-4 w-4 text-cyan-200" />
-                      </div>
-                      <div className="text-3xl font-semibold tracking-tight text-white">{item.value}</div>
-                      <p className="mt-3 text-sm leading-6 text-slate-300">{item.caption}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-white/10 bg-slate-950/80 backdrop-blur-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Atividade operacional imediata</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Acompanhe o status mais recente sem sair da tela principal.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {activeJobs.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-sm leading-6 text-slate-300">
-                    Nenhum job ativo no momento. Você pode iniciar uma nova submissão e a fila será retomada automaticamente neste painel.
-                  </div>
-                ) : (
-                  activeJobs.slice(0, 3).map((job) => (
-                    <button
-                      key={job.jobId}
-                      type="button"
-                      onClick={() => {
-                        setSelectedJobId(job.jobId);
-                        setActiveTab("queue");
-                      }}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                    >
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-white">{job.sampleName}</p>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{job.focusFunction}</p>
-                        </div>
-                        <Badge className={statusClasses(job.status)}>{job.status}</Badge>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-slate-400">
-                          <span>{job.stage}</span>
-                          <span>{formatPercent(job.progress)}</span>
-                        </div>
-                        <Progress value={job.progress ?? 0} className="h-2 bg-white/10" />
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-300">{job.message || "Sincronizando estado do job com o pipeline..."}</p>
-                    </button>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </section>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid h-auto grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2 lg:grid-cols-4">
-              <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
-                Visão executiva
-              </TabsTrigger>
-              <TabsTrigger value="submission" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
-                Nova submissão
-              </TabsTrigger>
-              <TabsTrigger value="queue" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
-                Tempo real
-              </TabsTrigger>
-              <TabsTrigger value="results" className="rounded-xl data-[state=active]:bg-cyan-500/15 data-[state=active]:text-white">
-                Resultados
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white">Histórico filtrável de análises</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Selecione qualquer execução para abrir os detalhes completos, artefatos e logs consolidados.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px_auto]">
-                    <Input
-                      value={sampleNameFilter}
-                      onChange={(event) => setSampleNameFilter(event.target.value)}
-                      placeholder="Filtrar por amostra"
-                      className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
-                    />
-                    <Input
-                      value={focusFilter}
-                      onChange={(event) => setFocusFilter(event.target.value)}
-                      placeholder="Filtrar por função"
-                      className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
-                    />
-                    <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusValue)}>
-                      <SelectTrigger className="border-white/10 bg-slate-950/60 text-slate-100">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os status</SelectItem>
-                        <SelectItem value="queued">Queued</SelectItem>
-                        <SelectItem value="running">Running</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
-                      onClick={() => jobsQuery.refetch()}
-                    >
-                      <RefreshCcw className="mr-2 h-4 w-4" /> Atualizar
-                    </Button>
-                  </div>
-                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/50">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-white/10 hover:bg-transparent">
-                          <TableHead>Amostra</TableHead>
-                          <TableHead>Foco</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Progresso</TableHead>
-                          <TableHead>Criado em</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {jobs.map((job) => (
-                          <TableRow
-                            key={job.jobId}
-                            className="cursor-pointer border-white/10 hover:bg-cyan-500/5"
-                            onClick={() => {
-                              setSelectedJobId(job.jobId);
-                              setActiveTab("results");
-                            }}
-                          >
-                            <TableCell>
-                              <div>
-                                <div className="font-medium text-slate-100">{job.sampleName}</div>
-                                <div className="text-xs text-slate-500">{job.jobId}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-slate-300">{job.focusFunction}</TableCell>
-                            <TableCell><Badge className={statusClasses(job.status)}>{job.status}</Badge></TableCell>
-                            <TableCell className="w-[180px]">
-                              <div className="space-y-2">
-                                <Progress value={job.progress ?? 0} className="h-2 bg-white/10" />
-                                <div className="text-xs text-slate-400">{formatPercent(job.progress)}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-slate-400">{formatDateTime(job.createdAt)}</TableCell>
-                          </TableRow>
-                        ))}
-                        {jobs.length === 0 ? (
-                          <TableRow className="border-white/10 hover:bg-transparent">
-                            <TableCell colSpan={5} className="py-12 text-center text-slate-400">
-                              Nenhum job encontrado com os filtros aplicados.
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white">Último job selecionado</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Resumo operacional para orientar a triagem antes do mergulho técnico.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {selectedDetail?.job ? (
-                    <>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Amostra</div>
-                          <div className="mt-2 text-lg font-medium text-white">{selectedDetail.job.sampleName}</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Função-alvo</div>
-                          <div className="mt-2 text-lg font-medium text-white">{selectedDetail.job.focusFunction}</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Estado</div>
-                          <div className="mt-2"><Badge className={statusClasses(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge></div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Última atualização</div>
-                          <div className="mt-2 text-lg font-medium text-white">{formatDateTime(selectedDetail.job.updatedAt)}</div>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-cyan-400/10 bg-cyan-500/5 p-4 text-sm leading-7 text-slate-300">
-                        {selectedDetail.job.message || "O backend ainda está consolidando dados adicionais deste job."}
-                      </div>
-                      {selectedDetail.insight?.summaryMarkdown ? (
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-cyan-200">
-                            <FileSearch className="h-4 w-4" /> Resumo interpretativo
-                          </div>
-                          <div className="prose prose-invert max-w-none prose-p:text-slate-300 prose-strong:text-white prose-headings:text-white">
-                            <Streamdown>{selectedDetail.insight.summaryMarkdown}</Streamdown>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
-                          O resumo interpretativo será exibido quando o JSON de correlação estiver disponível e o enriquecimento via LLM for concluído.
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-6 text-sm leading-7 text-slate-400">
-                      Selecione um job no histórico para abrir o painel de resultados consolidados.
-                    </div>
+                  )) : (
+                    <p className="text-sm text-zinc-400">Nenhum arquivo selecionado.</p>
                   )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
+              </div>
+              <Button className="w-full gap-2" onClick={handleSubmit} disabled={submitMutation.isPending}>
+                <UploadCloud className="h-4 w-4" />
+                {submitMutation.isPending ? "Processando análise..." : "Iniciar análise automatizada"}
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
 
-            <TabsContent value="submission" className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white">Nova submissão de análise</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    O pacote 7z é enviado para o armazenamento seguro, despachado ao pipeline Python e acompanhado automaticamente por esta aplicação.
+        <section>
+          <Card className="border-cyan-400/15 bg-slate-950/80 shadow-xl shadow-cyan-950/10">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Teste inicial do redutor em C++</CardTitle>
+                  <CardDescription>
+                    Validação isolada da heurística do documento técnico, usando as amostras reais <span className="font-medium text-zinc-200">FunctionInterceptor</span>, <span className="font-medium text-zinc-200">TraceInstructions</span> e <span className="font-medium text-zinc-200">TraceMemory</span> presentes no repositório base.
                   </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid gap-5 lg:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-200">Pacote compactado</label>
-                      <div className="rounded-2xl border border-dashed border-cyan-400/20 bg-slate-950/60 p-4">
-                        <Input
-                          type="file"
-                          accept=".7z"
-                          onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-                          className="border-white/10 bg-slate-950/70 text-slate-100 file:text-slate-200"
-                        />
-                        <p className="mt-3 text-sm text-slate-400">
-                          Limite operacional atual: 40 MB. O backend valida extensão, base64 e tamanho antes do despacho ao serviço legado.
-                        </p>
-                        {selectedFile ? (
-                          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
-                            <div className="flex items-center gap-2 font-medium text-white">
-                              <FileArchive className="h-4 w-4 text-cyan-300" /> {selectedFile.name}
-                            </div>
-                            <div className="mt-2 text-slate-400">{formatBytes(selectedFile.size)}</div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-200">Função de interesse</label>
-                      <Input
-                        value={focusFunction}
-                        onChange={(event) => setFocusFunction(event.target.value)}
-                        placeholder="Ex.: IsDebuggerPresent"
-                        className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
-                      />
-                      <p className="text-sm leading-6 text-slate-400">
-                        Esse valor é usado tanto para a submissão quanto para a organização do histórico e das notificações ao final do job.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid gap-5 lg:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-200">Termos de foco</label>
-                      <Textarea
-                        value={focusTermsInput}
-                        onChange={(event) => setFocusTermsInput(event.target.value)}
-                        rows={5}
-                        className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
-                        placeholder="Separe os termos por vírgula"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-200">Expressões regulares</label>
-                      <Textarea
-                        value={focusRegexesInput}
-                        onChange={(event) => setFocusRegexesInput(event.target.value)}
-                        rows={5}
-                        className="border-white/10 bg-slate-950/60 text-slate-100 placeholder:text-slate-500"
-                        placeholder="Separe as expressões por vírgula"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Button
-                      onClick={handleSubmitJob}
-                      disabled={submitJobMutation.isPending}
-                      className="rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400"
-                    >
-                      {submitJobMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <UploadCloud className="mr-2 h-4 w-4" />
-                      )}
-                      Iniciar análise
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setFocusFunction("IsDebuggerPresent");
-                        setFocusTermsInput("IsDebuggerPresent, VirtualProtect, CreateRemoteThread");
-                        setFocusRegexesInput("Zw.*InformationProcess, Nt.*QuerySystemInformation");
-                      }}
-                    >
-                      Restaurar parâmetros
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+                <Badge className={reductionBaselineQuery.data?.available ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-300" : "border-amber-400/25 bg-amber-500/10 text-amber-300"}>gatilho {reductionBaselineQuery.data?.trigger_address ?? "—"}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <MiniInfo label="Bytes antes" value={formatBytes(reductionBaselineQuery.data?.combined.original_bytes)} />
+                <MiniInfo label="Bytes depois" value={formatBytes(reductionBaselineQuery.data?.combined.reduced_bytes)} />
+                <MiniInfo label="Redução medida" value={formatPercent(reductionBaselineQuery.data?.combined.reduction_percent)} />
+              </div>
+              {reductionBaselineQuery.isLoading ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-400">
+                  Carregando o resultado do teste inicial do redutor em C++...
+                </div>
+              ) : reductionBaselineQuery.error ? (
+                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-200">
+                  Falha ao carregar a comparação antes/depois: {reductionBaselineQuery.error.message}
+                </div>
+              ) : !reductionBaselineQuery.data?.available ? (
+                <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                  {reductionBaselineQuery.data?.errorMessage ?? "O baseline de redução ainda não está disponível."}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-black/20">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Log</TableHead>
+                        <TableHead>Linhas antes</TableHead>
+                        <TableHead>Linhas depois</TableHead>
+                        <TableHead>Tamanho antes</TableHead>
+                        <TableHead>Tamanho depois</TableHead>
+                        <TableHead>Redução</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(reductionBaselineQuery.data?.files ?? []).map((file) => (
+                        <TableRow key={file.file}>
+                          <TableCell className="font-medium text-zinc-100">{file.file}</TableCell>
+                          <TableCell>{file.original_lines}</TableCell>
+                          <TableCell>{file.reduced_lines}</TableCell>
+                          <TableCell>{formatBytes(file.original_bytes)}</TableCell>
+                          <TableCell>{formatBytes(file.reduced_bytes)}</TableCell>
+                          <TableCell>{formatPercent(calculateReductionPercent(file.original_bytes, file.reduced_bytes))}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-cyan-500/5">
+                        <TableCell className="font-semibold text-cyan-200">Total combinado</TableCell>
+                        <TableCell>{reductionBaselineQuery.data.combined.original_lines}</TableCell>
+                        <TableCell>{reductionBaselineQuery.data.combined.reduced_lines}</TableCell>
+                        <TableCell>{formatBytes(reductionBaselineQuery.data.combined.original_bytes)}</TableCell>
+                        <TableCell>{formatBytes(reductionBaselineQuery.data.combined.reduced_bytes)}</TableCell>
+                        <TableCell>{formatPercent(reductionBaselineQuery.data.combined.reduction_percent)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              <p className="text-sm leading-6 text-zinc-400">
+                Nesta etapa, a plataforma está demonstrando primeiro a <span className="text-zinc-200">diminuição efetiva do volume</span> após um gatilho <span className="text-zinc-200">VirtualProtect RW→RX</span>. Depois dessa validação, evoluímos a mesma lógica para o restante do fluxo analítico.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
 
-              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white">O que acontece após o envio</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    A aplicação opera como fachada de observabilidade e orquestração sobre o backend legado.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm leading-7 text-slate-300">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <p className="font-medium text-white">1. Ingestão controlada</p>
-                    <p>O arquivo é validado, persistido em armazenamento externo e associado a um job interno para rastreabilidade.</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <p className="font-medium text-white">2. Execução assistida</p>
-                    <p>O pipeline Python recebe os parâmetros, expõe progresso incremental e publica artefatos que são sincronizados para o dashboard.</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <p className="font-medium text-white">3. Consolidação operacional</p>
-                    <p>Ao concluir, a plataforma gera resumo por LLM, envia notificação ao proprietário e prepara o commit dos artefatos no repositório configurado.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="queue" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-white">Fila e sincronização em tempo real</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Selecione um job para acompanhar progresso, estágio corrente e trechos recentes dos logs operacionais.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {jobs.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-5 text-sm text-slate-400">
-                      Ainda não há jobs cadastrados. Inicie uma submissão para ativar a fila monitorada.
-                    </div>
-                  ) : (
-                    jobs.slice(0, 12).map((job) => (
-                      <button
-                        key={job.jobId}
-                        type="button"
-                        onClick={() => setSelectedJobId(job.jobId)}
-                        className={`w-full rounded-2xl border p-4 text-left transition ${selectedJobId === job.jobId ? "border-cyan-400/30 bg-cyan-500/8" : "border-white/10 bg-slate-950/60 hover:border-white/20"}`}
-                      >
-                        <div className="mb-3 flex items-start justify-between gap-3">
+        <section className="grid gap-6 xl:grid-cols-[0.88fr,1.12fr]">
+          <Card className="border-white/10 bg-slate-950/80">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Fila e histórico</CardTitle>
+                  <CardDescription>Selecione uma análise para abrir o dashboard detalhado.</CardDescription>
+                </div>
+                <Badge className={statusVariant(statusFilter === "all" ? undefined : statusFilter)}>{statusFilter === "all" ? "Todos" : statusFilter}</Badge>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr,180px]">
+                <Input placeholder="Filtrar por nome da amostra" value={sampleFilter} onChange={(event) => setSampleFilter(event.target.value)} />
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="queued">Queued</SelectItem>
+                    <SelectItem value="running">Running</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ScrollArea className="h-[540px] pr-4">
+                <div className="space-y-3">
+                  {(jobsQuery.data ?? []).map((job) => {
+                    const isActive = selectedJobId === job.jobId;
+                    return (
+                      <button key={job.jobId} type="button" onClick={() => setSelectedJobId(job.jobId)} className={`w-full rounded-2xl border p-4 text-left transition ${isActive ? "border-cyan-400/40 bg-cyan-500/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}>
+                        <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="font-medium text-white">{job.sampleName}</div>
-                            <div className="text-xs tracking-[0.16em] text-slate-500 uppercase">{job.focusFunction}</div>
+                            <p className="text-sm font-semibold text-white">{job.sampleName}</p>
+                            <p className="text-xs text-zinc-400">{job.jobId}</p>
                           </div>
-                          <Badge className={statusClasses(job.status)}>{job.status}</Badge>
+                          <Badge className={statusVariant(job.status)}>{job.status}</Badge>
                         </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs text-slate-400">
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs text-zinc-400">
                             <span>{job.stage}</span>
                             <span>{formatPercent(job.progress)}</span>
                           </div>
-                          <Progress value={job.progress ?? 0} className="h-2 bg-white/10" />
+                          <Progress value={job.progress} />
+                          <p className="text-sm text-zinc-300">{job.message ?? "Sem mensagem adicional."}</p>
+                          <p className="text-xs text-zinc-500">Atualizado em {formatDate(job.updatedAt)}</p>
                         </div>
                       </button>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
+                    );
+                  })}
+                  {jobsQuery.data?.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-sm text-zinc-400">
+                      Nenhuma análise foi registrada ainda. Faça upload dos logs para criar o primeiro caso.
+                    </div>
+                  ) : null}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
-              <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <CardTitle className="text-white">Telemetria do job selecionado</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Os dados são refletidos automaticamente a partir das sincronizações periódicas do backend.
-                    </CardDescription>
+          <Card className="border-white/10 bg-slate-950/80">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Dashboard analítico</CardTitle>
+                  <CardDescription>Visão consolidada do fluxo, da redução e da interpretação da amostra selecionada.</CardDescription>
+                </div>
+                {selectedDetail ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className={statusVariant(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge>
+                    <Badge className={riskVariant(selectedDetail.riskLevel)}>{selectedDetail.riskLevel}</Badge>
+                    <Badge variant="outline" className="border-white/10 text-zinc-200">{selectedDetail.classification}</Badge>
                   </div>
-                  <Button
-                    variant="outline"
-                    disabled={!selectedJobId || syncJobMutation.isPending}
-                    onClick={async () => {
-                      if (!selectedJobId) return;
-                      const result = await syncJobMutation.mutateAsync({ jobId: selectedJobId }) as { job: { jobId: string } };
-                      await utils.analysis.detail.invalidate({ jobId: result.job.jobId });
-                      await utils.analysis.list.invalidate();
-                    }}
-                    className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
-                  >
-                    {syncJobMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCcw className="mr-2 h-4 w-4" />
-                    )}
-                    Sincronizar agora
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {selectedDetail?.job ? (
-                    <>
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</div>
-                          <div className="mt-2"><Badge className={statusClasses(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge></div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Estágio</div>
-                          <div className="mt-2 text-lg font-medium text-white">{selectedDetail.job.stage}</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Criado em</div>
-                          <div className="mt-2 text-lg font-medium text-white">{formatDateTime(selectedDetail.job.createdAt)}</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Progresso</div>
-                          <div className="mt-2 text-lg font-medium text-white">{formatPercent(selectedDetail.job.progress)}</div>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                        <div className="mb-3 flex items-center justify-between text-sm text-slate-400">
-                          <span>{selectedDetail.job.message || "Aguardando próxima atualização do pipeline."}</span>
-                          <span>{formatPercent(selectedDetail.job.progress)}</span>
-                        </div>
-                        <Progress value={selectedDetail.job.progress ?? 0} className="h-2 bg-white/10" />
-                      </div>
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-cyan-200">
-                            <TerminalSquare className="h-4 w-4" /> stdout recente
-                          </div>
-                          <ScrollArea className="h-[240px] rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs leading-6 text-emerald-200">
-                            <pre className="whitespace-pre-wrap break-words">{selectedDetail.job.stdoutTail || "Nenhum trecho de stdout disponível até o momento."}</pre>
-                          </ScrollArea>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-rose-200">
-                            <TerminalSquare className="h-4 w-4" /> stderr recente
-                          </div>
-                          <ScrollArea className="h-[240px] rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-xs leading-6 text-rose-200">
-                            <pre className="whitespace-pre-wrap break-words">{selectedDetail.job.stderrTail || "Nenhum trecho de stderr disponível até o momento."}</pre>
-                          </ScrollArea>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-6 text-sm text-slate-400">
-                      Selecione um job para observar os logs progressivos e o status de execução em tempo real.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!selectedDetail ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-10 text-center text-zinc-400">
+                  Selecione uma análise no painel lateral para abrir o detalhamento.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <MetricCard icon={ShieldAlert} label="Categoria" value={selectedDetail.classification} helper={selectedDetail.currentPhase} />
+                    <MetricCard icon={AlertTriangle} label="Risco" value={selectedDetail.riskLevel.toUpperCase()} helper={`${selectedDetail.techniques.length} técnica(s) destacadas`} />
+                    <MetricCard icon={Filter} label="Redução" value={`${selectedDetail.metrics.reductionPercent.toFixed(1)}%`} helper={`${selectedDetail.metrics.reducedLineCount} linhas mantidas`} />
+                    <MetricCard icon={BrainCircuit} label="APIs suspeitas" value={String(selectedDetail.suspiciousApis.length)} helper={`${selectedDetail.metrics.triggerCount} gatilho(s) heurísticos`} />
+                  </div>
 
-            <TabsContent value="results" className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <div className="space-y-6">
-                <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white">Fluxo de correlação</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Visualização interativa dos nós e relações encontrados a partir do JSON de correlação consolidado.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {positionedNodes.length > 0 ? (
-                      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-                        <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <svg viewBox="0 0 640 380" className="h-[380px] w-full">
-                            {visibleEdges.map((edge, index) => {
-                              const source = positionedNodes.find((node) => node.id === edge.source);
-                              const target = positionedNodes.find((node) => node.id === edge.target);
-                              if (!source || !target) return null;
-                              const emphasized = !highlightedNodeId || edge.source === highlightedNodeId || edge.target === highlightedNodeId;
-                              return (
-                                <g key={`${edge.source}-${edge.target}-${index}`}>
-                                  <line
-                                    x1={source.x}
-                                    y1={source.y}
-                                    x2={target.x}
-                                    y2={target.y}
-                                    stroke={emphasized ? "rgba(34,211,238,0.8)" : "rgba(148,163,184,0.22)"}
-                                    strokeWidth={emphasized ? 2.4 : 1.2}
-                                  />
-                                  <text
-                                    x={(source.x + target.x) / 2}
-                                    y={(source.y + target.y) / 2 - 6}
-                                    fill="rgba(148,163,184,0.85)"
-                                    fontSize="11"
-                                    textAnchor="middle"
-                                  >
-                                    {edge.relation || "relates_to"}
-                                  </text>
-                                </g>
-                              );
-                            })}
-                            {positionedNodes.map((node) => {
-                              const active = selectedGraphNode?.id === node.id;
-                              return (
-                                <g key={node.id} onClick={() => setHighlightedNodeId(node.id)} className="cursor-pointer">
-                                  <circle
-                                    cx={node.x}
-                                    cy={node.y}
-                                    r={active ? 20 : 15}
-                                    fill={active ? "rgba(34,211,238,0.88)" : "rgba(15,23,42,0.98)"}
-                                    stroke={active ? "rgba(224,242,254,0.95)" : "rgba(34,211,238,0.35)"}
-                                    strokeWidth={active ? 2.5 : 1.5}
-                                  />
-                                  <text x={node.x} y={node.y + 4} fill={active ? "#020617" : "#e2e8f0"} fontSize="10" textAnchor="middle">
-                                    {node.kind?.slice(0, 3)?.toUpperCase() || "FUN"}
-                                  </text>
-                                  <text x={node.x} y={node.y + 32} fill="rgba(226,232,240,0.92)" fontSize="11" textAnchor="middle">
-                                    {(node.label || node.id).slice(0, 18)}
-                                  </text>
-                                </g>
-                              );
-                            })}
-                          </svg>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                          <div className="mb-4 flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm text-slate-400">Nó destacado</p>
-                              <h3 className="text-lg font-medium text-white">{selectedGraphNode?.label || selectedGraphNode?.id || "Sem seleção"}</h3>
+                  <Tabs defaultValue="overview" className="space-y-4">
+                    <TabsList className="flex flex-wrap gap-2 bg-transparent p-0">
+                      <TabsTrigger value="overview">Resumo</TabsTrigger>
+                      <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                      <TabsTrigger value="graph">Fluxo</TabsTrigger>
+                      <TabsTrigger value="events">Eventos</TabsTrigger>
+                      <TabsTrigger value="report">Relatório</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="overview" className="space-y-4">
+                      <div className="grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
+                        <Card className="border-white/10 bg-white/5">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Resumo interpretativo</CardTitle>
+                            <CardDescription>{selectedDetail.insight?.title ?? "Resumo automático"}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-headings:text-white">
+                              <Streamdown>{selectedDetail.insight?.summaryMarkdown ?? "Resumo ainda não disponível."}</Streamdown>
                             </div>
-                            <Button
-                              variant="outline"
-                              className="border-white/10 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08]"
-                              onClick={() => setHighlightedNodeId(null)}
-                            >
-                              Limpar foco
-                            </Button>
-                          </div>
-                          <div className="space-y-3 text-sm text-slate-300">
-                            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Tipo</div>
-                              <div className="mt-2">{selectedGraphNode?.kind || "function"}</div>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-white/10 bg-white/5">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Indicadores gerenciais</CardTitle>
+                            <CardDescription>Métricas de compressão e pistas prioritárias para o analista.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <MiniInfo label="Linhas originais" value={String(selectedDetail.metrics.originalLineCount)} />
+                              <MiniInfo label="Linhas reduzidas" value={String(selectedDetail.metrics.reducedLineCount)} />
+                              <MiniInfo label="Tamanho original" value={formatBytes(selectedDetail.metrics.originalBytes)} />
+                              <MiniInfo label="Tamanho reduzido" value={formatBytes(selectedDetail.metrics.reducedBytes)} />
                             </div>
-                            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Conexões visíveis</div>
-                              <div className="mt-2">{visibleEdges.length}</div>
-                            </div>
-                            <ScrollArea className="h-[190px] rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                              <div className="space-y-2">
-                                {visibleEdges.map((edge, index) => (
-                                  <div key={`${edge.source}-${edge.target}-${index}`} className="rounded-lg border border-white/10 bg-slate-950/60 p-3">
-                                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Relação</div>
-                                    <div className="mt-1 font-medium text-white">{edge.source} → {edge.target}</div>
-                                    <div className="mt-2 text-slate-400">{edge.evidence || edge.relation || "Sem evidência textual consolidada."}</div>
-                                  </div>
-                                ))}
-                                {visibleEdges.length === 0 ? (
-                                  <div className="text-sm text-slate-500">Nenhuma aresta correspondente ao foco atual.</div>
-                                ) : null}
+                            <Separator />
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-zinc-200">Técnicas destacadas</p>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedDetail.techniques.length ? selectedDetail.techniques.map((technique) => (
+                                  <Badge key={technique} variant="outline" className="border-white/10 bg-white/5 text-zinc-200">{technique}</Badge>
+                                )) : <p className="text-sm text-zinc-400">Nenhuma técnica marcada.</p>}
                               </div>
-                            </ScrollArea>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-6 text-sm leading-7 text-slate-400">
-                        O grafo interativo será exibido assim que o job selecionado publicar um artefato JSON com nós e arestas, ou um fluxo correlacionado convertível para esse formato.
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white">Tabela de correlações</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Relações detectadas e respectivas evidências presentes no artefato consolidado do job.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-white/10 hover:bg-transparent">
-                            <TableHead>Origem</TableHead>
-                            <TableHead>Destino</TableHead>
-                            <TableHead>Relação</TableHead>
-                            <TableHead>Peso</TableHead>
-                            <TableHead>Evidência</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {graphEdges.map((edge, index) => (
-                            <TableRow key={`${edge.source}-${edge.target}-${index}`} className="border-white/10 hover:bg-white/[0.03]">
-                              <TableCell className="text-slate-200">{edge.source}</TableCell>
-                              <TableCell className="text-slate-200">{edge.target}</TableCell>
-                              <TableCell className="text-slate-300">{edge.relation || "correlates_with"}</TableCell>
-                              <TableCell className="text-slate-400">{edge.weight ?? "—"}</TableCell>
-                              <TableCell className="max-w-[280px] text-slate-400">{edge.evidence || "—"}</TableCell>
-                            </TableRow>
-                          ))}
-                          {graphEdges.length === 0 ? (
-                            <TableRow className="border-white/10 hover:bg-transparent">
-                              <TableCell colSpan={5} className="py-10 text-center text-slate-500">
-                                Ainda não há correlações estruturadas para este job.
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="space-y-6">
-                <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white">Artefatos publicados</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Acesso direto a JSON, Markdown, DOCX e demais saídas sincronizadas pelo orquestrador web.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {[
-                        { label: "Exportar JSON", artifact: jsonArtifact },
-                        { label: "Exportar Markdown", artifact: markdownArtifact },
-                        { label: "Exportar DOCX", artifact: docxArtifact },
-                      ].map((item) => (
-                        item.artifact?.storageUrl ? (
-                          <a
-                            key={item.label}
-                            href={item.artifact.storageUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-4 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/40 hover:bg-cyan-500/12"
-                          >
-                            {item.label}
-                            <div className="mt-2 text-xs font-normal text-cyan-200/80">{item.artifact.relativePath}</div>
-                          </a>
-                        ) : (
-                          <div
-                            key={item.label}
-                            className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-4 text-sm text-slate-500"
-                          >
-                            {item.label}
-                            <div className="mt-2 text-xs text-slate-500">Formato ainda não disponível para este job.</div>
-                          </div>
-                        )
-                      ))}
-                    </div>
-                    {selectedDetail?.artifacts?.map((artifact) => (
-                      <a
-                        key={artifact.id}
-                        href={artifact.storageUrl || "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-2xl border border-white/10 bg-slate-950/60 p-4 transition hover:border-cyan-400/30 hover:bg-cyan-500/5"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 text-white">
-                              <FileJson2 className="h-4 w-4 text-cyan-300" />
-                              <span className="font-medium">{artifact.label}</span>
                             </div>
-                            <div className="mt-2 text-sm text-slate-400">{artifact.relativePath}</div>
-                          </div>
-                          <ArrowUpRight className="h-4 w-4 text-slate-500" />
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
-                          <span>{artifact.artifactType || "artifact"}</span>
-                          <span>{formatBytes(artifact.sizeBytes)}</span>
-                          {artifact.mimeType ? <span>{artifact.mimeType}</span> : null}
-                        </div>
-                      </a>
-                    ))}
-                    {!selectedDetail?.artifacts?.length ? (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-5 text-sm text-slate-500">
-                        Os links de artefatos serão exibidos quando o backend finalizar a sincronização da saída do pipeline.
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-zinc-200">Recomendações</p>
+                              <ul className="space-y-2 text-sm text-zinc-300">
+                                {selectedDetail.recommendations.map((recommendation) => (
+                                  <li key={recommendation} className="rounded-xl border border-white/10 bg-white/5 p-3">{recommendation}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
+                    </TabsContent>
 
-                <Card className="border-white/10 bg-white/[0.04] backdrop-blur-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white">Notificação e commit</CardTitle>
-                    <CardDescription className="text-slate-400">
-                      Estado da etapa operacional que consolida a análise para auditoria e versionamento.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Resumo LLM</div>
-                          <div className="mt-2 text-lg font-medium text-white">{selectedDetail?.job?.llmSummaryStatus || "pending"}</div>
+                    <TabsContent value="timeline" className="space-y-4">
+                      <ScrollArea className="h-[420px] pr-4">
+                        <div className="space-y-4">
+                          {selectedDetail.events.map((event, index) => {
+                            const payload = asRecord(event.payloadJson);
+                            return (
+                              <div key={`${event.eventType}-${index}-${String(event.createdAt)}`} className="relative rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                  <Badge className={statusVariant(selectedDetail.job.status)}>{event.stage ?? "Sem fase"}</Badge>
+                                  <Badge variant="outline" className="border-white/10 text-zinc-200">{event.eventType}</Badge>
+                                  {payload.trigger === true ? <Badge className="bg-rose-500/15 text-rose-300 border-rose-400/25">gatilho</Badge> : null}
+                                </div>
+                                <p className="text-sm text-zinc-200">{event.message ?? "Evento sem descrição"}</p>
+                                <div className="mt-2 flex flex-wrap gap-3 text-xs text-zinc-400">
+                                  <span>{formatDate(event.createdAt)}</span>
+                                  {typeof payload.fileName === "string" ? <span>{payload.fileName}</span> : null}
+                                  {typeof payload.logType === "string" ? <span>{payload.logType}</span> : null}
+                                  {typeof payload.lineNumber === "number" ? <span>linha {payload.lineNumber}</span> : null}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <Badge className={statusClasses(selectedDetail?.job?.llmSummaryStatus)}>{selectedDetail?.job?.llmSummaryStatus || "pending"}</Badge>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Commit</div>
-                          <div className="mt-2 text-lg font-medium text-white">{selectedDetail?.commit?.status || selectedDetail?.job?.commitStatus || "pending"}</div>
-                        </div>
-                        <Badge className={statusClasses(selectedDetail?.commit?.status || selectedDetail?.job?.commitStatus)}>
-                          {selectedDetail?.commit?.status || selectedDetail?.job?.commitStatus || "pending"}
-                        </Badge>
-                      </div>
-                      <Separator className="my-4 bg-white/10" />
-                      <div className="space-y-3 text-sm text-slate-300">
-                        <div className="flex items-start gap-3">
-                          <GitCommitHorizontal className="mt-0.5 h-4 w-4 text-cyan-300" />
-                          <div>
-                            <div className="font-medium text-white">Repositório</div>
-                            <div className="text-slate-400">{selectedDetail?.commit?.repository || "Configuração padrão do pipeline"}</div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="graph" className="space-y-4">
+                      <div className="grid gap-4 lg:grid-cols-[1fr,320px]">
+                        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/40 p-4">
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-300">
+                            <Sparkles className="h-4 w-4 text-cyan-300" />
+                            Clique em um nó para inspecionar o contexto associado no painel ao lado.
+                          </div>
+                          <div className="mt-4 flex flex-wrap items-center gap-2">
+                            {selectedDetail.flowGraph.nodes.map((node) => (
+                              <button key={node.id} type="button" onClick={() => setSelectedGraphNodeId(node.id)} className={`rounded-2xl border px-4 py-3 text-left transition ${selectedGraphNodeId === node.id ? "border-cyan-400/40 bg-cyan-500/10 text-white" : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"}`}>
+                                <div className="flex items-center gap-2 text-sm font-medium">
+                                  <span>{node.label}</span>
+                                  <Badge variant="outline" className="border-white/10 text-zinc-300">{node.kind}</Badge>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="mt-4 flex flex-wrap items-center gap-2 text-zinc-400">
+                            {selectedDetail.flowGraph.edges.map((edge) => (
+                              <div key={`${edge.source}-${edge.target}-${edge.relation}`} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs">
+                                <span>{edge.source.replace("phase:", "").replace("event:", "")}</span>
+                                <ArrowRight className="h-3 w-3" />
+                                <span>{edge.target.replace("phase:", "").replace("event:", "")}</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                        <div className="flex items-start gap-3">
-                          <Link2 className="mt-0.5 h-4 w-4 text-cyan-300" />
-                          <div>
-                            <div className="font-medium text-white">Commit SHA</div>
-                            <div className="text-slate-400">{selectedDetail?.commit?.commitHash || "Aguardando execução"}</div>
-                          </div>
-                        </div>
-                        {selectedDetail?.commit?.repository && selectedDetail?.commit?.commitHash ? (
-                          <a
-                            href={`https://github.com/${selectedDetail.commit.repository}/commit/${selectedDetail.commit.commitHash}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 text-sm text-cyan-200 underline-offset-4 hover:underline"
-                          >
-                            Abrir commit no GitHub <ArrowUpRight className="h-4 w-4" />
-                          </a>
-                        ) : null}
+                        <Card className="border-white/10 bg-white/5">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Inspeção do nó</CardTitle>
+                            <CardDescription>{selectedGraphNode ? selectedGraphNode.label : "Selecione um nó do fluxo para ver seus metadados."}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {selectedGraphNode ? (
+                              <pre className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/80 p-4 text-xs text-zinc-300">{JSON.stringify(selectedGraphNode.metadata ?? {}, null, 2)}</pre>
+                            ) : (
+                              <p className="text-sm text-zinc-400">Nenhum nó selecionado.</p>
+                            )}
+                          </CardContent>
+                        </Card>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
+                    </TabsContent>
+
+                    <TabsContent value="events" className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-[1fr,220px]">
+                        <Input value={eventSearch} onChange={(event) => setEventSearch(event.target.value)} placeholder="Filtrar por API, fase, arquivo ou texto" />
+                        <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-300">{filteredEvents.length} evento(s) exibido(s)</div>
+                      </div>
+                      <div className="overflow-hidden rounded-2xl border border-white/10">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fase</TableHead>
+                              <TableHead>Evento</TableHead>
+                              <TableHead>Arquivo</TableHead>
+                              <TableHead>APIs</TableHead>
+                              <TableHead>Detalhe</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredEvents.map((event, index) => {
+                              const payload = asRecord(event.payloadJson);
+                              const apis = Array.isArray(payload.suspiciousApis) ? payload.suspiciousApis as string[] : [];
+                              return (
+                                <TableRow key={`${event.eventType}-${index}-${String(event.createdAt)}`}>
+                                  <TableCell>{event.stage ?? "—"}</TableCell>
+                                  <TableCell>{event.eventType}</TableCell>
+                                  <TableCell>{typeof payload.fileName === "string" ? payload.fileName : "—"}</TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-2">
+                                      {apis.length ? apis.map((api) => (
+                                        <Badge key={api} className="border-amber-400/25 bg-amber-500/10 text-amber-300">{api}</Badge>
+                                      )) : <span className="text-zinc-500">—</span>}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="max-w-md text-zinc-300">{event.message ?? "—"}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="report" className="space-y-4">
+                      <div className="grid gap-4 lg:grid-cols-[1fr,300px]">
+                        <Card className="border-white/10 bg-white/5">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Relatório exportável</CardTitle>
+                            <CardDescription>Baixe os artefatos gerados ou utilize o markdown abaixo como base do parecer técnico.</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-headings:text-white">
+                              <Streamdown>{selectedDetail.insight?.summaryMarkdown ?? "Relatório ainda não gerado."}</Streamdown>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-white/10 bg-white/5">
+                          <CardHeader>
+                            <CardTitle className="text-lg">Artefatos disponíveis</CardTitle>
+                            <CardDescription>Logs brutos, logs reduzidos, grafo consolidado e relatório final.</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {selectedDetail.artifacts.map((artifact) => (
+                              <a key={`${artifact.artifactType}-${artifact.relativePath}`} href={artifact.storageUrl ?? "#"} target="_blank" rel="noreferrer" className={`flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 p-4 transition ${artifact.storageUrl ? "hover:border-cyan-400/30 hover:bg-cyan-500/10" : "pointer-events-none opacity-60"}`}>
+                                <div>
+                                  <p className="text-sm font-medium text-white">{artifact.label}</p>
+                                  <p className="text-xs text-zinc-400">{artifact.artifactType} · {formatBytes(artifact.sizeBytes ?? undefined)}</p>
+                                </div>
+                                <FileDown className="h-4 w-4 text-zinc-300" />
+                              </a>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </DashboardLayout>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, helper }: { icon: typeof Activity; label: string; value: string; helper: string }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-zinc-400">{label}</p>
+        <Icon className="h-4 w-4 text-cyan-300" />
+      </div>
+      <p className="mt-4 text-3xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-2 text-sm text-zinc-400">{helper}</p>
+    </div>
+  );
+}
+
+function MiniInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3">
+      <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+    </div>
   );
 }

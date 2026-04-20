@@ -5,11 +5,13 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { Toaster } from "./components/ui/sonner";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import ReduceLogs from "./pages/ReduceLogs";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/reduce-logs" component={ReduceLogs} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

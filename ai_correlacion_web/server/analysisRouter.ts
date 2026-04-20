@@ -1,13 +1,15 @@
 import { z } from "zod";
 
-import { protectedProcedure, router } from "./_core/trpc";
+import { uploadedLogSchema } from "../shared/analysis";
 import {
   getAnalysisJobDetail,
+  getReductionBaselineMetrics,
   startAnalysisJob,
   syncActiveAnalysisJobs,
   syncAnalysisJob,
 } from "./analysisService";
 import { listAnalysisJobs } from "./db";
+import { protectedProcedure, router } from "./_core/trpc";
 
 const listJobsInputSchema = z.object({
   sampleName: z.string().trim().optional(),
@@ -20,9 +22,8 @@ const listJobsInputSchema = z.object({
 }).optional();
 
 const submitJobInputSchema = z.object({
-  archiveName: z.string().min(1),
-  archiveBase64: z.string().min(1),
-  focusFunction: z.string().min(1),
+  analysisName: z.string().min(1),
+  logFiles: z.array(uploadedLogSchema).min(1).max(20),
   focusTerms: z.array(z.string().min(1)).default([]),
   focusRegexes: z.array(z.string().min(1)).default([]),
   origin: z.string().url().optional(),
@@ -48,11 +49,14 @@ export const analysisRouter = router({
     return getAnalysisJobDetail(input.jobId);
   }),
 
+  reductionBaseline: protectedProcedure.query(async () => {
+    return getReductionBaselineMetrics();
+  }),
+
   submit: protectedProcedure.input(submitJobInputSchema).mutation(async ({ ctx, input }) => {
     return startAnalysisJob({
-      archiveName: input.archiveName,
-      archiveBase64: input.archiveBase64,
-      focusFunction: input.focusFunction,
+      analysisName: input.analysisName,
+      logFiles: input.logFiles,
       focusTerms: input.focusTerms,
       focusRegexes: input.focusRegexes,
       origin: input.origin,

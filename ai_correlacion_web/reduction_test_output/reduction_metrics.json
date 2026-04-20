@@ -1,0 +1,26 @@
+{
+  "trigger_address": "0x10A0",
+  "files": [
+    {
+      "file": "TraceInstructions_sample.csv",
+      "original_lines": 9,
+      "reduced_lines": 6,
+      "original_bytes": 696,
+      "reduced_bytes": 405
+    },
+    {
+      "file": "TraceMemory_sample.csv",
+      "original_lines": 3,
+      "reduced_lines": 2,
+      "original_bytes": 260,
+      "reduced_bytes": 136
+    }
+  ],
+  "combined": {
+    "original_lines": 12,
+    "reduced_lines": 8,
+    "original_bytes": 956,
+    "reduced_bytes": 541,
+    "reduction_percent": 43.41
+  }
+}

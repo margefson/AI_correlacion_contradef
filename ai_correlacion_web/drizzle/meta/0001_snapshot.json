@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "80130819-7ae1-4b5d-b58e-f9341fdaeffe",
-  "prevId": "d615a7d9-fb65-4abd-8299-e689a6e23e4d",
+  "id": "0f2640a0-c117-4631-8369-6b6418515677",
+  "prevId": "277881d6-b2c5-4ed0-8db8-580ba1d1c87b",
   "tables": {
     "analysisArtifacts": {
       "name": "analysisArtifacts",
@@ -455,6 +455,20 @@
         },
         "message": {
           "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stdoutTail": {
+          "name": "stdoutTail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stderrTail": {
+          "name": "stderrTail",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

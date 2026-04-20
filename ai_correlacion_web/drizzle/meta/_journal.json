@@ -5,22 +5,15 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1776207285369,
-      "tag": "0000_cynical_reptil",
+      "when": 1776635272341,
+      "tag": "0000_curious_magik",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "5",
-      "when": 1776207510854,
-      "tag": "0001_magenta_smasher",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1776208163703,
-      "tag": "0002_yielding_norrin_radd",
+      "when": 1776636779241,
+      "tag": "0001_lean_the_executioner",
       "breakpoints": true
     }
   ]

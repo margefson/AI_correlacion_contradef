@@ -1,16 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { describe, beforeEach, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
 const {
   mockStartAnalysisJob,
   mockGetAnalysisJobDetail,
+  mockGetReductionBaselineMetrics,
   mockSyncAnalysisJob,
   mockSyncActiveAnalysisJobs,
   mockListAnalysisJobs,
 } = vi.hoisted(() => ({
   mockStartAnalysisJob: vi.fn(),
   mockGetAnalysisJobDetail: vi.fn(),
+  mockGetReductionBaselineMetrics: vi.fn(),
   mockSyncAnalysisJob: vi.fn(),
   mockSyncActiveAnalysisJobs: vi.fn(),
   mockListAnalysisJobs: vi.fn(),
@@ -19,6 +20,7 @@ const {
 vi.mock("./analysisService", () => ({
   startAnalysisJob: mockStartAnalysisJob,
   getAnalysisJobDetail: mockGetAnalysisJobDetail,
+  getReductionBaselineMetrics: mockGetReductionBaselineMetrics,
   syncAnalysisJob: mockSyncAnalysisJob,
   syncActiveAnalysisJobs: mockSyncActiveAnalysisJobs,
 }));
@@ -65,31 +67,51 @@ describe("analysis router", () => {
     vi.clearAllMocks();
   });
 
-  it("encaminha a submissão do job com o usuário autenticado", async () => {
+  it("encaminha a submissão da análise com múltiplos logs e o usuário autenticado", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    mockStartAnalysisJob.mockResolvedValue({ jobId: "job-123", status: "queued" });
+    mockStartAnalysisJob.mockResolvedValue({ job: { jobId: "job-123", status: "queued" } });
 
     const result = await caller.analysis.submit({
-      archiveName: "sample.7z",
-      archiveBase64: Buffer.from("demo").toString("base64"),
-      focusFunction: "IsDebuggerPresent",
+      analysisName: "Sample Contradef",
+      logFiles: [
+        {
+          fileName: "FunctionInterceptor.log",
+          base64: Buffer.from("demo").toString("base64"),
+          logType: "FunctionInterceptor",
+        },
+        {
+          fileName: "TraceMemory.log",
+          base64: Buffer.from("demo-2").toString("base64"),
+          logType: "TraceMemory",
+        },
+      ],
       focusTerms: ["IsDebuggerPresent", "VirtualProtect"],
-      focusRegexes: ["Zw.*InformationProcess"],
+      focusRegexes: ["VirtualProtect.*RW.*RX"],
       origin: "https://example.com",
     });
 
     expect(mockStartAnalysisJob).toHaveBeenCalledWith({
-      archiveName: "sample.7z",
-      archiveBase64: Buffer.from("demo").toString("base64"),
-      focusFunction: "IsDebuggerPresent",
+      analysisName: "Sample Contradef",
+      logFiles: [
+        {
+          fileName: "FunctionInterceptor.log",
+          base64: Buffer.from("demo").toString("base64"),
+          logType: "FunctionInterceptor",
+        },
+        {
+          fileName: "TraceMemory.log",
+          base64: Buffer.from("demo-2").toString("base64"),
+          logType: "TraceMemory",
+        },
+      ],
       focusTerms: ["IsDebuggerPresent", "VirtualProtect"],
-      focusRegexes: ["Zw.*InformationProcess"],
+      focusRegexes: ["VirtualProtect.*RW.*RX"],
       origin: "https://example.com",
       createdByUserId: 7,
     });
-    expect(result).toEqual({ jobId: "job-123", status: "queued" });
+    expect(result).toEqual({ job: { jobId: "job-123", status: "queued" } });
   });
 
   it("lista jobs com os filtros informados", async () => {
@@ -102,7 +124,7 @@ describe("analysis router", () => {
 
     const result = await caller.analysis.list({
       sampleName: "Full-Execution-Sample-1",
-      focusFunction: "IsDebuggerPresent",
+      focusFunction: "Contradef",
       createdFrom,
       createdTo,
       status: ["completed"],
@@ -111,7 +133,7 @@ describe("analysis router", () => {
 
     expect(mockListAnalysisJobs).toHaveBeenCalledWith({
       sampleName: "Full-Execution-Sample-1",
-      focusFunction: "IsDebuggerPresent",
+      focusFunction: "Contradef",
       createdFrom,
       createdTo,
       status: ["completed"],
@@ -128,8 +150,35 @@ describe("analysis router", () => {
       events: [],
       artifacts: [],
       insight: { title: "Resumo" },
-      commit: { status: "completed" },
-      graph: { nodes: [], edges: [] },
+      flowGraph: { nodes: [], edges: [] },
+      metrics: {
+        originalLineCount: 10,
+        reducedLineCount: 4,
+        originalBytes: 100,
+        reducedBytes: 40,
+        reductionPercent: 60,
+        suspiciousEventCount: 2,
+        triggerCount: 1,
+        uploadedFileCount: 2,
+      },
+      fileMetrics: [
+        {
+          fileName: "TraceInstructions.log",
+          logType: "TraceInstructions",
+          originalLineCount: 8,
+          reducedLineCount: 3,
+          originalBytes: 80,
+          reducedBytes: 30,
+          suspiciousEventCount: 2,
+          triggerCount: 1,
+        },
+      ],
+      suspiciousApis: ["VirtualProtect"],
+      techniques: ["Anti-debug"],
+      recommendations: ["Revisar o ponto de desempacotamento."],
+      classification: "Trojan",
+      riskLevel: "high",
+      currentPhase: "Desempacotamento",
     };
 
     mockGetAnalysisJobDetail.mockResolvedValue(detail);
@@ -140,12 +189,92 @@ describe("analysis router", () => {
     expect(result).toEqual(detail);
   });
 
+  it("retorna as métricas validadas do teste de redução em C++", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const reductionMetrics = {
+      available: true,
+      errorMessage: null,
+      trigger_address: "0x10A0",
+      files: [
+        {
+          file: "TraceInstructions_sample.csv",
+          original_lines: 9,
+          reduced_lines: 6,
+          original_bytes: 696,
+          reduced_bytes: 405,
+        },
+      ],
+      combined: {
+        original_lines: 9,
+        reduced_lines: 6,
+        original_bytes: 696,
+        reduced_bytes: 405,
+        reduction_percent: 41.81,
+      },
+      sampleSelectiveTest: {
+        available: true,
+        errorMessage: null,
+        trigger_address: "0x10A0",
+        files: [
+          {
+            file: "TraceInstructions_sample.csv",
+            original_lines: 9,
+            reduced_lines: 6,
+            original_bytes: 696,
+            reduced_bytes: 405,
+          },
+        ],
+        combined: {
+          original_lines: 9,
+          reduced_lines: 6,
+          original_bytes: 696,
+          reduced_bytes: 405,
+          reduction_percent: 41.81,
+        },
+      },
+      realDatasetCompression: {
+        available: true,
+        errorMessage: null,
+        dataset_directory: "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1",
+        file_count: 6,
+        total_original_size: 5096911203,
+        total_compressed_size: 197261750,
+        reduction_percent: 96.13,
+        source_files_materialized: false,
+        compressed_files_materialized: false,
+        artifacts: [
+          {
+            file: "contradef.2956.TraceInstructions.cdf",
+            original_size: 4214246529,
+            compressed_size: 175592788,
+            reduction_percent: 95.83,
+            compression_level: 3,
+            source_path: "/home/ubuntu/work_real_cdfs/extracted/Full-Execution-Sample-1/contradef.2956.TraceInstructions.cdf",
+            compressed_path: "/home/ubuntu/work_real_cdfs/compressed_real_cdfs/contradef.2956.TraceInstructions.cdf.gz",
+            source_available_in_workspace: false,
+            compressed_available_in_workspace: false,
+            source_sha256: "499136c7c1c747c54cef69bfc874f279db8d6ea703d8f3247fb58422c0263924",
+            compressed_sha256: "062f336c0f357caed2e323091923b4b7ac8892d3d3fe71349bbb0ccb4fc435db",
+          },
+        ],
+      },
+    };
+
+    mockGetReductionBaselineMetrics.mockResolvedValue(reductionMetrics);
+
+    const result = await caller.analysis.reductionBaseline();
+
+    expect(mockGetReductionBaselineMetrics).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(reductionMetrics);
+  });
+
   it("sincroniza um job específico e retoma a sincronização dos jobs ativos", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
     mockSyncAnalysisJob.mockResolvedValue({ job: { jobId: "job-123", status: "running" } });
-    mockSyncActiveAnalysisJobs.mockResolvedValue(3);
+    mockSyncActiveAnalysisJobs.mockResolvedValue(["job-1", "job-2"]);
 
     const syncResult = await caller.analysis.sync({ jobId: "job-123" });
     const resumeResult = await caller.analysis.resumeActiveSync();
@@ -153,6 +282,6 @@ describe("analysis router", () => {
     expect(mockSyncAnalysisJob).toHaveBeenCalledWith("job-123");
     expect(syncResult).toEqual({ job: { jobId: "job-123", status: "running" } });
     expect(mockSyncActiveAnalysisJobs).toHaveBeenCalledTimes(1);
-    expect(resumeResult).toEqual({ resumedJobs: 3 });
+    expect(resumeResult).toEqual({ resumedJobs: ["job-1", "job-2"] });
   });
 });

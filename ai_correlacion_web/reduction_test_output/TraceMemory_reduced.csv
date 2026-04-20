@@ -1,0 +1,2 @@
+2,0x1090,HeapBuffer,write,allocated,buffer preparado por LocalAlloc
+3,0x10A0,UnpackedPage,protect,RW->RX,pagina marcada como executavel

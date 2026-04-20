@@ -1,12 +1,15 @@
-import { execFile } from "node:child_process";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { promisify } from "node:util";
+import { Buffer } from "node:buffer";
+import { createReadStream } from "node:fs";
+import { access, readFile, unlink } from "node:fs/promises";
+import { basename, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { StringDecoder } from "node:string_decoder";
+
+import { nanoid } from "nanoid";
 
 import {
   addAnalysisEvent,
   createAnalysisJob,
-  getAnalysisCommit,
   getAnalysisInsight,
   getAnalysisJobByJobId,
   listAnalysisArtifacts,
@@ -14,723 +17,1593 @@ import {
   listAnalysisJobs,
   replaceAnalysisArtifacts,
   updateAnalysisJob,
-  upsertAnalysisCommit,
   upsertAnalysisInsight,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
-import { notifyOwner } from "./_core/notification";
-import { storagePut } from "./storage";
-import type { AnalysisArtifactDto, CorrelationGraph } from "../shared/analysis";
+import { storageGetBuffer, storagePut } from "./storage";
+import type {
+  AnalysisArtifactDto,
+  AnalysisInsightDto,
+  AnalysisJobDetail,
+  FlowEdge,
+  FlowGraph,
+  FlowNode,
+  MalwareCategory,
+  ReductionFileMetric,
+  ReductionMetrics,
+  RiskLevel,
+  SupportedLogType,
+} from "../shared/analysis";
 
-const execFileAsync = promisify(execFile);
+const MAX_FILE_BYTES = 32 * 1024 * 1024;
+const MAX_SOURCE_ARTIFACT_UPLOAD_BYTES = 24 * 1024 * 1024;
+const MAX_FILES = 20;
+const MAX_EVENTS = 320;
+const DEFAULT_FOCUS = "Contradef log intelligence";
 
-const DEFAULT_PIPELINE_BASE_URL = process.env.CDF_PIPELINE_API_URL || "http://127.0.0.1:8765";
-const DEFAULT_PIPELINE_REPOSITORY = process.env.CDF_PIPELINE_REPO_PATH || "/home/ubuntu/repos/AI_correlacion_contradef";
-const DEFAULT_PIPELINE_BRANCH = process.env.CDF_PIPELINE_BRANCH || "main";
-const DEFAULT_GITHUB_REPOSITORY = process.env.CDF_PIPELINE_GITHUB_REPOSITORY || "margefson/AI_correlacion_contradef";
-const JOB_SYNC_INTERVAL_MS = 4000;
-const MAX_SUMMARY_CONTEXT_LENGTH = 18000;
-const MAX_ARCHIVE_BYTES = 40 * 1024 * 1024;
-const MAX_LOG_TAIL_LENGTH = 12000;
-const runningSyncs = new Map<string, Promise<unknown>>();
-const pollingTimers = new Map<string, NodeJS.Timeout>();
+const suspiciousApis = [
+  "IsDebuggerPresent",
+  "CheckRemoteDebuggerPresent",
+  "NtQueryInformationProcess",
+  "VirtualProtect",
+  "VirtualAlloc",
+  "WriteProcessMemory",
+  "CreateRemoteThread",
+  "Sleep",
+  "EnumSystemFirmwareTables",
+  "GetTickCount",
+  "RtlQueryPerformanceCounter",
+  "NtDelayExecution",
+  "GetProcAddress",
+  "WriteFile",
+  "URLDownloadToFile",
+  "WinHttpSendRequest",
+  "InternetOpenUrl",
+  "RegSetValue",
+  "CreateFile",
+  "DeleteFile",
+];
 
-export type StartAnalysisJobInput = {
-  archiveName: string;
-  archiveBase64: string;
-  focusFunction: string;
+const stageOrder = [
+  "Inicialização",
+  "Evasão",
+  "Desempacotamento",
+  "Execução maliciosa",
+  "Persistência",
+  "Exfiltração",
+];
+
+type StartAnalysisLogInput = {
+  fileName: string;
+  logType?: SupportedLogType;
+  base64?: string;
+  tempFilePath?: string;
+  sizeBytes?: number;
+  uploadSessionId?: string;
+  uploadFileId?: string;
+  uploadChunkCount?: number;
+  uploadedByUserId?: number;
+  uploadDurationMs?: number;
+  uploadReused?: boolean;
+};
+
+type StartAnalysisJobInput = {
+  analysisName: string;
   focusTerms?: string[];
   focusRegexes?: string[];
+  logFiles: StartAnalysisLogInput[];
   createdByUserId?: number;
   origin?: string;
 };
 
-type LegacyStatusPayload = {
-  state?: string;
-  progress?: number;
-  stage?: string;
-  message?: string;
-  archive?: string;
-  focus_terms?: string[];
-  focus_regexes?: string[];
-  updated_at?: string;
+type NormalizedEvent = {
+  eventType: string;
+  stage: string;
+  message: string;
+  logType: SupportedLogType;
+  fileName: string;
+  lineNumber: number;
+  suspiciousApis: string[];
+  suspicious: boolean;
+  trigger: boolean;
+  addresses: string[];
+  techniqueTags: string[];
 };
 
-type LegacyEventPayload = {
-  timestamp?: string;
-  type?: string;
-  event_type?: string;
-  level?: string;
-  stage?: string;
-  message?: string;
-  progress?: number;
-  [key: string]: unknown;
+type AnalysisComputationResult = {
+  events: NormalizedEvent[];
+  artifacts: AnalysisArtifactDto[];
+  insight: AnalysisInsightDto;
+  summaryJson: Record<string, unknown>;
+  metrics: ReductionMetrics;
+  fileMetrics: ReductionFileMetric[];
+  flowGraph: FlowGraph;
+  classification: MalwareCategory;
+  riskLevel: RiskLevel;
+  currentPhase: string;
+  suspiciousApis: string[];
+  techniques: string[];
+  recommendations: string[];
 };
 
-type LegacyArtifactPayload = {
-  path: string;
-  relative_path: string;
-  size_bytes?: number;
+type ProcessedLogLine = {
+  rawLine: string;
+  normalizedLine: string;
+  lineNumber: number;
+  logType: SupportedLogType;
+  fileName: string;
+  apis: string[];
+  addresses: string[];
+  stage: string;
+  techniqueTags: string[];
+  suspicious: boolean;
+  trigger: boolean;
 };
 
-function decodeBase64(input: string): Buffer {
+type ParsedLogResult = {
+  logType: SupportedLogType;
+  keptLines: Array<{ lineNumber: number; text: string }>;
+  events: NormalizedEvent[];
+  suspiciousApis: string[];
+  techniqueTags: string[];
+  originalLineCount: number;
+  reducedLineCount: number;
+  originalBytes: number;
+  reducedBytes: number;
+  suspiciousEventCount: number;
+  triggerCount: number;
+};
+
+function decodeBase64(input: string) {
   const normalized = input.includes(",") ? input.split(",").pop() ?? input : input;
   const trimmed = normalized.trim();
-  if (!trimmed || trimmed.length % 4 === 1 || /[^A-Za-z0-9+/=]/.test(trimmed)) {
-    throw new Error("O conteúdo enviado não está em base64 válido.");
+  if (!trimmed) {
+    throw new Error("Um dos arquivos enviados está vazio ou em formato base64 inválido.");
   }
   return Buffer.from(trimmed, "base64");
 }
 
-function validateArchiveInput(params: { archiveName: string; archiveBuffer: Buffer }) {
-  if (!params.archiveName.toLowerCase().endsWith(".7z")) {
-    throw new Error("Envie um arquivo .7z válido para iniciar a análise.");
+function inferLogType(fileName: string, provided?: SupportedLogType): SupportedLogType {
+  if (provided && provided !== "Unknown") return provided;
+  const lowered = fileName.toLowerCase();
+  if (lowered.includes("functioninterceptor") || lowered.includes("function_interceptor")) return "FunctionInterceptor";
+  if (lowered.includes("tracefcncall") || lowered.includes("trace_fcn_call")) return "TraceFcnCall";
+  if (lowered.includes("tracememory") || lowered.includes("trace_memory")) return "TraceMemory";
+  if (lowered.includes("traceinstructions") || lowered.includes("trace_instructions")) return "TraceInstructions";
+  if (lowered.includes("tracedisassembly") || lowered.includes("trace_disassembly")) return "TraceDisassembly";
+  return "Unknown";
+}
+
+function buildUploadedChunkStorageKey(userId: number, sessionId: string, fileId: string, chunkIndex: number) {
+  return `reduce-logs-chunks/${userId}/${sessionId}/${fileId}/chunk-${String(chunkIndex).padStart(6, "0")}.part`;
+}
+
+function hasChunkUploadReference(logFile: StartAnalysisLogInput) {
+  return Boolean(
+    logFile.uploadSessionId
+      && logFile.uploadFileId
+      && Number.isInteger(logFile.uploadChunkCount)
+      && (logFile.uploadChunkCount ?? 0) > 0
+      && typeof logFile.uploadedByUserId === "number"
+      && Number.isFinite(logFile.uploadedByUserId)
+  );
+}
+
+function detectApis(line: string) {
+  return suspiciousApis.filter((api) => line.includes(api));
+}
+
+function extractAddresses(line: string) {
+  return Array.from(new Set(line.match(/0x[0-9a-fA-F]+/g) ?? []));
+}
+
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function determineStage(line: string, apis: string[]): string {
+  const lowered = line.toLowerCase();
+  if (apis.some((api) => ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "Sleep", "EnumSystemFirmwareTables", "GetTickCount", "RtlQueryPerformanceCounter"].includes(api)) || lowered.includes("sandbox") || lowered.includes("debug")) {
+    return "Evasão";
   }
-  if (!params.archiveBuffer.length) {
-    throw new Error("O arquivo enviado está vazio.");
+  if (apis.some((api) => ["VirtualProtect", "VirtualAlloc", "WriteProcessMemory", "CreateRemoteThread"].includes(api)) || lowered.includes("rw") && lowered.includes("rx") || lowered.includes("execute_read")) {
+    return "Desempacotamento";
   }
-  if (params.archiveBuffer.length > MAX_ARCHIVE_BYTES) {
-    throw new Error(`O arquivo excede o limite suportado de ${Math.round(MAX_ARCHIVE_BYTES / (1024 * 1024))} MB.`);
+  if (lowered.includes("regsetvalue") || lowered.includes("autorun") || lowered.includes("runonce") || lowered.includes("schtasks")) {
+    return "Persistência";
   }
-}
-
-function normalizeCsvValues(values: string[] | undefined, fallbackValue: string): string[] {
-  const normalized = (values ?? []).map((item) => item.trim()).filter(Boolean);
-  if (normalized.length > 0) return normalized;
-  return [fallbackValue.trim()].filter(Boolean);
-}
-
-function resolvePipelineUrl(endpoint: string): string {
-  return `${DEFAULT_PIPELINE_BASE_URL.replace(/\/$/, "")}${endpoint}`;
-}
-
-function buildResultPath(jobId: string, origin?: string): string {
-  const relative = `/jobs/${jobId}`;
-  if (!origin) return relative;
-  return `${origin.replace(/\/$/, "")}${relative}`;
-}
-
-function mapJobStatus(state?: string): "queued" | "running" | "completed" | "failed" | "cancelled" {
-  switch ((state || "").toLowerCase()) {
-    case "queued":
-    case "pending":
-      return "queued";
-    case "completed":
-    case "success":
-    case "done":
-      return "completed";
-    case "failed":
-    case "error":
-      return "failed";
-    case "cancelled":
-    case "canceled":
-      return "cancelled";
-    default:
-      return "running";
+  if (lowered.includes("winhttp") || lowered.includes("internetopen") || lowered.includes("sendrequest") || lowered.includes("socket") || lowered.includes("c2") || lowered.includes("exfil")) {
+    return "Exfiltração";
   }
-}
-
-function detectArtifactType(relativePath: string): string {
-  const ext = path.extname(relativePath).toLowerCase();
-  if (ext === ".json") return "json";
-  if (ext === ".md") return "markdown";
-  if (ext === ".docx") return "docx";
-  if (ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".svg") return "image";
-  if (ext === ".log") return "log";
-  return "file";
-}
-
-function detectMimeType(relativePath: string): string {
-  const ext = path.extname(relativePath).toLowerCase();
-  if (ext === ".json") return "application/json";
-  if (ext === ".md") return "text/markdown";
-  if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (ext === ".png") return "image/png";
-  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
-  if (ext === ".svg") return "image/svg+xml";
-  if (ext === ".log" || ext === ".txt") return "text/plain";
-  return "application/octet-stream";
-}
-
-function buildArtifactLabel(relativePath: string): string {
-  const filename = path.basename(relativePath);
-  return filename.replace(/[_-]+/g, " ").replace(/\.[^.]+$/, "").trim() || filename;
-}
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) {
-    const detail = await response.text().catch(() => response.statusText);
-    throw new Error(`Falha ao chamar pipeline (${response.status} ${response.statusText}): ${detail}`);
+  if (apis.length > 0 || lowered.includes("writefile") || lowered.includes("createfile") || lowered.includes("dropper") || lowered.includes("payload")) {
+    return "Execução maliciosa";
   }
-  return (await response.json()) as T;
+  return "Inicialização";
 }
 
-async function readArtifactText(filePath: string, limit = MAX_SUMMARY_CONTEXT_LENGTH): Promise<string> {
-  const content = await fs.readFile(filePath, "utf-8");
-  return content.length > limit ? `${content.slice(-limit)}\n\n[conteúdo truncado]` : content;
-}
+function detectTechniqueTags(line: string, apis: string[]) {
+  const lowered = line.toLowerCase();
+  const tags = new Set<string>();
 
-async function maybeMirrorArtifact(jobId: string, artifact: LegacyArtifactPayload, shouldMirror: boolean) {
-  if (!shouldMirror) {
-    return {
-      artifactType: detectArtifactType(artifact.relative_path),
-      label: buildArtifactLabel(artifact.relative_path),
-      relativePath: artifact.relative_path,
-      sourcePath: artifact.path,
-      storageUrl: null,
-      storageKey: null,
-      mimeType: detectMimeType(artifact.relative_path),
-      sizeBytes: artifact.size_bytes ?? null,
-    } satisfies AnalysisArtifactDto;
+  if (apis.some((api) => ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"].includes(api)) || lowered.includes("debugger")) {
+    tags.add("Anti-debug");
+  }
+  if (apis.includes("EnumSystemFirmwareTables") || lowered.includes("waet") || lowered.includes("hpet") || lowered.includes("virtualbox") || lowered.includes("vmware") || lowered.includes("hypervisor")) {
+    tags.add("Detecção de VM");
+  }
+  if (apis.includes("Sleep") || lowered.includes("delay") || /sleep\s*[:=]?\s*\d{4,}/i.test(line)) {
+    tags.add("Atraso deliberado");
+  }
+  if (apis.includes("VirtualProtect") || apis.includes("VirtualAlloc") || lowered.includes("rw") && lowered.includes("rx") || lowered.includes("page_execute")) {
+    tags.add("Transição RW→RX");
+  }
+  if (apis.includes("WriteProcessMemory") || apis.includes("CreateRemoteThread")) {
+    tags.add("Injeção de código");
+  }
+  if (apis.includes("GetTickCount") || apis.includes("RtlQueryPerformanceCounter") || lowered.includes("rdpmc") || lowered.includes("performance counter")) {
+    tags.add("Verificação de overhead");
+  }
+  if (lowered.includes("writefile") || lowered.includes("deletefile") || lowered.includes("encrypt") || lowered.includes("ransom")) {
+    tags.add("Manipulação de arquivos");
+  }
+  if (lowered.includes("winhttp") || lowered.includes("internetopen") || lowered.includes("socket") || lowered.includes("http") || lowered.includes("dns")) {
+    tags.add("Comunicação de rede");
+  }
+  if (lowered.includes("regsetvalue") || lowered.includes("runonce") || lowered.includes("autorun") || lowered.includes("persistence")) {
+    tags.add("Persistência");
   }
 
-  try {
-    const fileBuffer = await fs.readFile(artifact.path);
-    const uploaded = await storagePut(
-      `analysis-results/${jobId}/${path.basename(artifact.relative_path)}`,
-      fileBuffer,
-      detectMimeType(artifact.relative_path)
-    );
-
-    return {
-      artifactType: detectArtifactType(artifact.relative_path),
-      label: buildArtifactLabel(artifact.relative_path),
-      relativePath: artifact.relative_path,
-      sourcePath: artifact.path,
-      storageUrl: uploaded.url,
-      storageKey: uploaded.key,
-      mimeType: detectMimeType(artifact.relative_path),
-      sizeBytes: artifact.size_bytes ?? null,
-    } satisfies AnalysisArtifactDto;
-  } catch (error) {
-    console.warn("[Analysis] Não foi possível espelhar artefato para storage:", artifact.path, error);
-    return {
-      artifactType: detectArtifactType(artifact.relative_path),
-      label: buildArtifactLabel(artifact.relative_path),
-      relativePath: artifact.relative_path,
-      sourcePath: artifact.path,
-      storageUrl: null,
-      storageKey: null,
-      mimeType: detectMimeType(artifact.relative_path),
-      sizeBytes: artifact.size_bytes ?? null,
-    } satisfies AnalysisArtifactDto;
-  }
+  return Array.from(tags);
 }
 
-async function submitArchiveToPipeline(params: {
-  archiveName: string;
-  archiveBuffer: Buffer;
-  focusTerms: string[];
-  focusRegexes: string[];
-}) {
-  const form = new FormData();
-  const archiveBytes = new Uint8Array(params.archiveBuffer);
-  form.append("archive", new Blob([archiveBytes], { type: "application/x-7z-compressed" }), params.archiveName);
-  form.append("focus_terms", params.focusTerms.join(", "));
-  form.append("focus_regexes", params.focusRegexes.join(", "));
+function isTriggerLine(line: string, apis: string[]) {
+  const lowered = line.toLowerCase();
+  if (apis.includes("VirtualProtect") && ((lowered.includes("rw") && lowered.includes("rx")) || lowered.includes("execute_read"))) {
+    return true;
+  }
+  if (apis.includes("VirtualAlloc") && lowered.includes("execute")) {
+    return true;
+  }
+  if (apis.includes("WriteProcessMemory") || apis.includes("CreateRemoteThread")) {
+    return true;
+  }
+  return false;
+}
 
-  return fetchJson<{
-    job_id: string;
-    status_url: string;
-    events_url: string;
-    artifacts_url: string;
-  }>(resolvePipelineUrl("/jobs/upload"), {
-    method: "POST",
-    body: form,
+function classifyMalware(techniques: Set<string>, events: NormalizedEvent[]): MalwareCategory {
+  const scores: Record<MalwareCategory, number> = {
+    Trojan: 1,
+    Spyware: 0,
+    Ransomware: 0,
+    Backdoor: 0,
+    Unknown: 0,
+  };
+
+  Array.from(techniques).forEach((technique) => {
+    if (["Anti-debug", "Detecção de VM", "Atraso deliberado", "Transição RW→RX"].includes(technique)) {
+      scores.Trojan += 2;
+    }
+    if (["Comunicação de rede", "Injeção de código"].includes(technique)) {
+      scores.Backdoor += 2;
+    }
+    if (["Persistência", "Manipulação de arquivos"].includes(technique)) {
+      scores.Backdoor += 1;
+      scores.Ransomware += 1;
+    }
   });
+
+  const content = events.map((event) => event.message.toLowerCase()).join(" \n ");
+  if (/(encrypt|ransom|shadow copy|deletefile|rename)/i.test(content)) scores.Ransomware += 4;
+  if (/(credential|keylog|screenshot|browser|clipboard|spy)/i.test(content)) scores.Spyware += 4;
+  if (/(socket|c2|http|https|winhttp|internetopen|remote|connectback)/i.test(content)) scores.Backdoor += 3;
+  if (/(packed|vmprotect|stub|dropper|payload)/i.test(content)) scores.Trojan += 2;
+
+  const winner = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[0] as MalwareCategory | undefined;
+  return winner ?? "Unknown";
 }
 
-async function generateInsight(jobId: string) {
-  const job = await getAnalysisJobByJobId(jobId);
-  if (!job) return null;
+function deriveRiskLevel(techniques: Set<string>, triggerCount: number, suspiciousCount: number): RiskLevel {
+  if (triggerCount >= 2 || techniques.size >= 5 || suspiciousCount >= 20) return "critical";
+  if (triggerCount >= 1 || techniques.size >= 3 || suspiciousCount >= 10) return "high";
+  if (techniques.size >= 2 || suspiciousCount >= 5) return "medium";
+  return "low";
+}
 
-  await updateAnalysisJob(jobId, { llmSummaryStatus: "running" });
+function deriveCurrentPhase(events: NormalizedEvent[]) {
+  const discovered = new Set(events.map((event) => event.stage));
+  let current = "Inicialização";
+  for (const stage of stageOrder) {
+    if (discovered.has(stage)) current = stage;
+  }
+  return current;
+}
+
+function buildFlowGraph(events: NormalizedEvent[], currentPhase: string): FlowGraph {
+  const phaseNodes: FlowNode[] = [];
+  const phaseEdges: FlowEdge[] = [];
+  const eventNodes: FlowNode[] = [];
+  const eventEdges: FlowEdge[] = [];
+
+  const orderedStages = stageOrder.filter((stage) => events.some((event) => event.stage === stage));
+  orderedStages.forEach((stage, index) => {
+    phaseNodes.push({
+      id: `phase:${stage}`,
+      label: stage,
+      kind: "phase",
+      severity: stage === currentPhase ? "high" : "medium",
+      metadata: { current: stage === currentPhase },
+    });
+    if (index > 0) {
+      phaseEdges.push({
+        source: `phase:${orderedStages[index - 1]}`,
+        target: `phase:${stage}`,
+        relation: "evolui para",
+      });
+    }
+  });
+
+  events.filter((event) => event.suspicious).slice(0, 18).forEach((event, index) => {
+    const apiLabel = event.suspiciousApis[0] ?? event.eventType;
+    const nodeId = `event:${index}:${apiLabel}`;
+    eventNodes.push({
+      id: nodeId,
+      label: apiLabel,
+      kind: "api",
+      severity: event.trigger ? "critical" : "high",
+      metadata: {
+        fileName: event.fileName,
+        logType: event.logType,
+        lineNumber: event.lineNumber,
+        message: event.message,
+      },
+    });
+    eventEdges.push({
+      source: `phase:${event.stage}`,
+      target: nodeId,
+      relation: event.trigger ? "gatilho" : "evidência",
+      evidence: event.message,
+    });
+  });
+
+  return {
+    nodes: [...phaseNodes, ...eventNodes],
+    edges: [...phaseEdges, ...eventEdges],
+    summary: {
+      phases: orderedStages,
+      totalSuspiciousEvents: events.filter((event) => event.suspicious).length,
+    },
+  };
+}
+
+function buildRecommendations(techniques: string[], classification: MalwareCategory) {
+  const recommendations = new Set<string>();
+  recommendations.add("Priorizar a revisão dos eventos marcados como gatilho para validar o instante de desempacotamento ou evasão.");
+  recommendations.add("Correlacionar os artefatos reduzidos com o log bruto para preservar evidências antes de aprofundar a engenharia reversa.");
+  if (techniques.includes("Anti-debug") || techniques.includes("Verificação de overhead")) {
+    recommendations.add("Executar a amostra em ambiente com contramedidas anti-DBI e validar discrepâncias temporais observadas nos logs.");
+  }
+  if (techniques.includes("Detecção de VM")) {
+    recommendations.add("Comparar o comportamento com uma execução em host menos instrumentado para confirmar evasão dependente de virtualização.");
+  }
+  if (classification === "Backdoor") {
+    recommendations.add("Inspecionar conexões de rede, DNS e possíveis domínios de C2 extraídos das evidências de execução.");
+  }
+  if (classification === "Ransomware") {
+    recommendations.add("Verificar rapidamente operações sobre arquivos, indicadores de criptografia e possíveis alvos de impacto em disco.");
+  }
+  return Array.from(recommendations);
+}
+
+function buildFallbackSummary(params: {
+  analysisName: string;
+  classification: MalwareCategory;
+  riskLevel: RiskLevel;
+  currentPhase: string;
+  techniques: string[];
+  suspiciousApis: string[];
+  metrics: ReductionMetrics;
+}) {
+  const techniqueText = params.techniques.length ? params.techniques.join(", ") : "nenhuma técnica relevante detectada";
+  const apiText = params.suspiciousApis.length ? params.suspiciousApis.join(", ") : "nenhuma API sensível identificada";
+  return `# Veredito da análise\n\nA amostra **${params.analysisName}** foi classificada preliminarmente como **${params.classification}**, com nível de risco **${params.riskLevel}** e fase atual estimada em **${params.currentPhase}**.\n\nAs principais técnicas observadas foram: **${techniqueText}**. As APIs com maior relevância analítica foram: **${apiText}**.\n\nO módulo de redução manteve **${params.metrics.reducedLineCount}** de **${params.metrics.originalLineCount}** linhas, resultando em uma redução aproximada de **${params.metrics.reductionPercent.toFixed(1)}%**. Esse recorte privilegia eventos críticos e contextos vizinhos aos gatilhos heurísticos, especialmente transições de memória e chamadas indicativas de evasão.\n\n## Recomendação inicial\n\nRevisar o fluxo reduzido em conjunto com o grafo e a linha do tempo para confirmar o ponto exato em que o malware altera seu comportamento, concentrando a investigação nas chamadas sensíveis e nos artefatos produzidos logo após os gatilhos.`;
+}
+
+async function generateInsight(params: {
+  analysisName: string;
+  classification: MalwareCategory;
+  riskLevel: RiskLevel;
+  currentPhase: string;
+  techniques: string[];
+  suspiciousApis: string[];
+  metrics: ReductionMetrics;
+  flowGraph: FlowGraph;
+  notableEvents: NormalizedEvent[];
+  recommendations: string[];
+}) {
+  const fallbackMarkdown = buildFallbackSummary(params);
+  const payload = {
+    analysisName: params.analysisName,
+    classification: params.classification,
+    riskLevel: params.riskLevel,
+    currentPhase: params.currentPhase,
+    techniques: params.techniques,
+    suspiciousApis: params.suspiciousApis,
+    metrics: params.metrics,
+    recommendations: params.recommendations,
+    notableEvents: params.notableEvents.slice(0, 20).map((event) => ({
+      stage: event.stage,
+      message: event.message,
+      fileName: event.fileName,
+      logType: event.logType,
+      suspiciousApis: event.suspiciousApis,
+    })),
+  };
 
   try {
-    const artifacts = await listAnalysisArtifacts(jobId);
-    const jsonArtifact = artifacts.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".json"));
-    const markdownArtifact = artifacts.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".md"));
-    const stdoutPath = path.join(DEFAULT_PIPELINE_REPOSITORY, "data", "jobs_api", jobId, "process.stdout.log");
-    const stderrPath = path.join(DEFAULT_PIPELINE_REPOSITORY, "data", "jobs_api", jobId, "process.stderr.log");
-
-    const jsonContent = jsonArtifact?.sourcePath ? await readArtifactText(jsonArtifact.sourcePath).catch(() => "") : "";
-    const markdownContent = markdownArtifact?.sourcePath ? await readArtifactText(markdownArtifact.sourcePath).catch(() => "") : "";
-    const stdoutContent = await readArtifactText(stdoutPath, 8000).catch(() => "");
-    const stderrContent = await readArtifactText(stderrPath, 4000).catch(() => "");
-
     const response = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: "Você é um analista sênior de malware. Produza um resumo técnico, objetivo e interpretativo em português a partir de artefatos reais de uma execução instrumentada. Não invente fatos ausentes e destaque apenas o que puder ser inferido dos artefatos fornecidos.",
+          content: "Você é um analista de malware especializado em interpretar logs da Contradef. Produza uma saída JSON objetiva e tecnicamente consistente.",
         },
         {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: [
-                `Job: ${job.jobId}`,
-                `Amostra: ${job.sampleName}`,
-                `Função de interesse: ${job.focusFunction}`,
-                `Status final: ${job.status}`,
-                `Etapa final: ${job.stage}`,
-                "Artefato JSON de correlação:",
-                jsonContent || "(não disponível)",
-                "Artefato Markdown do job:",
-                markdownContent || "(não disponível)",
-                "Trecho de stdout do processamento:",
-                stdoutContent || "(não disponível)",
-                "Trecho de stderr do processamento:",
-                stderrContent || "(não disponível)",
-              ].join("\n\n"),
-            },
-          ],
+          content: `Com base no seguinte resumo estruturado, gere um veredito técnico em português para um analista de segurança: ${JSON.stringify(payload)}`,
         },
       ],
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "analysis_insight",
+          name: "contradef_analysis_summary",
           strict: true,
           schema: {
             type: "object",
-            additionalProperties: false,
             properties: {
               title: { type: "string" },
-              riskLevel: { type: "string" },
-              summaryMarkdown: { type: "string" },
-              keyFunctions: {
-                type: "array",
-                items: { type: "string" },
-              },
-              confidenceNotes: {
-                type: "array",
-                items: { type: "string" },
-              },
+              classification: { type: "string", enum: ["Trojan", "Spyware", "Ransomware", "Backdoor", "Unknown"] },
+              riskLevel: { type: "string", enum: ["low", "medium", "high", "critical"] },
+              currentPhase: { type: "string" },
+              techniques: { type: "array", items: { type: "string" } },
+              recommendations: { type: "array", items: { type: "string" } },
+              summaryMarkdown: { type: "string" }
             },
-            required: ["title", "riskLevel", "summaryMarkdown", "keyFunctions", "confidenceNotes"],
+            required: ["title", "classification", "riskLevel", "currentPhase", "techniques", "recommendations", "summaryMarkdown"],
+            additionalProperties: false,
           },
         },
       },
     });
 
-    const raw = response.choices[0]?.message.content;
-    const parsed = JSON.parse(typeof raw === "string" ? raw : JSON.stringify(raw));
+    const content = response.choices?.[0]?.message?.content;
+    const parsed = typeof content === "string" ? JSON.parse(content) : null;
+    if (!parsed) {
+      throw new Error("A resposta do modelo veio vazia.");
+    }
 
-    await upsertAnalysisInsight(jobId, {
-      jobId,
-      modelName: response.model,
-      riskLevel: parsed.riskLevel,
-      title: parsed.title,
-      summaryMarkdown: parsed.summaryMarkdown,
-      summaryJson: parsed,
-    });
-
-    await updateAnalysisJob(jobId, { llmSummaryStatus: "completed" });
-    return parsed;
+    return {
+      title: parsed.title as string,
+      classification: parsed.classification as MalwareCategory,
+      riskLevel: parsed.riskLevel as RiskLevel,
+      currentPhase: parsed.currentPhase as string,
+      techniques: Array.isArray(parsed.techniques) ? parsed.techniques as string[] : params.techniques,
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations as string[] : params.recommendations,
+      summaryMarkdown: typeof parsed.summaryMarkdown === "string" ? parsed.summaryMarkdown : fallbackMarkdown,
+      modelName: response.model ?? "default-llm",
+    };
   } catch (error) {
-    console.error("[Analysis] Falha ao gerar insight por LLM:", error);
-    await updateAnalysisJob(jobId, { llmSummaryStatus: "failed" });
-    throw error;
+    console.warn("[Analysis] Falha ao gerar resumo com LLM, usando fallback determinístico.", error);
+    return {
+      title: `Resumo interpretativo de ${params.analysisName}`,
+      classification: params.classification,
+      riskLevel: params.riskLevel,
+      currentPhase: params.currentPhase,
+      techniques: params.techniques,
+      recommendations: params.recommendations,
+      summaryMarkdown: fallbackMarkdown,
+      modelName: "deterministic-fallback",
+    };
   }
 }
 
-async function commitJobArtifacts(jobId: string) {
-  const job = await getAnalysisJobByJobId(jobId);
-  if (!job) return null;
+function validateSubmission(input: StartAnalysisJobInput) {
+  if (!input.analysisName.trim()) {
+    throw new Error("Informe um nome para a análise.");
+  }
+  if (!input.logFiles.length) {
+    throw new Error("Envie ao menos um arquivo de log da Contradef para iniciar a análise.");
+  }
+  if (input.logFiles.length > MAX_FILES) {
+    throw new Error(`Envie no máximo ${MAX_FILES} arquivos por análise.`);
+  }
 
-  await updateAnalysisJob(jobId, { commitStatus: "running" });
-  await upsertAnalysisCommit(jobId, {
-    jobId,
-    repository: DEFAULT_GITHUB_REPOSITORY,
-    branch: DEFAULT_PIPELINE_BRANCH,
-    status: "running",
-  });
+  for (const logFile of input.logFiles) {
+    if (!logFile.base64 && !logFile.tempFilePath && !hasChunkUploadReference(logFile)) {
+      throw new Error(`O arquivo ${logFile.fileName} não possui conteúdo submetido.`);
+    }
+  }
+}
 
-  const targetDir = path.join(DEFAULT_PIPELINE_REPOSITORY, "data", "jobs_api", jobId);
-  const commitMessage = `feat: add analysis artifacts for ${job.sampleName} (${job.focusFunction}) [job ${jobId}]`;
+async function uploadArtifact(jobId: string, relativePath: string, content: Buffer | string, mimeType: string) {
+  const buffer = typeof content === "string" ? Buffer.from(content, "utf-8") : content;
+  const uploaded = await storagePut(`contradef-analysis/${jobId}/${relativePath}`, buffer, mimeType);
+  return {
+    relativePath,
+    storageUrl: uploaded.url,
+    storageKey: uploaded.key,
+    sizeBytes: buffer.byteLength,
+  };
+}
+
+function computeMetrics(params: {
+  originalLineCount: number;
+  reducedLineCount: number;
+  originalBytes: number;
+  reducedBytes: number;
+  suspiciousEventCount: number;
+  triggerCount: number;
+  uploadedFileCount: number;
+}): ReductionMetrics {
+  const reductionPercent = params.originalLineCount > 0
+    ? ((params.originalLineCount - params.reducedLineCount) / params.originalLineCount) * 100
+    : 0;
+
+  return {
+    originalLineCount: params.originalLineCount,
+    reducedLineCount: params.reducedLineCount,
+    originalBytes: params.originalBytes,
+    reducedBytes: params.reducedBytes,
+    reductionPercent: Math.max(0, Math.min(100, reductionPercent)),
+    suspiciousEventCount: params.suspiciousEventCount,
+    triggerCount: params.triggerCount,
+    uploadedFileCount: params.uploadedFileCount,
+  };
+}
+
+function buildProcessedLine(rawLine: string, fileName: string, logType: SupportedLogType, lineNumber: number): ProcessedLogLine {
+  const normalizedLine = normalizeWhitespace(rawLine);
+  const apis = detectApis(normalizedLine);
+  const addresses = extractAddresses(normalizedLine);
+  const stage = determineStage(normalizedLine, apis);
+  const techniqueTags = detectTechniqueTags(normalizedLine, apis);
+  const trigger = isTriggerLine(normalizedLine, apis);
+  const suspicious = trigger || apis.length > 0 || techniqueTags.length > 0;
+
+  return {
+    rawLine,
+    normalizedLine,
+    lineNumber,
+    logType,
+    fileName,
+    apis,
+    addresses,
+    stage,
+    techniqueTags,
+    suspicious,
+    trigger,
+  };
+}
+
+function toNormalizedEvent(item: ProcessedLogLine): NormalizedEvent {
+  return {
+    eventType: item.apis[0] ?? item.techniqueTags[0] ?? "log-evidence",
+    stage: item.stage,
+    message: item.normalizedLine || item.rawLine,
+    logType: item.logType,
+    fileName: item.fileName,
+    lineNumber: item.lineNumber,
+    suspiciousApis: item.apis,
+    suspicious: item.suspicious,
+    trigger: item.trigger,
+    addresses: item.addresses,
+    techniqueTags: item.techniqueTags,
+  };
+}
+
+function createLogCollector(fileName: string, logType: SupportedLogType, perFileEventLimit: number) {
+  const keepLineMap = new Map<number, string>();
+  const previousLines: ProcessedLogLine[] = [];
+  const lastLines: ProcessedLogLine[] = [];
+  const firstLines: ProcessedLogLine[] = [];
+  const suspiciousApiSet = new Set<string>();
+  const techniqueSet = new Set<string>();
+  const events: NormalizedEvent[] = [];
+
+  let futureContextBudget = 0;
+  let originalLineCount = 0;
+  let approximateOriginalBytes = 0;
+  let suspiciousEventCount = 0;
+  let triggerCount = 0;
+
+  const rememberLine = (item: ProcessedLogLine) => {
+    if (item.rawLine.trim().length > 0) {
+      keepLineMap.set(item.lineNumber, item.rawLine);
+    }
+  };
+
+  const consume = (rawLine: string) => {
+    originalLineCount += 1;
+    approximateOriginalBytes += Buffer.byteLength(rawLine, "utf-8") + 1;
+
+    const item = buildProcessedLine(rawLine, fileName, logType, originalLineCount);
+
+    item.apis.forEach((api) => suspiciousApiSet.add(api));
+    item.techniqueTags.forEach((tag) => techniqueSet.add(tag));
+
+    if (item.lineNumber <= 25) {
+      firstLines.push(item);
+    }
+    if (item.lineNumber <= 3) {
+      rememberLine(item);
+    }
+    if (futureContextBudget > 0) {
+      rememberLine(item);
+      futureContextBudget -= 1;
+    }
+
+    if (item.suspicious) {
+      suspiciousEventCount += 1;
+      previousLines.forEach(rememberLine);
+      rememberLine(item);
+      futureContextBudget = 4;
+      if (events.length < perFileEventLimit && (item.normalizedLine || item.rawLine)) {
+        events.push(toNormalizedEvent(item));
+      }
+    }
+
+    if (item.trigger) {
+      triggerCount += 1;
+    }
+
+    previousLines.push(item);
+    if (previousLines.length > 4) {
+      previousLines.shift();
+    }
+
+    lastLines.push(item);
+    if (lastLines.length > 2) {
+      lastLines.shift();
+    }
+  };
+
+  const finalize = (exactOriginalBytes?: number): ParsedLogResult => {
+    lastLines.forEach(rememberLine);
+
+    if (keepLineMap.size === 0) {
+      firstLines.slice(0, Math.min(25, firstLines.length)).forEach(rememberLine);
+    }
+
+    const keptLines = Array.from(keepLineMap.entries())
+      .sort((left, right) => left[0] - right[0])
+      .map(([lineNumber, text]) => ({ lineNumber, text }))
+      .filter((entry) => entry.text.trim().length > 0);
+
+    const reducedBytes = Buffer.byteLength(keptLines.map((entry) => entry.text).join("\n"), "utf-8");
+
+    return {
+      logType,
+      keptLines,
+      events,
+      suspiciousApis: Array.from(suspiciousApiSet),
+      techniqueTags: Array.from(techniqueSet),
+      originalLineCount,
+      reducedLineCount: keptLines.length,
+      originalBytes: exactOriginalBytes ?? approximateOriginalBytes,
+      reducedBytes,
+      suspiciousEventCount,
+      triggerCount,
+    };
+  };
+
+  return {
+    consume,
+    finalize,
+  };
+}
+
+async function analyzeSingleLogFile(logFile: StartAnalysisLogInput, perFileEventLimit: number): Promise<ParsedLogResult> {
+  const logType = inferLogType(logFile.fileName, logFile.logType);
+  const collector = createLogCollector(logFile.fileName, logType, perFileEventLimit);
+
+  if (logFile.tempFilePath) {
+    const reader = createInterface({
+      input: createReadStream(logFile.tempFilePath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+
+    for await (const rawLine of reader) {
+      collector.consume(rawLine);
+    }
+
+    return collector.finalize(logFile.sizeBytes);
+  }
+
+  if (hasChunkUploadReference(logFile)) {
+    const decoder = new StringDecoder("utf8");
+    let pendingLine = "";
+
+    for (let chunkIndex = 0; chunkIndex < (logFile.uploadChunkCount ?? 0); chunkIndex += 1) {
+      const chunkKey = buildUploadedChunkStorageKey(
+        logFile.uploadedByUserId as number,
+        logFile.uploadSessionId as string,
+        logFile.uploadFileId as string,
+        chunkIndex,
+      );
+      const chunkDownload = await storageGetBuffer(chunkKey);
+      if (!chunkDownload.buffer.byteLength) {
+        throw new Error(`O bloco ${chunkIndex} de ${logFile.fileName} foi encontrado vazio no armazenamento compartilhado.`);
+      }
+
+      pendingLine += decoder.write(chunkDownload.buffer);
+      const lines = pendingLine.split(/\r?\n/);
+      pendingLine = lines.pop() ?? "";
+      lines.forEach((rawLine) => collector.consume(rawLine));
+    }
+
+    pendingLine += decoder.end();
+    if (pendingLine.length > 0) {
+      collector.consume(pendingLine);
+    }
+
+    return collector.finalize(logFile.sizeBytes);
+  }
+
+  if (!logFile.base64) {
+    throw new Error(`O arquivo ${logFile.fileName} não possui conteúdo submetido.`);
+  }
+
+  const buffer = decodeBase64(logFile.base64);
+  if (!buffer.length) {
+    throw new Error(`O arquivo ${logFile.fileName} está vazio.`);
+  }
+  if (buffer.byteLength > MAX_FILE_BYTES) {
+    throw new Error(`O arquivo ${logFile.fileName} excede o limite inline de ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB. Use o envio robusto da área Reduzir Logs para arquivos grandes.`);
+  }
+
+  const text = buffer.toString("utf-8");
+  for (const rawLine of text.split(/\r?\n/)) {
+    collector.consume(rawLine);
+  }
+
+  return collector.finalize(buffer.byteLength);
+}
+
+async function buildSourceArtifact(jobId: string, logFile: StartAnalysisLogInput, logType: SupportedLogType): Promise<AnalysisArtifactDto> {
+  const fallbackArtifact: AnalysisArtifactDto = {
+    artifactType: "source-log",
+    label: `${logType} bruto`,
+    relativePath: `source/${logFile.fileName}`,
+    sourcePath: logFile.fileName,
+    storageUrl: null,
+    storageKey: null,
+    mimeType: "text/plain",
+    sizeBytes: logFile.sizeBytes ?? 0,
+  };
 
   try {
-    await fs.access(targetDir);
-    await execFileAsync("git", ["-C", DEFAULT_PIPELINE_REPOSITORY, "add", path.relative(DEFAULT_PIPELINE_REPOSITORY, targetDir)]);
+    let sourceBuffer: Buffer | null = null;
 
-    const status = await execFileAsync("git", ["-C", DEFAULT_PIPELINE_REPOSITORY, "status", "--porcelain", path.relative(DEFAULT_PIPELINE_REPOSITORY, targetDir)]);
-    if (!status.stdout.trim()) {
-      await upsertAnalysisCommit(jobId, {
-        jobId,
-        repository: DEFAULT_GITHUB_REPOSITORY,
-        branch: DEFAULT_PIPELINE_BRANCH,
-        status: "skipped",
-        commitMessage: "Nenhuma alteração nova para versionar.",
-        detailsJson: { reason: "no_changes" },
-      });
-      await updateAnalysisJob(jobId, { commitStatus: "skipped" });
-      return { status: "skipped" as const };
+    if (logFile.tempFilePath) {
+      if ((logFile.sizeBytes ?? 0) <= MAX_SOURCE_ARTIFACT_UPLOAD_BYTES) {
+        sourceBuffer = await readFile(logFile.tempFilePath);
+      }
+    } else if (logFile.base64) {
+      const decoded = decodeBase64(logFile.base64);
+      if (decoded.byteLength <= MAX_SOURCE_ARTIFACT_UPLOAD_BYTES) {
+        sourceBuffer = decoded;
+      }
+      fallbackArtifact.sizeBytes = decoded.byteLength;
     }
 
-    let commitHash = "";
-    try {
-      const commitResult = await execFileAsync("git", ["-C", DEFAULT_PIPELINE_REPOSITORY, "commit", "-m", commitMessage]);
-      const hashResult = await execFileAsync("git", ["-C", DEFAULT_PIPELINE_REPOSITORY, "rev-parse", "HEAD"]);
-      commitHash = hashResult.stdout.trim();
-      await execFileAsync("git", ["-C", DEFAULT_PIPELINE_REPOSITORY, "push", "origin", DEFAULT_PIPELINE_BRANCH]);
-
-      await upsertAnalysisCommit(jobId, {
-        jobId,
-        repository: DEFAULT_GITHUB_REPOSITORY,
-        branch: DEFAULT_PIPELINE_BRANCH,
-        commitHash,
-        commitMessage,
-        status: "completed",
-        detailsJson: { commitStdout: commitResult.stdout },
-      });
-      await updateAnalysisJob(jobId, { commitStatus: "completed" });
-      return { status: "completed" as const, commitHash };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await upsertAnalysisCommit(jobId, {
-        jobId,
-        repository: DEFAULT_GITHUB_REPOSITORY,
-        branch: DEFAULT_PIPELINE_BRANCH,
-        commitHash: commitHash || null,
-        commitMessage,
-        status: "failed",
-        detailsJson: { error: errorMessage },
-      });
-      await updateAnalysisJob(jobId, { commitStatus: "failed" });
-      throw error;
+    if (!sourceBuffer) {
+      return fallbackArtifact;
     }
+
+    const uploaded = await uploadArtifact(jobId, `source/${logFile.fileName}`, sourceBuffer, "text/plain");
+    return {
+      ...fallbackArtifact,
+      relativePath: uploaded.relativePath,
+      storageUrl: uploaded.storageUrl,
+      storageKey: uploaded.storageKey,
+      sizeBytes: uploaded.sizeBytes,
+    };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    await upsertAnalysisCommit(jobId, {
-      jobId,
-      repository: DEFAULT_GITHUB_REPOSITORY,
-      branch: DEFAULT_PIPELINE_BRANCH,
-      status: "failed",
-      commitMessage,
-      detailsJson: { error: errorMessage },
+    console.warn(`[Analysis] Não foi possível persistir o artefato bruto de ${logFile.fileName}.`, error);
+    return fallbackArtifact;
+  }
+}
+
+async function cleanupSubmittedTempFiles(logFiles: StartAnalysisLogInput[]) {
+  const tempPaths = Array.from(new Set(logFiles
+    .map((logFile) => logFile.tempFilePath)
+    .filter((tempFilePath): tempFilePath is string => Boolean(tempFilePath))));
+
+  await Promise.all(tempPaths.map(async (tempFilePath) => {
+    await unlink(tempFilePath).catch(() => undefined);
+  }));
+}
+
+function createEmptyReductionFileMetric(fileName: string, logType?: SupportedLogType): ReductionFileMetric {
+  return {
+    fileName,
+    logType: inferLogType(fileName, logType),
+    status: "queued",
+    progress: 0,
+    currentStage: "Aguardando processamento",
+    currentStep: "Na fila",
+    lastMessage: "Arquivo recebido e aguardando processamento.",
+    originalLineCount: 0,
+    reducedLineCount: 0,
+    originalBytes: 0,
+    reducedBytes: 0,
+    suspiciousEventCount: 0,
+    triggerCount: 0,
+    uploadDurationMs: 0,
+    uploadReused: false,
+  };
+}
+
+function readNumericValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+export function buildLiveFileMetrics(
+  events: Array<{ eventType: string | null; stage: string | null; message: string | null; progress: number | null; payloadJson: unknown }>,
+  summaryJson: Record<string, unknown>,
+  jobStatus: string,
+) {
+  const fileMap = new Map<string, ReductionFileMetric>();
+
+  const submissionPayload = events.find((event) => event.eventType === "submission")?.payloadJson;
+  const submittedFileNames = submissionPayload && !Array.isArray(submissionPayload) && Array.isArray((submissionPayload as Record<string, unknown>).fileNames)
+    ? ((submissionPayload as Record<string, unknown>).fileNames as unknown[]).filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+  submittedFileNames.forEach((fileName) => {
+    fileMap.set(fileName, createEmptyReductionFileMetric(fileName));
+  });
+
+  if (Array.isArray(summaryJson.fileMetrics)) {
+    summaryJson.fileMetrics.forEach((entry) => {
+      if (!entry || typeof entry !== "object") return;
+      const fileName = typeof entry.fileName === "string" ? entry.fileName : null;
+      if (!fileName) return;
+      const previous = fileMap.get(fileName) ?? createEmptyReductionFileMetric(fileName, entry.logType as SupportedLogType | undefined);
+      fileMap.set(fileName, {
+        ...previous,
+        logType: (entry.logType as SupportedLogType | undefined) ?? previous.logType,
+        status: (entry.status as ReductionFileMetric["status"] | undefined) ?? (jobStatus === "completed" ? "completed" : previous.status),
+        progress: typeof entry.progress === "number" ? entry.progress : (jobStatus === "completed" ? 100 : previous.progress),
+        currentStage: typeof entry.currentStage === "string" ? entry.currentStage : previous.currentStage,
+        currentStep: typeof entry.currentStep === "string" ? entry.currentStep : previous.currentStep,
+        lastMessage: typeof entry.lastMessage === "string" ? entry.lastMessage : previous.lastMessage,
+        originalLineCount: readNumericValue(entry.originalLineCount),
+        reducedLineCount: readNumericValue(entry.reducedLineCount),
+        originalBytes: readNumericValue(entry.originalBytes),
+        reducedBytes: readNumericValue(entry.reducedBytes),
+        suspiciousEventCount: readNumericValue(entry.suspiciousEventCount),
+        triggerCount: readNumericValue(entry.triggerCount),
+        uploadDurationMs: readNumericValue(entry.uploadDurationMs),
+        uploadReused: Boolean(entry.uploadReused),
+      });
     });
-    await updateAnalysisJob(jobId, { commitStatus: "failed" });
-    throw error;
   }
+
+  events.forEach((event) => {
+    const payload = event.payloadJson && !Array.isArray(event.payloadJson) ? event.payloadJson as Record<string, unknown> : null;
+    if (!payload) return;
+
+    const fileName = typeof payload.fileName === "string" ? payload.fileName : null;
+    if (!fileName) return;
+
+    const previous = fileMap.get(fileName) ?? createEmptyReductionFileMetric(fileName, payload.logType as SupportedLogType | undefined);
+    const nextStatus = event.eventType === "file-complete"
+      ? "completed"
+      : event.eventType === "error"
+        ? "failed"
+        : event.eventType === "file-queued"
+          ? "queued"
+          : event.eventType === "file-start" || event.eventType === "file-stage"
+            ? "running"
+            : previous.status;
+
+    fileMap.set(fileName, {
+      ...previous,
+      logType: (payload.logType as SupportedLogType | undefined) ?? previous.logType,
+      status: nextStatus,
+      progress: typeof payload.fileProgress === "number"
+        ? payload.fileProgress
+        : typeof event.progress === "number"
+          ? event.progress
+          : previous.progress,
+      currentStage: typeof payload.currentStage === "string"
+        ? payload.currentStage
+        : event.stage ?? previous.currentStage,
+      currentStep: typeof payload.currentStep === "string"
+        ? payload.currentStep
+        : previous.currentStep,
+      lastMessage: event.message ?? previous.lastMessage,
+      originalLineCount: typeof payload.originalLineCount === "number" ? payload.originalLineCount : previous.originalLineCount,
+      reducedLineCount: typeof payload.reducedLineCount === "number" ? payload.reducedLineCount : previous.reducedLineCount,
+      originalBytes: typeof payload.originalBytes === "number" ? payload.originalBytes : previous.originalBytes,
+      reducedBytes: typeof payload.reducedBytes === "number" ? payload.reducedBytes : previous.reducedBytes,
+      suspiciousEventCount: typeof payload.suspiciousEventCount === "number" ? payload.suspiciousEventCount : previous.suspiciousEventCount,
+      triggerCount: typeof payload.triggerCount === "number" ? payload.triggerCount : previous.triggerCount,
+      uploadDurationMs: typeof payload.uploadDurationMs === "number" ? payload.uploadDurationMs : previous.uploadDurationMs,
+      uploadReused: typeof payload.uploadReused === "boolean" ? payload.uploadReused : previous.uploadReused,
+    });
+  });
+
+  if (jobStatus === "completed") {
+    fileMap.forEach((value, fileName) => {
+      fileMap.set(fileName, {
+        ...value,
+        status: value.status === "failed" ? "failed" : "completed",
+        progress: value.status === "failed" ? value.progress : 100,
+        currentStage: value.status === "failed" ? value.currentStage : "Arquivo concluído",
+        currentStep: value.status === "failed" ? value.currentStep : (value.triggerCount > 0 || value.suspiciousEventCount > 0 ? "Sinais críticos preservados" : "Redução concluída"),
+        lastMessage: value.lastMessage || `Redução concluída para ${fileName}.`,
+      });
+    });
+  }
+
+  return Array.from(fileMap.values()).sort((left, right) => left.fileName.localeCompare(right.fileName));
 }
 
-async function finalizeSuccessfulJob(jobId: string) {
-  const job = await getAnalysisJobByJobId(jobId);
-  if (!job) return;
+async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise<AnalysisComputationResult> {
+  const normalizedEvents: NormalizedEvent[] = [];
+  const suspiciousApiSet = new Set<string>();
+  const techniqueSet = new Set<string>();
+  const reducedLogEntries: Array<{ fileName: string; logType: SupportedLogType; keptLines: Array<{ lineNumber: number; text: string }> }> = [];
+  const fileMetrics: ReductionFileMetric[] = [];
 
-  if (job.llmSummaryStatus === "pending" || job.llmSummaryStatus === "failed") {
-    try {
-      await generateInsight(jobId);
-    } catch (error) {
-      console.warn("[Analysis] Insight pós-processamento falhou:", error);
-    }
-  }
+  const artifacts: AnalysisArtifactDto[] = [];
+  let originalLineCount = 0;
+  let reducedLineCount = 0;
+  let originalBytes = 0;
+  let reducedBytes = 0;
+  let triggerCount = 0;
 
-  const refreshedJob = await getAnalysisJobByJobId(jobId);
-  if (refreshedJob && (refreshedJob.commitStatus === "pending" || refreshedJob.commitStatus === "failed")) {
-    try {
-      await commitJobArtifacts(jobId);
-    } catch (error) {
-      console.warn("[Analysis] Commit automático falhou:", error);
-    }
-  }
+  const perFileEventLimit = Math.max(1, Math.ceil(MAX_EVENTS / Math.max(1, input.logFiles.length)));
 
-  const finalJob = await getAnalysisJobByJobId(jobId);
-  if (finalJob) {
-    const insight = await getAnalysisInsight(jobId);
-    await notifyOwner({
-      title: `Análise concluída: ${finalJob.sampleName} · ${finalJob.focusFunction}`,
-      content: [
-        `A amostra **${finalJob.sampleName}** com foco em **${finalJob.focusFunction}** foi concluída com sucesso.`,
-        `Link para os resultados: ${finalJob.resultPath || buildResultPath(jobId)}`,
-        insight?.title ? `Resumo: ${insight.title}` : "Resumo interpretativo disponível no painel do job.",
-      ].join("\n\n"),
-    }).catch((error) => console.warn("[Analysis] Notificação ao proprietário falhou:", error));
-  }
-}
-
-async function synchronizeEvents(jobId: string, remoteEvents: LegacyEventPayload[]) {
-  const localEvents = await listAnalysisEvents(jobId, 1000);
-  const alreadyPersisted = localEvents.length;
-  const pendingEvents = remoteEvents.slice(alreadyPersisted);
-
-  for (const event of pendingEvents) {
+  for (const queuedFile of input.logFiles) {
+    const queuedLogType = inferLogType(queuedFile.fileName, queuedFile.logType);
     await addAnalysisEvent({
       jobId,
-      eventType: String(event.event_type || event.type || event.level || "info"),
-      stage: typeof event.stage === "string" ? event.stage : null,
-      message: typeof event.message === "string" ? event.message : JSON.stringify(event),
-      progress: typeof event.progress === "number" ? event.progress : null,
-      payloadJson: event,
+      eventType: "file-queued",
+      stage: "fila do lote",
+      message: `${queuedFile.fileName} entrou na fila de redução do lote atual.`,
+      progress: 8,
+      payloadJson: {
+        fileName: queuedFile.fileName,
+        logType: queuedLogType,
+        status: "queued",
+        fileProgress: 0,
+        currentStage: "Fila do lote",
+        currentStep: "Aguardando vez para reduzir",
+        lastMessage: `${queuedFile.fileName} aguardando processamento.`,
+        originalBytes: queuedFile.sizeBytes ?? 0,
+        uploadDurationMs: queuedFile.uploadDurationMs ?? 0,
+        uploadReused: queuedFile.uploadReused ?? false,
+      },
     });
   }
-}
 
-async function synchronizeArtifacts(jobId: string, remoteArtifacts: LegacyArtifactPayload[], shouldMirror: boolean) {
-  const existingArtifacts = await listAnalysisArtifacts(jobId);
-  const canReuseMirrors = existingArtifacts.length > 0 && existingArtifacts.every((artifact) => !!artifact.storageUrl);
-  const mapped = [];
-  for (const artifact of remoteArtifacts) {
-    mapped.push(await maybeMirrorArtifact(jobId, artifact, shouldMirror && !canReuseMirrors));
+  for (let index = 0; index < input.logFiles.length; index += 1) {
+    const logFile = input.logFiles[index]!;
+    const fileOrdinal = index + 1;
+    const startProgress = Math.min(90, 20 + Math.round((index / Math.max(1, input.logFiles.length)) * 60));
+    const inferredLogType = inferLogType(logFile.fileName, logFile.logType);
+
+    await updateAnalysisJob(jobId, {
+      status: "running",
+      progress: startProgress,
+      stage: `reduzindo arquivo ${fileOrdinal}/${input.logFiles.length}`,
+      message: `Processando ${logFile.fileName}.`,
+      llmSummaryStatus: "running",
+    });
+
+    await addAnalysisEvent({
+      jobId,
+      eventType: "file-start",
+      stage: "preparando redução",
+      message: `Iniciando a preparação de ${logFile.fileName}.`,
+      progress: startProgress,
+      payloadJson: {
+        fileName: logFile.fileName,
+        logType: inferredLogType,
+        status: "running",
+        fileProgress: 10,
+        currentStage: "Preparação do arquivo",
+        currentStep: "Validando cabeçalho e contexto do log",
+        lastMessage: `Preparando ${logFile.fileName} para redução heurística.`,
+        originalBytes: logFile.sizeBytes ?? 0,
+      },
+    });
+
+    await addAnalysisEvent({
+      jobId,
+      eventType: "file-stage",
+      stage: "redução heurística",
+      message: `Aplicando filtragem heurística em ${logFile.fileName}.`,
+      progress: Math.min(90, startProgress + 8),
+      payloadJson: {
+        fileName: logFile.fileName,
+        logType: inferredLogType,
+        status: "running",
+        fileProgress: 45,
+        currentStage: "Redução heurística",
+        currentStep: "Filtrando linhas e preservando gatilhos críticos",
+        lastMessage: `Filtragem heurística em andamento para ${logFile.fileName}.`,
+        originalBytes: logFile.sizeBytes ?? 0,
+      },
+    });
+
+    const parsed = await analyzeSingleLogFile(logFile, perFileEventLimit);
+
+    parsed.suspiciousApis.forEach((api) => suspiciousApiSet.add(api));
+    parsed.techniqueTags.forEach((tag) => techniqueSet.add(tag));
+
+    triggerCount += parsed.triggerCount;
+    originalLineCount += parsed.originalLineCount;
+    reducedLineCount += parsed.reducedLineCount;
+    originalBytes += parsed.originalBytes;
+    reducedBytes += parsed.reducedBytes;
+
+    reducedLogEntries.push({
+      fileName: logFile.fileName,
+      logType: parsed.logType,
+      keptLines: parsed.keptLines,
+    });
+
+    await addAnalysisEvent({
+      jobId,
+      eventType: "file-stage",
+      stage: "consolidação do resultado",
+      message: `Consolidando métricas e artefatos reduzidos de ${logFile.fileName}.`,
+      progress: Math.min(94, startProgress + 20),
+      payloadJson: {
+        fileName: logFile.fileName,
+        logType: parsed.logType,
+        status: "running",
+        fileProgress: 82,
+        currentStage: "Consolidação",
+        currentStep: "Agregando métricas e preparando artefatos",
+        lastMessage: `Consolidando o resultado reduzido de ${logFile.fileName}.`,
+        originalLineCount: parsed.originalLineCount,
+        reducedLineCount: parsed.reducedLineCount,
+        originalBytes: parsed.originalBytes,
+        reducedBytes: parsed.reducedBytes,
+        suspiciousEventCount: parsed.suspiciousEventCount,
+        triggerCount: parsed.triggerCount,
+      },
+    });
+
+    const completionStep = parsed.triggerCount > 0 || parsed.suspiciousEventCount > 0
+      ? "Sinais críticos preservados"
+      : "Redução concluída";
+    const completionMessage = `${logFile.fileName} concluído: ${parsed.reducedLineCount}/${parsed.originalLineCount} linhas mantidas após a redução.`;
+
+    fileMetrics.push({
+      fileName: logFile.fileName,
+      logType: parsed.logType,
+      status: "completed",
+      progress: 100,
+      currentStage: "Arquivo concluído",
+      currentStep: completionStep,
+      lastMessage: completionMessage,
+      originalLineCount: parsed.originalLineCount,
+      reducedLineCount: parsed.reducedLineCount,
+      originalBytes: parsed.originalBytes,
+      reducedBytes: parsed.reducedBytes,
+      suspiciousEventCount: parsed.suspiciousEventCount,
+      triggerCount: parsed.triggerCount,
+      uploadDurationMs: logFile.uploadDurationMs ?? 0,
+      uploadReused: logFile.uploadReused ?? false,
+    });
+
+    const endProgress = Math.min(95, 25 + Math.round((fileOrdinal / Math.max(1, input.logFiles.length)) * 60));
+    await addAnalysisEvent({
+      jobId,
+      eventType: "file-complete",
+      stage: completionStep,
+      message: completionMessage,
+      progress: endProgress,
+      payloadJson: {
+        fileName: logFile.fileName,
+        logType: parsed.logType,
+        status: "completed",
+        fileProgress: 100,
+        currentStage: "Arquivo concluído",
+        currentStep: completionStep,
+        lastMessage: completionMessage,
+        originalLineCount: parsed.originalLineCount,
+        reducedLineCount: parsed.reducedLineCount,
+        originalBytes: parsed.originalBytes,
+        reducedBytes: parsed.reducedBytes,
+        suspiciousEventCount: parsed.suspiciousEventCount,
+        triggerCount: parsed.triggerCount,
+      },
+    });
+
+    normalizedEvents.push(...parsed.events);
+    artifacts.push(await buildSourceArtifact(jobId, logFile, parsed.logType));
   }
 
-  await replaceAnalysisArtifacts(
-    jobId,
-    mapped.map((artifact) => ({
+  const sortedEvents = normalizedEvents.slice(0, MAX_EVENTS);
+  const classification = classifyMalware(techniqueSet, sortedEvents);
+  const currentPhase = deriveCurrentPhase(sortedEvents);
+  const metrics = computeMetrics({
+    originalLineCount,
+    reducedLineCount,
+    originalBytes,
+    reducedBytes,
+    suspiciousEventCount: sortedEvents.length,
+    triggerCount,
+    uploadedFileCount: input.logFiles.length,
+  });
+  const riskLevel = deriveRiskLevel(techniqueSet, triggerCount, sortedEvents.length);
+  const flowGraph = buildFlowGraph(sortedEvents, currentPhase);
+  const techniques = Array.from(techniqueSet);
+  const suspiciousApisList = Array.from(suspiciousApiSet);
+  const recommendations = buildRecommendations(techniques, classification);
+  const insight = await generateInsight({
+    analysisName: input.analysisName,
+    classification,
+    riskLevel,
+    currentPhase,
+    techniques,
+    suspiciousApis: suspiciousApisList,
+    metrics,
+    flowGraph,
+    notableEvents: sortedEvents,
+    recommendations,
+  });
+
+  const summaryJson = {
+    classification: insight.classification,
+    riskLevel: insight.riskLevel,
+    currentPhase: insight.currentPhase,
+    techniques: insight.techniques,
+    suspiciousApis: suspiciousApisList,
+    recommendations: insight.recommendations,
+    metrics,
+    fileMetrics,
+    flowGraph,
+  };
+
+  const reportArtifact = await uploadArtifact(jobId, "reports/final-report.md", insight.summaryMarkdown, "text/markdown");
+  artifacts.push({
+    artifactType: "report",
+    label: "Relatório final",
+    relativePath: reportArtifact.relativePath,
+    sourcePath: null,
+    storageUrl: reportArtifact.storageUrl,
+    storageKey: reportArtifact.storageKey,
+    mimeType: "text/markdown",
+    sizeBytes: reportArtifact.sizeBytes,
+  });
+
+  const reducedArtifact = await uploadArtifact(jobId, "reports/reduced-logs.json", JSON.stringify(reducedLogEntries, null, 2), "application/json");
+  artifacts.push({
+    artifactType: "reduced-log",
+    label: "Logs reduzidos",
+    relativePath: reducedArtifact.relativePath,
+    sourcePath: null,
+    storageUrl: reducedArtifact.storageUrl,
+    storageKey: reducedArtifact.storageKey,
+    mimeType: "application/json",
+    sizeBytes: reducedArtifact.sizeBytes,
+  });
+
+  const graphArtifact = await uploadArtifact(jobId, "reports/flow-graph.json", JSON.stringify(flowGraph, null, 2), "application/json");
+  artifacts.push({
+    artifactType: "graph",
+    label: "Fluxo consolidado",
+    relativePath: graphArtifact.relativePath,
+    sourcePath: null,
+    storageUrl: graphArtifact.storageUrl,
+    storageKey: graphArtifact.storageKey,
+    mimeType: "application/json",
+    sizeBytes: graphArtifact.sizeBytes,
+  });
+
+  return {
+    events: sortedEvents,
+    artifacts,
+    insight,
+    summaryJson,
+    metrics,
+    fileMetrics,
+    flowGraph,
+    classification,
+    riskLevel,
+    currentPhase,
+    suspiciousApis: suspiciousApisList,
+    techniques,
+    recommendations,
+  };
+}
+
+async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput) {
+  await updateAnalysisJob(jobId, {
+    status: "running",
+    progress: 20,
+    stage: "reduzindo e correlacionando logs",
+    message: "Identificando APIs sensíveis, gatilhos heurísticos e sequências suspeitas.",
+    llmSummaryStatus: "running",
+  });
+
+  try {
+    const result = await analyzeLogs(input, jobId);
+
+    await replaceAnalysisArtifacts(jobId, result.artifacts.map((artifact: typeof result.artifacts[number]) => ({
       jobId,
       artifactType: artifact.artifactType,
       label: artifact.label,
       relativePath: artifact.relativePath,
-      sourcePath: artifact.sourcePath,
-      storageUrl: artifact.storageUrl,
-      storageKey: artifact.storageKey,
-      mimeType: artifact.mimeType,
+      sourcePath: artifact.sourcePath ?? null,
+      storageUrl: artifact.storageUrl ?? null,
+      storageKey: artifact.storageKey ?? null,
+      mimeType: artifact.mimeType ?? null,
       sizeBytes: artifact.sizeBytes ?? null,
-    }))
-  );
-}
+    })));
 
-function startJobPolling(jobId: string) {
-  if (pollingTimers.has(jobId)) return;
+    await Promise.all(result.events.map((event: typeof result.events[number], index: number) => addAnalysisEvent({
+      jobId,
+      eventType: event.eventType,
+      stage: event.stage,
+      message: event.message,
+      progress: Math.min(95, 25 + Math.round((index / Math.max(1, result.events.length)) * 60)),
+      payloadJson: {
+        fileName: event.fileName,
+        logType: event.logType,
+        lineNumber: event.lineNumber,
+        suspiciousApis: event.suspiciousApis,
+        trigger: event.trigger,
+        addresses: event.addresses,
+        techniqueTags: event.techniqueTags,
+      },
+    })));
 
-  const timer = setInterval(() => {
-    syncAnalysisJob(jobId).catch((error) => {
-      console.warn(`[Analysis] Erro ao sincronizar job ${jobId}:`, error);
+    await upsertAnalysisInsight(jobId, {
+      jobId,
+      modelName: result.insight.modelName,
+      riskLevel: result.insight.riskLevel,
+      title: result.insight.title,
+      summaryMarkdown: result.insight.summaryMarkdown,
+      summaryJson: result.summaryJson,
     });
-  }, JOB_SYNC_INTERVAL_MS);
 
-  pollingTimers.set(jobId, timer);
-}
-
-function stopJobPolling(jobId: string) {
-  const timer = pollingTimers.get(jobId);
-  if (timer) {
-    clearInterval(timer);
-    pollingTimers.delete(jobId);
+    await updateAnalysisJob(jobId, {
+      status: "completed",
+      progress: 100,
+      stage: "análise concluída",
+      message: `Classificação sugerida: ${result.classification}. Risco ${result.riskLevel}.`,
+      llmSummaryStatus: "completed",
+      completedAt: new Date(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha inesperada durante a análise.";
+    await updateAnalysisJob(jobId, {
+      status: "failed",
+      progress: 100,
+      stage: "falha",
+      message,
+      errorMessage: message,
+      llmSummaryStatus: "failed",
+      completedAt: new Date(),
+    });
+    await addAnalysisEvent({
+      jobId,
+      eventType: "error",
+      stage: "falha",
+      message,
+      progress: 100,
+      payloadJson: null,
+    });
+  } finally {
+    await cleanupSubmittedTempFiles(input.logFiles);
   }
 }
 
 export async function startAnalysisJob(input: StartAnalysisJobInput) {
-  const focusTerms = normalizeCsvValues(input.focusTerms, input.focusFunction);
-  const focusRegexes = (input.focusRegexes ?? []).map((item) => item.trim()).filter(Boolean);
-  const archiveBuffer = decodeBase64(input.archiveBase64);
-  validateArchiveInput({ archiveName: input.archiveName, archiveBuffer });
-  const sampleName = path.parse(input.archiveName).name;
+  validateSubmission(input);
+  const jobId = `ctr-${nanoid(10)}`;
+  const sourceName = `${input.analysisName.trim().replace(/\s+/g, "-").toLowerCase()}.bundle`;
 
-  const archiveUpload = await storagePut(
-    `analysis-inputs/${sampleName}/${input.archiveName}`,
-    archiveBuffer,
-    "application/x-7z-compressed"
-  );
-
-  const pipelineJob = await submitArchiveToPipeline({
-    archiveName: input.archiveName,
-    archiveBuffer,
-    focusTerms,
-    focusRegexes,
-  });
-
-  const job = await createAnalysisJob({
-    jobId: pipelineJob.job_id,
-    pipelineJobId: pipelineJob.job_id,
-    sampleName,
-    sourceArchiveName: input.archiveName,
-    sourceArchiveUrl: archiveUpload.url,
-    sourceArchiveStorageKey: archiveUpload.key,
-    focusFunction: input.focusFunction,
-    focusTermsJson: focusTerms,
-    focusRegexesJson: focusRegexes,
+  await createAnalysisJob({
+    jobId,
+    pipelineJobId: null,
+    sampleName: input.analysisName.trim(),
+    sourceArchiveName: sourceName,
+    sourceArchiveUrl: null,
+    sourceArchiveStorageKey: null,
+    focusFunction: DEFAULT_FOCUS,
+    focusTermsJson: input.focusTerms ?? [],
+    focusRegexesJson: input.focusRegexes ?? [],
     status: "queued",
-    progress: 0,
-    stage: "submitted",
-    message: "Job enviado para o pipeline Python e aguardando processamento.",
-    pipelineBaseUrl: DEFAULT_PIPELINE_BASE_URL,
-    pipelineJobPath: pipelineJob.status_url,
-    resultPath: buildResultPath(pipelineJob.job_id, input.origin),
-    llmSummaryStatus: "pending",
-    commitStatus: "pending",
+    progress: 5,
+    stage: "recebendo logs",
+    message: "Os arquivos foram recebidos e a análise heurística será iniciada.",
     stdoutTail: null,
     stderrTail: null,
-    createdByUserId: input.createdByUserId,
+    pipelineBaseUrl: null,
+    pipelineJobPath: null,
+    resultPath: input.origin ? `${input.origin.replace(/\/$/, "")}/?job=${jobId}` : `/jobs/${jobId}`,
+    errorMessage: null,
+    llmSummaryStatus: "pending",
+    commitStatus: "skipped",
+    createdByUserId: input.createdByUserId ?? null,
+    completedAt: null,
   });
 
   await addAnalysisEvent({
-    jobId: pipelineJob.job_id,
-    eventType: "submitted",
-    stage: "submitted",
-    message: "Upload concluído e job encaminhado ao pipeline Python.",
-    progress: 0,
+    jobId,
+    eventType: "submission",
+    stage: "recebendo logs",
+    message: `${input.logFiles.length} arquivo(s) recebidos para análise automatizada da Contradef.`,
+    progress: 5,
     payloadJson: {
-      statusUrl: pipelineJob.status_url,
-      eventsUrl: pipelineJob.events_url,
-      artifactsUrl: pipelineJob.artifacts_url,
+      analysisName: input.analysisName,
+      fileNames: input.logFiles.map((file) => file.fileName),
     },
   });
 
-  startJobPolling(pipelineJob.job_id);
-  await syncAnalysisJob(pipelineJob.job_id).catch((error) => {
-    console.warn("[Analysis] Sincronização inicial falhou:", error);
-  });
-
-  return job ?? getAnalysisJobByJobId(pipelineJob.job_id);
+  void processAnalysisJob(jobId, input);
+  return getAnalysisJobDetail(jobId);
 }
 
-export async function syncAnalysisJob(jobId: string) {
-  if (runningSyncs.has(jobId)) {
-    return runningSyncs.get(jobId);
-  }
+export async function getAnalysisJobDetail(jobId: string): Promise<AnalysisJobDetail | null> {
+  const job = await getAnalysisJobByJobId(jobId);
+  if (!job) return null;
 
-  const syncPromise = (async () => {
-    const job = await getAnalysisJobByJobId(jobId);
-    if (!job) {
-      throw new Error(`Job ${jobId} não encontrado na aplicação web.`);
-    }
-
-    const [statusPayload, eventsPayload, artifactsPayload, stdoutPayload, stderrPayload] = await Promise.all([
-      fetchJson<LegacyStatusPayload>(resolvePipelineUrl(`/jobs/${jobId}/status`)),
-      fetchJson<{ job_id: string; events: LegacyEventPayload[] }>(resolvePipelineUrl(`/jobs/${jobId}/events`)),
-      fetchJson<{ job_id: string; artifacts: LegacyArtifactPayload[] }>(resolvePipelineUrl(`/jobs/${jobId}/artifacts`)),
-      fetchJson<{ job_id: string; stdout: string }>(resolvePipelineUrl(`/jobs/${jobId}/stdout`)),
-      fetchJson<{ job_id: string; stderr: string }>(resolvePipelineUrl(`/jobs/${jobId}/stderr`)),
-    ]);
-
-    const mappedStatus = mapJobStatus(statusPayload.state);
-    const shouldMirrorArtifacts = mappedStatus === "completed";
-
-    await updateAnalysisJob(jobId, {
-      status: mappedStatus,
-      progress: typeof statusPayload.progress === "number" ? statusPayload.progress : job.progress,
-      stage: statusPayload.stage || job.stage,
-      message: statusPayload.message || job.message,
-      sourceArchiveUrl: job.sourceArchiveUrl,
-      resultPath: job.resultPath,
-      errorMessage: mappedStatus === "failed" ? statusPayload.message || job.errorMessage : null,
-      stdoutTail: (stdoutPayload.stdout || "").slice(-MAX_LOG_TAIL_LENGTH),
-      stderrTail: (stderrPayload.stderr || "").slice(-MAX_LOG_TAIL_LENGTH),
-      completedAt: mappedStatus === "completed" || mappedStatus === "failed" || mappedStatus === "cancelled"
-        ? (job.completedAt ?? new Date())
-        : null,
-    });
-
-    await synchronizeEvents(jobId, eventsPayload.events || []);
-    await synchronizeArtifacts(jobId, artifactsPayload.artifacts || [], shouldMirrorArtifacts);
-
-    if (mappedStatus === "completed") {
-      stopJobPolling(jobId);
-      if (job.status !== "completed") {
-        await finalizeSuccessfulJob(jobId);
-      }
-    }
-
-    if (mappedStatus === "failed" || mappedStatus === "cancelled") {
-      stopJobPolling(jobId);
-    }
-
-    return getAnalysisJobDetail(jobId);
-  })();
-
-  runningSyncs.set(jobId, syncPromise);
-
-  try {
-    return await syncPromise;
-  } finally {
-    runningSyncs.delete(jobId);
-  }
-}
-
-export async function syncActiveAnalysisJobs() {
-  const jobs = await listAnalysisJobs({ limit: 100 });
-  const activeJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
-  for (const job of activeJobs) {
-    startJobPolling(job.jobId);
-    await syncAnalysisJob(job.jobId).catch((error) => {
-      console.warn(`[Analysis] Falha ao sincronizar job ativo ${job.jobId}:`, error);
-    });
-  }
-  return activeJobs.length;
-}
-
-export async function loadCorrelationGraph(jobId: string): Promise<CorrelationGraph | null> {
-  const artifacts = await listAnalysisArtifacts(jobId);
-  const jsonArtifact = artifacts.find((artifact) => artifact.relativePath.toLowerCase().endsWith(".json"));
-  if (!jsonArtifact?.sourcePath) return null;
-
-  try {
-    const raw = await fs.readFile(jsonArtifact.sourcePath, "utf-8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-
-    if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-      return {
-        nodes: parsed.nodes as CorrelationGraph["nodes"],
-        edges: parsed.edges as CorrelationGraph["edges"],
-        summary: typeof parsed.summary === "object" && parsed.summary ? parsed.summary as Record<string, unknown> : undefined,
-      };
-    }
-
-    const flow = Array.isArray(parsed.flow) ? parsed.flow as Array<Record<string, unknown>> : [];
-    if (flow.length > 0) {
-      const nodes = new Map<string, { id: string; label: string; kind: string; metadata?: Record<string, unknown> }>();
-      const edges: CorrelationGraph["edges"] = [];
-
-      for (const item of flow) {
-        const source = String(item.source || item.from || item.parent || "unknown_source");
-        const target = String(item.target || item.to || item.child || "unknown_target");
-        const relation = String(item.relation || item.edge || "correlates_with");
-
-        if (!nodes.has(source)) {
-          nodes.set(source, { id: source, label: source, kind: "function" });
-        }
-        if (!nodes.has(target)) {
-          nodes.set(target, { id: target, label: target, kind: "function" });
-        }
-
-        edges.push({
-          source,
-          target,
-          relation,
-          weight: typeof item.weight === "number" ? item.weight : null,
-          evidence: typeof item.evidence === "string" ? item.evidence : null,
-          metadata: item,
-        });
-      }
-
-      return {
-        nodes: Array.from(nodes.values()),
-        edges,
-        summary: parsed,
-      };
-    }
-
-    return {
-      nodes: [],
-      edges: [],
-      summary: parsed,
-    };
-  } catch (error) {
-    console.warn("[Analysis] Não foi possível carregar o grafo de correlação:", error);
-    return null;
-  }
-}
-
-export async function getAnalysisJobDetail(jobId: string) {
-  const [job, events, artifacts, insight, commit, graph] = await Promise.all([
-    getAnalysisJobByJobId(jobId),
-    listAnalysisEvents(jobId, 1000),
+  const [events, artifacts, insight] = await Promise.all([
+    listAnalysisEvents(jobId, 500),
     listAnalysisArtifacts(jobId),
     getAnalysisInsight(jobId),
-    getAnalysisCommit(jobId),
-    loadCorrelationGraph(jobId),
   ]);
+
+  const summaryJson = insight?.summaryJson && !Array.isArray(insight.summaryJson) ? insight.summaryJson as Record<string, unknown> : {};
+  const metrics = (summaryJson.metrics as ReductionMetrics | undefined) ?? {
+    originalLineCount: 0,
+    reducedLineCount: 0,
+    originalBytes: 0,
+    reducedBytes: 0,
+    reductionPercent: 0,
+    suspiciousEventCount: 0,
+    triggerCount: 0,
+    uploadedFileCount: 0,
+  };
+  const flowGraph = (summaryJson.flowGraph as FlowGraph | undefined) ?? { nodes: [], edges: [] };
 
   return {
     job,
-    events: [...events].reverse(),
+    events: events.slice().reverse().map((event) => ({
+      eventType: event.eventType,
+      stage: event.stage,
+      message: event.message,
+      progress: event.progress,
+      payloadJson: (event.payloadJson as Record<string, unknown> | unknown[] | null | undefined) ?? null,
+      createdAt: event.createdAt,
+    })),
     artifacts,
-    insight,
-    commit,
-    graph,
+    insight: insight
+      ? {
+          title: insight.title,
+          riskLevel: (insight.riskLevel as RiskLevel | null | undefined) ?? null,
+          classification: (summaryJson.classification as MalwareCategory | undefined) ?? null,
+          currentPhase: (summaryJson.currentPhase as string | undefined) ?? null,
+          summaryMarkdown: insight.summaryMarkdown,
+          summaryJson: (insight.summaryJson as Record<string, unknown> | unknown[] | null | undefined) ?? null,
+          modelName: insight.modelName,
+        }
+      : null,
+    flowGraph,
+    metrics,
+    fileMetrics: buildLiveFileMetrics(events, summaryJson, job.status),
+    suspiciousApis: Array.isArray(summaryJson.suspiciousApis) ? summaryJson.suspiciousApis as string[] : [],
+    techniques: Array.isArray(summaryJson.techniques) ? summaryJson.techniques as string[] : [],
+    recommendations: Array.isArray(summaryJson.recommendations) ? summaryJson.recommendations as string[] : [],
+    classification: (summaryJson.classification as MalwareCategory | undefined) ?? "Unknown",
+    riskLevel: (summaryJson.riskLevel as RiskLevel | undefined) ?? "low",
+    currentPhase: (summaryJson.currentPhase as string | undefined) ?? "Inicialização",
+  };
+}
+
+export async function syncAnalysisJob(jobId: string) {
+  return getAnalysisJobDetail(jobId);
+}
+
+export async function syncActiveAnalysisJobs() {
+  const jobs = await listAnalysisJobs({ status: ["queued", "running"], limit: 100 });
+  return jobs.map((job) => job.jobId);
+}
+
+async function pathExists(path: string) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveFirstExistingPath(candidates: string[]) {
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+export async function getReductionBaselineMetrics() {
+  const metricsPath = resolve(process.cwd(), "reduction_test_output", "reduction_metrics.json");
+  const manifestRootCandidates = [
+    "/home/ubuntu/reference_repo/AI_correlacion_contradef-main/data/manifests",
+    "/home/ubuntu/reference_repo/AI_correlacion_contradef-main/data/jobs_api/20260414_180723_full_execution_sample_1_isdebuggerpresent-virtualprotect_01bed4fb/output/manifests",
+    "/home/ubuntu/reference_repo/AI_correlacion_contradef-main/data/jobs_generic_test/20260414_180214_full_execution_sample_1_isdebuggerpresent-virtualprotect/output/manifests",
+  ];
+
+  const datasetManifestPath = await resolveFirstExistingPath(
+    manifestRootCandidates.map((root) => `${root}/dataset_manifest.json`),
+  );
+  const compressionManifestPath = await resolveFirstExistingPath(
+    manifestRootCandidates.map((root) => `${root}/compression_manifest.json`),
+  );
+
+  const emptyCombined = {
+    original_lines: 0,
+    reduced_lines: 0,
+    original_bytes: 0,
+    reduced_bytes: 0,
+    reduction_percent: 0,
+  };
+
+  const sampleSelectiveTest = {
+    available: false,
+    errorMessage: null as string | null,
+    trigger_address: null as string | null,
+    files: [] as Array<{
+      file: string;
+      original_lines: number;
+      reduced_lines: number;
+      original_bytes: number;
+      reduced_bytes: number;
+    }>,
+    combined: emptyCombined,
+  };
+
+  try {
+    const raw = await readFile(metricsPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      trigger_address?: string;
+      files?: Array<{
+        file: string;
+        original_lines: number;
+        reduced_lines: number;
+        original_bytes: number;
+        reduced_bytes: number;
+      }>;
+      combined?: typeof emptyCombined;
+    };
+
+    sampleSelectiveTest.available = true;
+    sampleSelectiveTest.trigger_address = parsed.trigger_address ?? null;
+    sampleSelectiveTest.files = parsed.files ?? [];
+    sampleSelectiveTest.combined = parsed.combined ?? emptyCombined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha desconhecida ao carregar o teste seletivo em C++.";
+    sampleSelectiveTest.errorMessage = `Não foi possível carregar o teste seletivo em C++: ${message}`;
+  }
+
+  const realDatasetCompression = {
+    available: false,
+    errorMessage: null as string | null,
+    dataset_directory: null as string | null,
+    file_count: 0,
+    total_original_size: 0,
+    total_compressed_size: 0,
+    reduction_percent: 0,
+    source_files_materialized: false,
+    compressed_files_materialized: false,
+    artifacts: [] as Array<{
+      file: string;
+      original_size: number;
+      compressed_size: number;
+      reduction_percent: number;
+      compression_level: number;
+      source_path: string;
+      compressed_path: string;
+      source_available_in_workspace: boolean;
+      compressed_available_in_workspace: boolean;
+      source_sha256: string | null;
+      compressed_sha256: string | null;
+    }>,
+  };
+
+  try {
+    if (!datasetManifestPath || !compressionManifestPath) {
+      throw new Error("Os manifestos do dataset real não foram encontrados em nenhum dos diretórios esperados do workspace.");
+    }
+
+    const [datasetRaw, compressionRaw] = await Promise.all([
+      readFile(datasetManifestPath, "utf8"),
+      readFile(compressionManifestPath, "utf8"),
+    ]);
+
+    const datasetManifest = JSON.parse(datasetRaw) as Array<{
+      file: string;
+      path: string;
+      size_bytes: number;
+      sha256: string;
+    }>;
+    const compressionManifest = JSON.parse(compressionRaw) as {
+      dataset_directory?: string;
+      file_count?: number;
+      total_original_size?: number;
+      total_compressed_size?: number;
+      artifacts?: Array<{
+        source: string;
+        compressed: string;
+        original_size: number;
+        compressed_size: number;
+        compression_level: number;
+        source_sha256?: string;
+        compressed_sha256?: string;
+      }>;
+    };
+
+    const datasetByFile = new Map(datasetManifest.map((entry) => [entry.file, entry]));
+    const artifacts = await Promise.all((compressionManifest.artifacts ?? []).map(async (artifact) => {
+      const file = basename(artifact.source);
+      const datasetEntry = datasetByFile.get(file);
+      const reductionPercent = artifact.original_size > 0
+        ? 100 * (1 - artifact.compressed_size / artifact.original_size)
+        : 0;
+      const sourceAvailableInWorkspace = await pathExists(artifact.source);
+      const compressedAvailableInWorkspace = await pathExists(artifact.compressed);
+
+      return {
+        file,
+        original_size: datasetEntry?.size_bytes ?? artifact.original_size,
+        compressed_size: artifact.compressed_size,
+        reduction_percent: reductionPercent,
+        compression_level: artifact.compression_level,
+        source_path: artifact.source,
+        compressed_path: artifact.compressed,
+        source_available_in_workspace: sourceAvailableInWorkspace,
+        compressed_available_in_workspace: compressedAvailableInWorkspace,
+        source_sha256: datasetEntry?.sha256 ?? artifact.source_sha256 ?? null,
+        compressed_sha256: artifact.compressed_sha256 ?? null,
+      };
+    }));
+
+    realDatasetCompression.available = true;
+    realDatasetCompression.dataset_directory = compressionManifest.dataset_directory ?? null;
+    realDatasetCompression.file_count = compressionManifest.file_count ?? artifacts.length;
+    realDatasetCompression.total_original_size = compressionManifest.total_original_size ?? artifacts.reduce((sum, artifact) => sum + artifact.original_size, 0);
+    realDatasetCompression.total_compressed_size = compressionManifest.total_compressed_size ?? artifacts.reduce((sum, artifact) => sum + artifact.compressed_size, 0);
+    realDatasetCompression.reduction_percent = realDatasetCompression.total_original_size > 0
+      ? 100 * (1 - realDatasetCompression.total_compressed_size / realDatasetCompression.total_original_size)
+      : 0;
+    realDatasetCompression.source_files_materialized = artifacts.length > 0 && artifacts.every((artifact) => artifact.source_available_in_workspace);
+    realDatasetCompression.compressed_files_materialized = artifacts.length > 0 && artifacts.every((artifact) => artifact.compressed_available_in_workspace);
+    realDatasetCompression.artifacts = artifacts;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha desconhecida ao carregar os manifestos do dataset real.";
+    realDatasetCompression.errorMessage = `Não foi possível carregar os manifestos do dataset real: ${message}`;
+  }
+
+  return {
+    available: sampleSelectiveTest.available || realDatasetCompression.available,
+    errorMessage: sampleSelectiveTest.available || realDatasetCompression.available
+      ? null
+      : sampleSelectiveTest.errorMessage ?? realDatasetCompression.errorMessage,
+    trigger_address: sampleSelectiveTest.trigger_address,
+    files: sampleSelectiveTest.files,
+    combined: sampleSelectiveTest.combined,
+    sampleSelectiveTest,
+    realDatasetCompression,
   };
 }

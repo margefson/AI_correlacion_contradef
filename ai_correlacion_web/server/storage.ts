@@ -1,4 +1,3 @@
-// Preconfigured storage helpers for Manus WebDev templates
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
 import { ENV } from './_core/env';
@@ -38,6 +37,12 @@ async function buildDownloadUrl(
     method: "GET",
     headers: buildAuthHeaders(apiKey),
   });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(`Storage download URL failed (${response.status} ${response.statusText}): ${message}`);
+  }
+
   return (await response.json()).url;
 }
 
@@ -65,7 +70,7 @@ function toFormData(
   const blob =
     typeof data === "string"
       ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
+      : new Blob([data as unknown as BlobPart], { type: contentType });
   const form = new FormData();
   form.append("file", blob, fileName || "file");
   return form;
@@ -75,13 +80,15 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
-export async function storagePut(
+async function uploadObject(
   relKey: string,
   data: Buffer | Uint8Array | string,
-  contentType = "application/octet-stream"
+  contentType: string,
+  withHashSuffix: boolean,
 ): Promise<{ key: string; url: string }> {
   const { baseUrl, apiKey } = getStorageConfig();
-  const key = appendHashSuffix(normalizeKey(relKey));
+  const normalizedKey = normalizeKey(relKey);
+  const key = withHashSuffix ? appendHashSuffix(normalizedKey) : normalizedKey;
   const uploadUrl = buildUploadUrl(baseUrl, key);
   const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
   const response = await fetch(uploadUrl, {
@@ -100,11 +107,43 @@ export async function storagePut(
   return { key, url };
 }
 
+export async function storagePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  return uploadObject(relKey, data, contentType, true);
+}
+
+export async function storagePutExact(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType = "application/octet-stream"
+): Promise<{ key: string; url: string }> {
+  return uploadObject(relKey, data, contentType, false);
+}
+
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   return {
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),
+  };
+}
+
+export async function storageGetBuffer(relKey: string): Promise<{ key: string; url: string; buffer: Buffer }> {
+  const download = await storageGet(relKey);
+  const response = await fetch(download.url);
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(`Storage read failed (${response.status} ${response.statusText}): ${message}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return {
+    ...download,
+    buffer: Buffer.from(arrayBuffer),
   };
 }
