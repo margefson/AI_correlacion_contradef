@@ -14,23 +14,20 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import {
+  buildMonitoredFiles,
+  getFileInterpretation,
+  getFileRecommendation,
+  inferLogType,
+  type FileMonitor,
+  type LogType,
+  type ProcessingStatus,
+  type SubmittedFileMonitor,
+} from "@/pages/reduceLogsMonitor";
 import { AlertTriangle, Database, FileArchive, RefreshCw, ShieldCheck, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type LogType = "FunctionInterceptor" | "TraceFcnCall" | "TraceMemory" | "TraceInstructions" | "TraceDisassembly" | "Unknown";
-type ProcessingStatus = "queued" | "uploading" | "running" | "completed" | "failed";
-
-type SubmittedFileMonitor = {
-  fileName: string;
-  logType: LogType;
-  sizeBytes: number;
-  uploadProgress: number;
-  uploadStatus: ProcessingStatus;
-  uploadFileId?: string;
-  uploadDurationMs?: number;
-  uploadReused?: boolean;
-};
 
 type UploadInitResponse = {
   sessionId: string;
@@ -49,27 +46,6 @@ type UploadInitResponse = {
 
 type UploadApiError = {
   message?: string;
-};
-
-type FileMonitor = {
-  fileName: string;
-  logType: LogType;
-  sizeBytes: number;
-  uploadProgress: number;
-  uploadStatus: ProcessingStatus;
-  processingStatus: ProcessingStatus;
-  processingProgress: number;
-  currentStage: string;
-  currentStep: string;
-  lastMessage: string;
-  originalLineCount: number;
-  reducedLineCount: number;
-  originalBytes: number;
-  reducedBytes: number;
-  suspiciousEventCount: number;
-  triggerCount: number;
-  uploadDurationMs: number;
-  uploadReused: boolean;
 };
 
 function formatBytes(value?: number | null) {
@@ -101,16 +77,6 @@ function formatDuration(value?: number | null) {
   const seconds = totalSeconds % 60;
   if (minutes <= 0) return `${seconds}s`;
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
-}
-
-function inferLogType(fileName: string): LogType {
-  const lowered = fileName.toLowerCase();
-  if (lowered.includes("functioninterceptor") || lowered.includes("function_interceptor")) return "FunctionInterceptor";
-  if (lowered.includes("tracefcncall") || lowered.includes("trace_fcn_call")) return "TraceFcnCall";
-  if (lowered.includes("tracememory") || lowered.includes("trace_memory")) return "TraceMemory";
-  if (lowered.includes("traceinstructions") || lowered.includes("trace_instructions")) return "TraceInstructions";
-  if (lowered.includes("tracedisassembly") || lowered.includes("trace_disassembly")) return "TraceDisassembly";
-  return "Unknown";
 }
 
 function getStatusLabel(status?: string | null) {
@@ -158,48 +124,6 @@ function getSemaforoTone(file: FileMonitor) {
   if (label === "Revisar") return "text-amber-200";
   if (label === "Falhou") return "text-rose-200";
   return "text-zinc-300";
-}
-
-function getFileInterpretation(file: FileMonitor) {
-  if (file.uploadStatus === "failed" || file.processingStatus === "failed") {
-    return "O fluxo foi interrompido antes da consolidação final e exige nova submissão ou revisão do arquivo.";
-  }
-  if (file.uploadStatus === "uploading") {
-    return file.sizeBytes >= 1024 * 1024 * 1024
-      ? "O envio em partes ainda está em andamento; arquivos multi-GB podem levar mais tempo antes de entrar na fila analítica."
-      : "O arquivo ainda está sendo transmitido ao servidor e ainda não entrou na etapa heurística.";
-  }
-  if (file.uploadStatus === "completed" && file.processingStatus === "queued") {
-    return "O arquivo já foi recebido integralmente e aguarda a abertura da etapa heurística do lote atual.";
-  }
-  if (file.processingStatus === "running") {
-    return "A redução está em curso e a leitura final depende da conclusão da etapa atual indicada no painel operacional.";
-  }
-  if (file.triggerCount > 0 || file.suspiciousEventCount > 0) {
-    return "A redução preservou sinais relevantes para triagem posterior e priorização investigativa.";
-  }
-  return "A redução terminou sem destaque crítico explícito, exigindo revisão contextual antes do veredito final.";
-}
-
-function getFileRecommendation(file: FileMonitor) {
-  if (file.uploadStatus === "failed" || file.processingStatus === "failed") {
-    return "Reenvie apenas este log, valide integridade do arquivo e confirme se o tipo inferido corresponde ao artefato da Contradef.";
-  }
-  if (file.uploadStatus === "uploading") {
-    return file.sizeBytes >= 1024 * 1024 * 1024
-      ? "Mantenha a guia aberta até o envio em partes alcançar 100%; o processamento só começa após o recebimento integral do lote."
-      : "Acompanhe a barra de envio até 100% antes de esperar métricas de redução ou eventos preservados.";
-  }
-  if (file.uploadStatus === "completed" && file.processingStatus === "queued") {
-    return "O upload terminou. Aguarde a fila do lote e acompanhe a transição para leitura heurística neste mesmo painel.";
-  }
-  if (file.processingStatus === "running") {
-    return "Use a etapa atual e a mensagem operacional para verificar se o arquivo está em leitura, filtragem heurística ou consolidação do resultado reduzido.";
-  }
-  if (file.triggerCount > 0 || file.suspiciousEventCount > 0) {
-    return "Priorize este log na análise posterior, pois a redução manteve gatilhos e sinais críticos úteis para interpretação do comportamento.";
-  }
-  return "Revise termos prioritários, regex heurística e contexto da amostra antes de consolidar o veredito, porque este arquivo concluiu sem destaque crítico explícito.";
 }
 
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
@@ -300,69 +224,10 @@ export default function ReduceLogs() {
   const sampleSelectiveTest = reductionQuery.data?.sampleSelectiveTest;
   const uploadedDetail = submittedDetailQuery.data;
 
-  const monitoredFiles = useMemo(() => {
-    const detailFiles = uploadedDetail?.fileMetrics ?? [];
-    const detailMap = new Map(detailFiles.map((file) => [file.fileName, file]));
-    const localMap = new Map(submittedFiles.map((file) => [file.fileName, file]));
-    const allNames = Array.from(new Set([...submittedFiles.map((file) => file.fileName), ...detailFiles.map((file) => file.fileName)]));
-
-    return allNames.map((fileName) => {
-      const local = localMap.get(fileName);
-      const detail = detailMap.get(fileName);
-      const processingStatus = (detail?.status as ProcessingStatus | undefined)
-        ?? (local?.uploadStatus === "failed" ? "failed" : "queued");
-      const processingProgress = typeof detail?.progress === "number"
-        ? detail.progress
-        : processingStatus === "completed"
-          ? 100
-          : processingStatus === "running"
-            ? 20
-            : 0;
-      const uploadStatus = local?.uploadStatus ?? (detail ? "completed" : "queued");
-
-      return {
-        fileName,
-        logType: (detail?.logType as LogType | undefined) ?? local?.logType ?? inferLogType(fileName),
-        sizeBytes: local?.sizeBytes ?? detail?.originalBytes ?? 0,
-        uploadProgress: local?.uploadProgress ?? 100,
-        uploadStatus,
-        processingStatus,
-        processingProgress,
-        uploadDurationMs: detail?.uploadDurationMs ?? local?.uploadDurationMs ?? 0,
-        uploadReused: detail?.uploadReused ?? local?.uploadReused ?? false,
-        currentStage: detail?.currentStage
-          ?? (uploadStatus === "uploading"
-            ? "Enviando arquivo em partes"
-            : uploadStatus === "failed"
-              ? "Falha no envio"
-              : uploadStatus === "completed"
-                ? "Arquivo recebido"
-                : "Aguardando processamento"),
-        currentStep: detail?.currentStep
-          ?? (uploadStatus === "uploading"
-            ? "Upload robusto em andamento"
-            : uploadStatus === "failed"
-              ? "Reenvio necessário"
-              : uploadStatus === "completed"
-                ? "Aguardando início do lote"
-                : "Na fila"),
-        lastMessage: detail?.lastMessage
-          ?? (uploadStatus === "uploading"
-            ? `Transmitindo ${fileName} em partes.`
-            : uploadStatus === "failed"
-              ? `O envio de ${fileName} falhou antes do processamento.`
-              : uploadStatus === "completed"
-                ? `Arquivo ${fileName} recebido integralmente e aguardando processamento.`
-                : `Arquivo ${fileName} aguardando processamento.`),
-        originalLineCount: detail?.originalLineCount ?? 0,
-        reducedLineCount: detail?.reducedLineCount ?? 0,
-        originalBytes: detail?.originalBytes ?? local?.sizeBytes ?? 0,
-        reducedBytes: detail?.reducedBytes ?? 0,
-        suspiciousEventCount: detail?.suspiciousEventCount ?? 0,
-        triggerCount: detail?.triggerCount ?? 0,
-      } satisfies FileMonitor;
-    });
-  }, [submittedFiles, uploadedDetail]);
+  const monitoredFiles = useMemo(
+    () => buildMonitoredFiles(submittedFiles, uploadedDetail?.fileMetrics ?? []),
+    [submittedFiles, uploadedDetail],
+  );
 
   useEffect(() => {
     if (!activeFileTab && monitoredFiles[0]?.fileName) {
@@ -508,9 +373,9 @@ export default function ReduceLogs() {
 
           completionFilesPayload.push({
             fileId: remoteFile.fileId,
-            fileName: file.name,
-            sizeBytes: file.size,
-            logType: inferLogType(file.name),
+            fileName: remoteFile.fileName,
+            sizeBytes: remoteFile.sizeBytes,
+            logType: remoteFile.logType,
             chunkCount: expectedChunkCount,
             lastModifiedMs: file.lastModified,
             uploadDurationMs: 0,
@@ -900,11 +765,7 @@ export default function ReduceLogs() {
                             <TableRow key={`guidance-${file.fileName}`}>
                               <TableCell className="font-medium text-zinc-100">{file.fileName}</TableCell>
                               <TableCell>{`${getStatusLabel(file.processingStatus)} · ${file.currentStep}`}</TableCell>
-                              <TableCell>
-                                {file.processingStatus === "completed"
-                                  ? getFileInterpretation(file)
-                                  : getFileInterpretation(file)}
-                              </TableCell>
+                              <TableCell>{getFileInterpretation(file)}</TableCell>
                               <TableCell>{getFileRecommendation(file)}</TableCell>
                             </TableRow>
                           ))}

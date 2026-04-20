@@ -78,7 +78,12 @@
 - [x] Documentar de forma objetiva como a redução heurística está sendo executada atualmente para cada tipo de log.
 - [ ] Validar e registrar no projeto uma execução publicada completa do lote real de 6 arquivos, incluindo o arquivo de 3,9 GB, após a correção assíncrona do `/api/reduce-logs/upload/complete`.
 - [ ] Documentar explicitamente o diagnóstico final do antigo `ERR_CONNECTION_RESET` com evidência da execução autenticada do arquivo de 3,9 GB sem reinício de conexão.
-- [ ] Reaproveitar arquivos já persistidos no servidor para permitir reprocessamento sem novo upload quando o mesmo arquivo já existir no armazenamento do backend.
-- [ ] Exibir por arquivo o tempo total de upload e permitir leitura de tempo médio de envio no lote atual.
+- [x] Reaproveitar arquivos já persistidos no servidor para permitir reprocessamento sem novo upload quando o mesmo arquivo já existir no armazenamento do backend.
+- [x] Exibir por arquivo o tempo total de upload e permitir leitura de tempo médio de envio no lote atual.
 - [ ] Diagnosticar por que o lote pode permanecer em processamento após upload 100% sem erro visível no console e sem evolução de etapa para alguns arquivos.
-- [ ] Registrar e enviar ao repositório GitHub do usuário todas as modificações de código, documentos e artefatos relevantes deste projeto.
+- [x] Registrar e enviar ao repositório GitHub do usuário todas as modificações de código, documentos e artefatos relevantes deste projeto.
+- [x] Impedir novo upload quando já existir no backend um arquivo com o mesmo nome/label submetido anteriormente, reutilizando-o diretamente para reprocessamento.
+- [x] Ajustar o critério de reaproveitamento para priorizar igualdade de nome/label do arquivo conforme a operação esperada pelo analista, e não apenas fingerprint técnico.
+- [x] Corrigir a seção "Sugestões de acompanhamento do lote atual" para não exibir estados contraditórios entre upload, fila, processamento e conclusão.
+- [ ] Investigar e corrigir com evidência verificável a causa real de arquivos/lotes ficarem em `queued` após upload 100%, incluindo teste automatizado cobrindo a transição `queued → running/completed` no monitoramento.
+- [ ] Adicionar evidência automatizada para a derivação de estado da tela Reduzir Logs após o `/complete`, garantindo que `submittedJobId` + `fileMetrics` reflitam o progresso em background sem depender apenas de fallbacks visuais.

@@ -270,8 +270,9 @@ describe("reduce logs upload route", () => {
     expect(completeResponse.status).toBe(200);
     expect(completePayload.job.jobId).toBe("job-upload-1");
 
-    expect(mockStoragePutExact).toHaveBeenCalledTimes(5);
-    expect(mockStorageGetBuffer).not.toHaveBeenCalled();
+    expect(mockStoragePutExact).toHaveBeenCalled();
+    expect(storageObjects.has("reduce-logs-cache/7/by-name/traceinstructions.log.json")).toBe(true);
+    expect(storageObjects.has("reduce-logs-cache/7/by-name/tracefcncall.log.json")).toBe(true);
 
     expect(mockStartAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({
       analysisName: "Lote robusto",
@@ -361,6 +362,55 @@ describe("reduce logs upload route", () => {
     }));
   });
 
+  it("reaproveita um arquivo já persistido pelo mesmo nome/label mesmo quando o fingerprint não coincide", async () => {
+    const fileName = "TraceInstructions.log";
+
+    storageObjects.set(
+      "reduce-logs-cache/7/by-name/traceinstructions.log.json",
+      Buffer.from(JSON.stringify({
+        version: 1,
+        fileFingerprint: "cached-by-name",
+        fileName,
+        logType: "TraceInstructions",
+        sizeBytes: 4096,
+        lastModifiedMs: 1713651000000,
+        chunkCount: 32,
+        storageSessionId: "cached-session-by-name",
+        storageFileId: "cached-file-by-name",
+        uploadedByUserId: 7,
+        uploadedAt: new Date().toISOString(),
+      })),
+    );
+
+    const initResponse = await fetch(`${baseUrl}/api/reduce-logs/upload/init`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        files: [
+          {
+            fileName,
+            sizeBytes: 8192,
+            logType: "TraceInstructions",
+            lastModifiedMs: 1713652000000,
+          },
+        ],
+      }),
+    });
+
+    const initPayload = await initResponse.json();
+    expect(initResponse.status).toBe(200);
+    expect(initPayload.files[0]).toEqual(expect.objectContaining({
+      fileId: "cached-file-by-name",
+      sizeBytes: 4096,
+      chunkCount: 32,
+      reused: true,
+      storageSessionId: "cached-session-by-name",
+      storageFileId: "cached-file-by-name",
+    }));
+  });
+
   it("aceita dezenas de chunks sequenciais do mesmo arquivo sem depender de sessão em memória", async () => {
     mockStartAnalysisJob.mockResolvedValue({
       job: {
@@ -430,8 +480,8 @@ describe("reduce logs upload route", () => {
     const completePayload = await completeResponse.json();
     expect(completeResponse.status).toBe(200);
     expect(completePayload.job.jobId).toBe("job-many-chunks");
-    expect(mockStoragePutExact).toHaveBeenCalledTimes(chunks.length);
-    expect(mockStorageGetBuffer).not.toHaveBeenCalled();
+    expect(mockStoragePutExact).toHaveBeenCalled();
+    expect(storageObjects.has("reduce-logs-cache/7/by-name/traceinstructions.log.json")).toBe(true);
 
     const startedInput = mockStartAnalysisJob.mock.calls.at(-1)?.[0] as StartedJobInput;
     expect(startedInput.logFiles[0]).toEqual(expect.objectContaining({
