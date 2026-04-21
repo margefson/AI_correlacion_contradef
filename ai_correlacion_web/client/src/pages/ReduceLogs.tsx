@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
+import { formatBytes, formatDateTimeLocale, formatDurationMs, formatPercentFine } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import {
   completeReduceLogsUpload,
@@ -36,33 +38,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
-
-function formatBytes(value?: number | null) {
-  if (!value || value <= 0) return "—";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let size = value;
-  let index = 0;
-  while (size >= 1024 && index < units.length - 1) {
-    size /= 1024;
-    index += 1;
-  }
-  return `${size.toFixed(size >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-function formatPercent(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "0%";
-  return `${Math.max(0, Math.min(100, value)).toFixed(value >= 10 ? 1 : 2)}%`;
-}
-
-function formatDuration(value?: number | null) {
-  if (!value || value <= 0) return "—";
-  const totalSeconds = Math.max(0, Math.round(value / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes <= 0) return `${seconds}s`;
-  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
-}
-
 function getStatusLabel(status?: string | null) {
   switch (status) {
     case "queued":
@@ -80,20 +55,6 @@ function getStatusLabel(status?: string | null) {
   }
 }
 
-function getStatusTone(status?: string | null) {
-  switch (status) {
-    case "completed":
-      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-300";
-    case "running":
-    case "uploading":
-      return "border-cyan-400/25 bg-cyan-500/10 text-cyan-300";
-    case "failed":
-      return "border-rose-400/25 bg-rose-500/10 text-rose-200";
-    default:
-      return "border-white/10 bg-white/5 text-zinc-300";
-  }
-}
-
 function getSemaforo(file: FileMonitor) {
   if (file.processingStatus === "failed") return "Falhou";
   if (file.processingStatus === "queued" || file.processingStatus === "uploading") return "Aguardando";
@@ -108,26 +69,6 @@ function getSemaforoTone(file: FileMonitor) {
   if (label === "Revisar") return "text-amber-200";
   if (label === "Falhou") return "text-rose-200";
   return "text-zinc-300";
-}
-
-function reduceLogsRiskBadgeClass(risk?: string | null) {
-  switch (risk) {
-    case "critical":
-      return "bg-rose-500/15 text-rose-300 border-rose-400/25";
-    case "high":
-      return "bg-amber-500/15 text-amber-300 border-amber-400/25";
-    case "medium":
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-400/25";
-    default:
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-400/25";
-  }
-}
-
-function formatJobTimestamp(value?: Date | string | number | null) {
-  if (!value) return "—";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR");
 }
 
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
@@ -672,7 +613,7 @@ export default function ReduceLogs() {
                       icon={Database}
                       label="Arquivos no lote"
                       value={`${monitoredFiles.length}`}
-                      helper={`${batchSummary?.completedFiles ?? 0} concluído(s), ${batchSummary?.runningFiles ?? 0} em processamento, ${batchSummary?.failedFiles ?? 0} com falha · tempo médio de upload ${formatDuration(batchSummary?.averageUploadDurationMs ?? 0)}`}
+                      helper={`${batchSummary?.completedFiles ?? 0} concluído(s), ${batchSummary?.runningFiles ?? 0} em processamento, ${batchSummary?.failedFiles ?? 0} com falha · tempo médio de upload ${formatDurationMs(batchSummary?.averageUploadDurationMs ?? 0)}`}
                     />
                     <MetricCard
                       icon={FileArchive}
@@ -683,7 +624,7 @@ export default function ReduceLogs() {
                     <MetricCard
                       icon={ShieldCheck}
                       label="Redução consolidada"
-                      value={formatPercent(batchSummary?.reductionPercent ?? 0)}
+                      value={formatPercentFine(batchSummary?.reductionPercent ?? 0)}
                       helper={`${batchSummary?.discardedLines ?? 0} linhas descartadas no lote atual`}
                     />
                   </div>
@@ -705,8 +646,8 @@ export default function ReduceLogs() {
                             </CardDescription>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <Badge className={getStatusTone(uploadedDetail.job.status)}>{uploadedDetail.job.status}</Badge>
-                            <Badge className={reduceLogsRiskBadgeClass(uploadedDetail.riskLevel)}>{uploadedDetail.riskLevel}</Badge>
+                            <Badge className={jobStatusBadgeClass(uploadedDetail.job.status)}>{uploadedDetail.job.status}</Badge>
+                            <Badge className={riskLevelBadgeClass(uploadedDetail.riskLevel)}>{uploadedDetail.riskLevel}</Badge>
                             <Badge variant="outline" className="border-white/10 text-zinc-200">{uploadedDetail.classification}</Badge>
                           </div>
                         </div>
@@ -736,7 +677,7 @@ export default function ReduceLogs() {
                                 <p className="text-sm font-medium text-zinc-100">Indicadores do lote</p>
                                 <div className="grid gap-2 text-sm text-zinc-300">
                                   <p><span className="text-zinc-400">Fase comportamental:</span> {uploadedDetail.currentPhase}</p>
-                                  <p><span className="text-zinc-400">Redução (linhas):</span> {uploadedDetail.metrics.originalLineCount} → {uploadedDetail.metrics.reducedLineCount} ({formatPercent(uploadedDetail.metrics.reductionPercent)})</p>
+                                  <p><span className="text-zinc-400">Redução (linhas):</span> {uploadedDetail.metrics.originalLineCount} → {uploadedDetail.metrics.reducedLineCount} ({formatPercentFine(uploadedDetail.metrics.reductionPercent)})</p>
                                   <p><span className="text-zinc-400">APIs suspeitas (lista):</span> {uploadedDetail.suspiciousApis.length ? uploadedDetail.suspiciousApis.join(", ") : "—"}</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -823,7 +764,7 @@ export default function ReduceLogs() {
                                   <div className="flex flex-wrap gap-2">
                                     <Badge variant="outline" className="border-white/10 text-zinc-300">{event.stage ?? "—"}</Badge>
                                     <Badge className="border-white/10 bg-white/5 text-zinc-200">{event.eventType}</Badge>
-                                    <span className="text-xs text-zinc-500">{formatJobTimestamp(event.createdAt)}</span>
+                                    <span className="text-xs text-zinc-500">{formatDateTimeLocale(event.createdAt)}</span>
                                   </div>
                                   <p className="mt-2 text-zinc-200">{event.message ?? "—"}</p>
                                 </div>
@@ -894,7 +835,7 @@ export default function ReduceLogs() {
                                 </TableCell>
                                 <TableCell>
                                   <div>
-                                    <p className="font-medium text-zinc-100">{file.uploadReused ? "Reaproveitado" : formatDuration(file.uploadDurationMs)}</p>
+                                    <p className="font-medium text-zinc-100">{file.uploadReused ? "Reaproveitado" : formatDurationMs(file.uploadDurationMs)}</p>
                                     <p className="text-xs text-zinc-400">{file.uploadReused ? "Arquivo já existia no servidor" : "Tempo bruto de envio até 100%"}</p>
                                   </div>
                                 </TableCell>
@@ -906,7 +847,7 @@ export default function ReduceLogs() {
                                 </TableCell>
                                 <TableCell>{formatBytes(file.originalBytes)}</TableCell>
                                 <TableCell>{formatBytes(file.reducedBytes)}</TableCell>
-                                <TableCell>{formatPercent(reduction)}</TableCell>
+                                <TableCell>{formatPercentFine(reduction)}</TableCell>
                                 <TableCell>{`${file.suspiciousEventCount} eventos / ${file.triggerCount} gatilhos`}</TableCell>
                                 <TableCell className={getSemaforoTone(file)}>{getSemaforo(file)}</TableCell>
                               </TableRow>
@@ -963,7 +904,7 @@ export default function ReduceLogs() {
                         </p>
                       </div>
                       {activeFile ? (
-                        <Badge className={getStatusTone(activeFile.processingStatus)}>
+                        <Badge className={jobStatusBadgeClass(activeFile.processingStatus)}>
                           {getStatusLabel(activeFile.processingStatus)} · {activeFile.fileName}
                         </Badge>
                       ) : null}
@@ -991,10 +932,10 @@ export default function ReduceLogs() {
                           return (
                             <TabsContent key={`content-${file.fileName}`} value={file.fileName} className="space-y-4">
                               <div className="grid gap-4 md:grid-cols-4">
-                                <MetricCard icon={RefreshCw} label="Upload" value={`${file.uploadProgress}%`} helper={file.uploadReused ? "Reaproveitado do servidor" : `${getStatusLabel(file.uploadStatus)} · ${formatDuration(file.uploadDurationMs)}`} />
+                                <MetricCard icon={RefreshCw} label="Upload" value={`${file.uploadProgress}%`} helper={file.uploadReused ? "Reaproveitado do servidor" : `${getStatusLabel(file.uploadStatus)} · ${formatDurationMs(file.uploadDurationMs)}`} />
                                 <MetricCard icon={Database} label="Processamento" value={`${file.processingProgress}%`} helper={`${getStatusLabel(file.processingStatus)} · ${file.currentStage}`} />
                                 <MetricCard icon={FileArchive} label="Tamanho antes" value={formatBytes(file.originalBytes)} helper={`${file.originalLineCount} linhas`} />
-                                <MetricCard icon={ShieldCheck} label="Tamanho depois" value={formatBytes(file.reducedBytes)} helper={`${file.reducedLineCount} linhas · ${formatPercent(reduction)}`} />
+                                <MetricCard icon={ShieldCheck} label="Tamanho depois" value={formatBytes(file.reducedBytes)} helper={`${file.reducedLineCount} linhas · ${formatPercentFine(reduction)}`} />
                               </div>
 
                               <div className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
@@ -1012,8 +953,8 @@ export default function ReduceLogs() {
                                   <div className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                                     <p><span className="font-medium text-zinc-100">Tipo inferido:</span> {file.logType}</p>
                                     <p><span className="font-medium text-zinc-100">Etapa atual:</span> {file.currentStage}</p>
-                                    <p><span className="font-medium text-zinc-100">Resultado heurístico:</span> {formatBytes(file.originalBytes)} antes, {formatBytes(file.reducedBytes)} depois, com {formatPercent(reduction)} de redução.</p>
-                                    <p><span className="font-medium text-zinc-100">Tempo de upload:</span> {file.uploadReused ? "Reaproveitado do servidor, sem novo envio" : formatDuration(file.uploadDurationMs)}</p>
+                                    <p><span className="font-medium text-zinc-100">Resultado heurístico:</span> {formatBytes(file.originalBytes)} antes, {formatBytes(file.reducedBytes)} depois, com {formatPercentFine(reduction)} de redução.</p>
+                                    <p><span className="font-medium text-zinc-100">Tempo de upload:</span> {file.uploadReused ? "Reaproveitado do servidor, sem novo envio" : formatDurationMs(file.uploadDurationMs)}</p>
                                     <p><span className="font-medium text-zinc-100">Próxima leitura do analista:</span> {file.currentStep}</p>
                                     <p><span className="font-medium text-zinc-100">Última mensagem:</span> {file.lastMessage}</p>
                                     <p><span className="font-medium text-zinc-100">Sinais críticos:</span> {file.suspiciousEventCount} eventos suspeitos e {file.triggerCount} gatilhos preservados.</p>

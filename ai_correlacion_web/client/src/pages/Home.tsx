@@ -23,7 +23,16 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
+import { formatBytes, formatDateTimeShort, formatPercentRounded } from "@/lib/format";
+import { asRecord, type PayloadRecord } from "@/lib/payload";
+import {
+  calculateReductionPercent,
+  fileToBase64,
+  parseCsv,
+} from "@/lib/submissionUtils";
 import { trpc } from "@/lib/trpc";
+import { inferLogType } from "@/pages/reduceLogsMonitor";
 import {
   Activity,
   AlertTriangle,
@@ -44,102 +53,6 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 
 type StatusFilter = "all" | "queued" | "running" | "completed" | "failed" | "cancelled";
-type LogType = "FunctionInterceptor" | "TraceFcnCall" | "TraceMemory" | "TraceInstructions" | "TraceDisassembly" | "Unknown";
-type PayloadRecord = Record<string, unknown>;
-
-function statusVariant(status?: string) {
-  switch (status) {
-    case "completed":
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-400/25";
-    case "running":
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-400/25";
-    case "queued":
-      return "bg-amber-500/15 text-amber-300 border-amber-400/25";
-    case "failed":
-      return "bg-rose-500/15 text-rose-300 border-rose-400/25";
-    default:
-      return "bg-zinc-500/15 text-zinc-300 border-zinc-400/25";
-  }
-}
-
-function riskVariant(risk?: string) {
-  switch (risk) {
-    case "critical":
-      return "bg-rose-500/15 text-rose-300 border-rose-400/25";
-    case "high":
-      return "bg-amber-500/15 text-amber-300 border-amber-400/25";
-    case "medium":
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-400/25";
-    default:
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-400/25";
-  }
-}
-
-function formatDate(value?: Date | string | number | null) {
-  if (!value) return "—";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-}
-
-function formatPercent(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "0%";
-  return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
-}
-
-function formatBytes(value?: number | null) {
-  if (!value || value <= 0) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  let size = value;
-  let index = 0;
-  while (size >= 1024 && index < units.length - 1) {
-    size /= 1024;
-    index += 1;
-  }
-  return `${size.toFixed(size >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-function calculateReductionPercent(original?: number | null, reduced?: number | null) {
-  if (!original || original <= 0 || typeof reduced !== "number") return 0;
-  return Math.max(0, Math.min(100, (1 - reduced / original) * 100));
-}
-
-function parseCsv(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function inferLogType(fileName: string): LogType {
-  const lowered = fileName.toLowerCase();
-  if (lowered.includes("functioninterceptor") || lowered.includes("function_interceptor")) return "FunctionInterceptor";
-  if (lowered.includes("tracefcncall") || lowered.includes("trace_fcn_call")) return "TraceFcnCall";
-  if (lowered.includes("tracememory") || lowered.includes("trace_memory")) return "TraceMemory";
-  if (lowered.includes("traceinstructions") || lowered.includes("trace_instructions")) return "TraceInstructions";
-  if (lowered.includes("tracedisassembly") || lowered.includes("trace_disassembly")) return "TraceDisassembly";
-  return "Unknown";
-}
-
-function fileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("Falha ao ler o arquivo selecionado."));
-        return;
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = () => reject(new Error("Falha ao converter o arquivo para base64."));
-    reader.readAsDataURL(file);
-  });
-}
-
-function asRecord(value: unknown): PayloadRecord {
-  if (!value || Array.isArray(value) || typeof value !== "object") return {};
-  return value as PayloadRecord;
-}
 
 export default function Home() {
   const utils = trpc.useUtils();
@@ -335,7 +248,7 @@ export default function Home() {
               <div className="grid gap-3 md:grid-cols-3">
                 <MiniInfo label="Bytes antes" value={formatBytes(reductionBaselineQuery.data?.combined.original_bytes)} />
                 <MiniInfo label="Bytes depois" value={formatBytes(reductionBaselineQuery.data?.combined.reduced_bytes)} />
-                <MiniInfo label="Redução medida" value={formatPercent(reductionBaselineQuery.data?.combined.reduction_percent)} />
+                <MiniInfo label="Redução medida" value={formatPercentRounded(reductionBaselineQuery.data?.combined.reduction_percent)} />
               </div>
               {reductionBaselineQuery.isLoading ? (
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-400">
@@ -370,7 +283,7 @@ export default function Home() {
                           <TableCell>{file.reduced_lines}</TableCell>
                           <TableCell>{formatBytes(file.original_bytes)}</TableCell>
                           <TableCell>{formatBytes(file.reduced_bytes)}</TableCell>
-                          <TableCell>{formatPercent(calculateReductionPercent(file.original_bytes, file.reduced_bytes))}</TableCell>
+                          <TableCell>{formatPercentRounded(calculateReductionPercent(file.original_bytes, file.reduced_bytes))}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-cyan-500/5">
@@ -379,7 +292,7 @@ export default function Home() {
                         <TableCell>{reductionBaselineQuery.data.combined.reduced_lines}</TableCell>
                         <TableCell>{formatBytes(reductionBaselineQuery.data.combined.original_bytes)}</TableCell>
                         <TableCell>{formatBytes(reductionBaselineQuery.data.combined.reduced_bytes)}</TableCell>
-                        <TableCell>{formatPercent(reductionBaselineQuery.data.combined.reduction_percent)}</TableCell>
+                        <TableCell>{formatPercentRounded(reductionBaselineQuery.data.combined.reduction_percent)}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -400,7 +313,7 @@ export default function Home() {
                   <CardTitle>Fila e histórico</CardTitle>
                   <CardDescription>Selecione uma análise para abrir o dashboard detalhado.</CardDescription>
                 </div>
-                <Badge className={statusVariant(statusFilter === "all" ? undefined : statusFilter)}>{statusFilter === "all" ? "Todos" : statusFilter}</Badge>
+                <Badge className={jobStatusBadgeClass(statusFilter === "all" ? undefined : statusFilter)}>{statusFilter === "all" ? "Todos" : statusFilter}</Badge>
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr,180px]">
                 <Input placeholder="Filtrar por nome da amostra" value={sampleFilter} onChange={(event) => setSampleFilter(event.target.value)} />
@@ -431,16 +344,16 @@ export default function Home() {
                             <p className="text-sm font-semibold text-white">{job.sampleName}</p>
                             <p className="text-xs text-zinc-400">{job.jobId}</p>
                           </div>
-                          <Badge className={statusVariant(job.status)}>{job.status}</Badge>
+                          <Badge className={jobStatusBadgeClass(job.status)}>{job.status}</Badge>
                         </div>
                         <div className="mt-3 space-y-2">
                           <div className="flex items-center justify-between text-xs text-zinc-400">
                             <span>{job.stage}</span>
-                            <span>{formatPercent(job.progress)}</span>
+                            <span>{formatPercentRounded(job.progress)}</span>
                           </div>
                           <Progress value={job.progress} />
                           <p className="text-sm text-zinc-300">{job.message ?? "Sem mensagem adicional."}</p>
-                          <p className="text-xs text-zinc-500">Atualizado em {formatDate(job.updatedAt)}</p>
+                          <p className="text-xs text-zinc-500">Atualizado em {formatDateTimeShort(job.updatedAt)}</p>
                         </div>
                       </button>
                     );
@@ -464,8 +377,8 @@ export default function Home() {
                 </div>
                 {selectedDetail ? (
                   <div className="flex flex-wrap gap-2">
-                    <Badge className={statusVariant(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge>
-                    <Badge className={riskVariant(selectedDetail.riskLevel)}>{selectedDetail.riskLevel}</Badge>
+                    <Badge className={jobStatusBadgeClass(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge>
+                    <Badge className={riskLevelBadgeClass(selectedDetail.riskLevel)}>{selectedDetail.riskLevel}</Badge>
                     <Badge variant="outline" className="border-white/10 text-zinc-200">{selectedDetail.classification}</Badge>
                   </div>
                 ) : null}
@@ -549,13 +462,13 @@ export default function Home() {
                             return (
                               <div key={`${event.eventType}-${index}-${String(event.createdAt)}`} className="relative rounded-2xl border border-white/10 bg-white/5 p-4">
                                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                                  <Badge className={statusVariant(selectedDetail.job.status)}>{event.stage ?? "Sem fase"}</Badge>
+                                  <Badge className={jobStatusBadgeClass(selectedDetail.job.status)}>{event.stage ?? "Sem fase"}</Badge>
                                   <Badge variant="outline" className="border-white/10 text-zinc-200">{event.eventType}</Badge>
                                   {payload.trigger === true ? <Badge className="bg-rose-500/15 text-rose-300 border-rose-400/25">gatilho</Badge> : null}
                                 </div>
                                 <p className="text-sm text-zinc-200">{event.message ?? "Evento sem descrição"}</p>
                                 <div className="mt-2 flex flex-wrap gap-3 text-xs text-zinc-400">
-                                  <span>{formatDate(event.createdAt)}</span>
+                                  <span>{formatDateTimeShort(event.createdAt)}</span>
                                   {typeof payload.fileName === "string" ? <span>{payload.fileName}</span> : null}
                                   {typeof payload.logType === "string" ? <span>{payload.logType}</span> : null}
                                   {typeof payload.lineNumber === "number" ? <span>linha {payload.lineNumber}</span> : null}
