@@ -98,4 +98,27 @@ describe("reduceLogsMonitor", () => {
     expect(getFileInterpretation(monitored[0])).toMatch(/preservou sinais relevantes/i);
     expect(getFileRecommendation(monitored[0])).toMatch(/priorize este log/i);
   });
+
+  it("oculta o contêiner .7z quando o backend já retornou logs extraídos", () => {
+    const submittedFiles: SubmittedFileMonitor[] = [
+      {
+        fileName: "Full-Execution-Sample-1.7z",
+        logType: "Unknown",
+        sizeBytes: 38 * 1024 * 1024,
+        uploadProgress: 100,
+        uploadStatus: "completed",
+      },
+    ];
+    const detailFiles: DetailFileMonitor[] = [
+      { fileName: "contradef.2956.FunctionInterceptor.cdf", status: "queued", progress: 8 },
+      { fileName: "contradef.2956.TraceInstructions.cdf", status: "queued", progress: 8 },
+    ];
+
+    const monitored = buildMonitoredFiles(submittedFiles, detailFiles);
+
+    expect(monitored.map((file) => file.fileName)).toEqual([
+      "contradef.2956.FunctionInterceptor.cdf",
+      "contradef.2956.TraceInstructions.cdf",
+    ]);
+  });
 });

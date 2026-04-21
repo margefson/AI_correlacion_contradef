@@ -1,4 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import FlowJourneyDiagram from "@/components/FlowJourneyDiagram";
+import { ExplicitSha256Block } from "@/components/ExplicitSha256Block";
+import { MitreDefenseEvasionPanel } from "@/components/MitreDefenseEvasionPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +17,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
+import { extractFlowNodeDetails } from "@/lib/flowGraph";
+import { computeSha256HexFromFile } from "@/lib/fileHash";
 import { formatBytes, formatDateTimeLocale, formatDurationMs, formatPercentFine } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
+import { VirusTotalSampleCard } from "@/components/VirusTotalSampleCard";
+import { isValidSha256Hex } from "@shared/virusTotal";
 import {
   completeReduceLogsUpload,
   getReduceLogsUploadCapabilities,
@@ -34,7 +41,7 @@ import {
   type SubmittedFileMonitor,
 } from "@/pages/reduceLogsMonitor";
 import { AlertTriangle, ArrowRight, BrainCircuit, Database, FileArchive, FileDown, RefreshCw, ShieldCheck, Sparkles, UploadCloud } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
@@ -55,6 +62,71 @@ function getStatusLabel(status?: string | null) {
   }
 }
 
+function getProcessingStatusVisual(status?: string | null) {
+  if (status === "completed") {
+    return {
+      badge: "border-emerald-400/30 bg-emerald-500/15 text-emerald-200",
+      row: "bg-emerald-500/5",
+      label: "text-emerald-200",
+      progressTone: "emerald" as const,
+    };
+  }
+  if (status === "running") {
+    return {
+      badge: "border-cyan-400/35 bg-cyan-500/15 text-cyan-200",
+      row: "bg-cyan-500/5",
+      label: "text-cyan-200",
+      progressTone: "cyan" as const,
+    };
+  }
+  if (status === "queued" || status === "uploading") {
+    return {
+      badge: "border-amber-400/35 bg-amber-500/15 text-amber-200",
+      row: "bg-amber-500/5",
+      label: "text-amber-200",
+      progressTone: "amber" as const,
+    };
+  }
+  if (status === "failed") {
+    return {
+      badge: "border-rose-400/35 bg-rose-500/15 text-rose-200",
+      row: "bg-rose-500/5",
+      label: "text-rose-200",
+      progressTone: "rose" as const,
+    };
+  }
+  return {
+    badge: "border-white/10 bg-white/5 text-zinc-300",
+    row: "",
+    label: "text-zinc-300",
+    progressTone: "cyan" as const,
+  };
+}
+
+function formatLastActivityLabel(value?: Date | null) {
+  if (!value) return "sem eventos recentes";
+  const diffMs = Date.now() - value.getTime();
+  if (diffMs < 15000) return "atividade agora";
+  const seconds = Math.round(diffMs / 1000);
+  if (seconds < 60) return `última atualização há ${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  return `última atualização há ${minutes}min`;
+}
+
+function formatElapsedMs(ms: number) {
+  const safe = Math.max(0, Math.floor(ms));
+  const totalSeconds = Math.floor(safe / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}min`;
+  }
+  if (minutes > 0) return `${minutes}min ${seconds}s`;
+  return `${seconds}s`;
+}
+
 function getSemaforo(file: FileMonitor) {
   if (file.processingStatus === "failed") return "Falhou";
   if (file.processingStatus === "queued" || file.processingStatus === "uploading") return "Aguardando";
@@ -73,6 +145,7 @@ function getSemaforoTone(file: FileMonitor) {
 
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
 const STORAGE_CREDENTIALS_MISSING_FRAGMENT = "Storage proxy credentials missing";
+const STAGE_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
 
 function buildInitialSubmittedFiles(files: File[]) {
   return files.map((file) => ({
@@ -125,13 +198,13 @@ function MetricCard({
   helper: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 transition duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-md hover:shadow-slate-950/30">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-zinc-400">{label}</p>
+        <p className="text-xs uppercase tracking-[0.14em] text-zinc-300">{label}</p>
         <Icon className="h-4 w-4 text-cyan-300" />
       </div>
       <p className="mt-3 text-3xl font-semibold tracking-tight text-zinc-100">{value}</p>
-      <p className="mt-2 text-sm text-zinc-400">{helper}</p>
+      <p className="mt-2 text-sm text-zinc-300">{helper}</p>
     </div>
   );
 }
@@ -139,6 +212,10 @@ function MetricCard({
 export default function ReduceLogs() {
   const utils = trpc.useUtils();
   const [analysisName, setAnalysisName] = useState("Redução Contradef - Validação Manual");
+  const [sampleSha256Input, setSampleSha256Input] = useState("");
+  const [isHashingSample, setIsHashingSample] = useState(false);
+  const [sampleHashError, setSampleHashError] = useState<string | null>(null);
+  const [sampleExecutableLabel, setSampleExecutableLabel] = useState<string | null>(null);
   const [focusTerms, setFocusTerms] = useState("VirtualProtect, NtQueryInformationProcess, IsDebuggerPresent, Sleep");
   const [focusRegexes, setFocusRegexes] = useState("VirtualProtect.*RW.*RX, Nt.*QueryInformationProcess");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -147,12 +224,21 @@ export default function ReduceLogs() {
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFileMonitor[]>([]);
   const [activeFileTab, setActiveFileTab] = useState<string>("");
   const [reduceLogsGraphNodeId, setReduceLogsGraphNodeId] = useState<string | null>(null);
+  const [uiNowMs, setUiNowMs] = useState(() => Date.now());
+  const [fileQuickFilter, setFileQuickFilter] = useState<"all" | "stalled" | "running" | "completed">("all");
+  const [sortByPriority, setSortByPriority] = useState(true);
+  const [focusCriticalMode, setFocusCriticalMode] = useState(true);
 
   const resumeActiveSync = trpc.analysis.resumeActiveSync.useMutation();
 
   useEffect(() => {
     resumeActiveSync.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setUiNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   const submittedDetailQuery = trpc.analysis.detail.useQuery(
@@ -193,22 +279,19 @@ export default function ReduceLogs() {
     () => uploadedDetail?.flowGraph.nodes.find((node) => node.id === effectiveReduceLogsGraphNodeId) ?? null,
     [uploadedDetail?.flowGraph.nodes, effectiveReduceLogsGraphNodeId],
   );
-
+  const selectedReduceLogsNodeDetails = useMemo(
+    () => extractFlowNodeDetails(selectedReduceLogsGraphNode?.metadata),
+    [selectedReduceLogsGraphNode?.metadata],
+  );
+  const selectedReduceLogsIncomingEdge = useMemo(() => {
+    if (!uploadedDetail?.flowGraph.edges.length || !selectedReduceLogsGraphNode) return null;
+    return uploadedDetail.flowGraph.edges.find((edge) => edge.target === selectedReduceLogsGraphNode.id) ?? null;
+  }, [uploadedDetail?.flowGraph.edges, selectedReduceLogsGraphNode]);
   const monitoredFiles = useMemo(
     () => buildMonitoredFiles(submittedFiles, uploadedDetail?.fileMetrics ?? []),
     [submittedFiles, uploadedDetail],
   );
 
-  useEffect(() => {
-    if (!activeFileTab && monitoredFiles[0]?.fileName) {
-      setActiveFileTab(monitoredFiles[0].fileName);
-      return;
-    }
-
-    if (activeFileTab && !monitoredFiles.some((file) => file.fileName === activeFileTab) && monitoredFiles[0]?.fileName) {
-      setActiveFileTab(monitoredFiles[0].fileName);
-    }
-  }, [activeFileTab, monitoredFiles]);
 
   const batchSummary = useMemo(() => {
     if (!monitoredFiles.length) return null;
@@ -245,7 +328,125 @@ export default function ReduceLogs() {
     };
   }, [monitoredFiles]);
 
-  const activeFile = monitoredFiles.find((file) => file.fileName === activeFileTab) ?? monitoredFiles[0] ?? null;
+  const fileLastEventAtMap = useMemo(() => {
+    const map = new Map<string, Date>();
+    (uploadedDetail?.events ?? []).forEach((event) => {
+      const payload = event.payloadJson && !Array.isArray(event.payloadJson) ? event.payloadJson as Record<string, unknown> : null;
+      const fileName = typeof payload?.fileName === "string" ? payload.fileName : null;
+      if (!fileName || !event.createdAt) return;
+      const createdAt = new Date(event.createdAt);
+      if (!Number.isFinite(createdAt.getTime())) return;
+      const previous = map.get(fileName);
+      if (!previous || createdAt > previous) {
+        map.set(fileName, createdAt);
+      }
+    });
+    return map;
+  }, [uploadedDetail?.events]);
+  const fileCurrentStageSinceMap = useMemo(() => {
+    const map = new Map<string, Date>();
+    const stageMap = new Map<string, string>();
+    const events = [...(uploadedDetail?.events ?? [])].sort((left, right) => {
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return leftTime - rightTime;
+    });
+
+    events.forEach((event) => {
+      const payload = event.payloadJson && !Array.isArray(event.payloadJson) ? event.payloadJson as Record<string, unknown> : null;
+      const fileName = typeof payload?.fileName === "string" ? payload.fileName : null;
+      const currentStage = typeof payload?.currentStage === "string"
+        ? payload.currentStage
+        : typeof event.stage === "string"
+          ? event.stage
+          : null;
+      if (!fileName || !currentStage || !event.createdAt) return;
+      const createdAt = new Date(event.createdAt);
+      if (!Number.isFinite(createdAt.getTime())) return;
+      const previousStage = stageMap.get(fileName);
+      if (previousStage !== currentStage) {
+        stageMap.set(fileName, currentStage);
+        map.set(fileName, createdAt);
+      }
+    });
+    return map;
+  }, [uploadedDetail?.events]);
+  const staleRunningFiles = useMemo(() => monitoredFiles.filter((file) => {
+    if (file.processingStatus !== "running") return false;
+    const lastEventAt = fileLastEventAtMap.get(file.fileName);
+    if (!lastEventAt) return true;
+    return uiNowMs - lastEventAt.getTime() > 120000;
+  }), [fileLastEventAtMap, monitoredFiles, uiNowMs]);
+  const stalledFileNameSet = useMemo(() => {
+    const set = new Set<string>();
+    monitoredFiles.forEach((file) => {
+      if (file.processingStatus !== "running") return;
+      const lastEventAt = fileLastEventAtMap.get(file.fileName);
+      const stageSince = fileCurrentStageSinceMap.get(file.fileName);
+      const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
+      const noRecentActivity = !lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000);
+      if (noRecentActivity || stageElapsedMs > STAGE_WARNING_THRESHOLD_MS) {
+        set.add(file.fileName);
+      }
+    });
+    return set;
+  }, [fileCurrentStageSinceMap, fileLastEventAtMap, monitoredFiles, uiNowMs]);
+  const priorityScoreMap = useMemo(() => {
+    const map = new Map<string, number>();
+    monitoredFiles.forEach((file) => {
+      const stalled = stalledFileNameSet.has(file.fileName) ? 1 : 0;
+      const score = stalled * 1000 + (file.triggerCount * 5) + (file.suspiciousEventCount * 2) + (file.processingStatus === "running" ? 50 : 0);
+      map.set(file.fileName, score);
+    });
+    return map;
+  }, [monitoredFiles, stalledFileNameSet]);
+  const priorityScoredFiles = useMemo(
+    () => [...monitoredFiles].sort((left, right) => (priorityScoreMap.get(right.fileName) ?? 0) - (priorityScoreMap.get(left.fileName) ?? 0)),
+    [monitoredFiles, priorityScoreMap],
+  );
+  const criticalFocusCandidate = useMemo(
+    () => priorityScoredFiles.find((file) => stalledFileNameSet.has(file.fileName) || file.triggerCount > 0 || file.suspiciousEventCount > 0 || file.processingStatus === "running") ?? null,
+    [priorityScoredFiles, stalledFileNameSet],
+  );
+  const filteredMonitoredFiles = useMemo(() => {
+    if (fileQuickFilter === "stalled") return monitoredFiles.filter((file) => stalledFileNameSet.has(file.fileName));
+    if (fileQuickFilter === "running") return monitoredFiles.filter((file) => file.processingStatus === "running");
+    if (fileQuickFilter === "completed") return monitoredFiles.filter((file) => file.processingStatus === "completed");
+    return monitoredFiles;
+  }, [fileQuickFilter, monitoredFiles, stalledFileNameSet]);
+  const visibleMonitoredFiles = useMemo(() => {
+    if (!sortByPriority) return filteredMonitoredFiles;
+    const scored = [...filteredMonitoredFiles];
+    scored.sort((left, right) => {
+      const leftScore = priorityScoreMap.get(left.fileName) ?? 0;
+      const rightScore = priorityScoreMap.get(right.fileName) ?? 0;
+      if (leftScore !== rightScore) return rightScore - leftScore;
+      return left.fileName.localeCompare(right.fileName);
+    });
+    return scored;
+  }, [filteredMonitoredFiles, priorityScoreMap, sortByPriority]);
+  const activeFile = visibleMonitoredFiles.find((file) => file.fileName === activeFileTab) ?? visibleMonitoredFiles[0] ?? null;
+
+  useEffect(() => {
+    if (!focusCriticalMode || !criticalFocusCandidate) return;
+    if (activeFileTab === criticalFocusCandidate.fileName) return;
+    const activeScore = activeFileTab ? (priorityScoreMap.get(activeFileTab) ?? -1) : -1;
+    const candidateScore = priorityScoreMap.get(criticalFocusCandidate.fileName) ?? -1;
+    if (candidateScore >= activeScore + 100) {
+      setActiveFileTab(criticalFocusCandidate.fileName);
+    }
+  }, [activeFileTab, criticalFocusCandidate, focusCriticalMode, priorityScoreMap]);
+
+  useEffect(() => {
+    if (!activeFileTab && visibleMonitoredFiles[0]?.fileName) {
+      setActiveFileTab(visibleMonitoredFiles[0].fileName);
+      return;
+    }
+
+    if (activeFileTab && !visibleMonitoredFiles.some((file) => file.fileName === activeFileTab) && visibleMonitoredFiles[0]?.fileName) {
+      setActiveFileTab(visibleMonitoredFiles[0].fileName);
+    }
+  }, [activeFileTab, visibleMonitoredFiles]);
 
   const activeFileEvents = useMemo(() => {
     if (!activeFile || !uploadedDetail?.events) return [];
@@ -257,6 +458,29 @@ export default function ReduceLogs() {
       .slice(-8);
   }, [activeFile, uploadedDetail?.events]);
 
+  async function handleSampleExecutableChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setSampleHashError(null);
+    if (!file) {
+      setSampleExecutableLabel(null);
+      return;
+    }
+    setSampleExecutableLabel(`${file.name} · ${formatBytes(file.size)}`);
+    setIsHashingSample(true);
+    try {
+      const hex = await computeSha256HexFromFile(file);
+      setSampleSha256Input(hex);
+      toast.success("SHA-256 calculado — confira o bloco destacado abaixo antes de enviar.");
+    } catch (err) {
+      setSampleSha256Input("");
+      const message = err instanceof Error ? err.message : "Não foi possível calcular o SHA-256.";
+      setSampleHashError(message);
+      toast.error(message);
+    } finally {
+      setIsHashingSample(false);
+    }
+  }
+
   async function handleReductionSubmit() {
     if (!selectedFiles.length) {
       toast.error("Selecione ao menos um arquivo de log da Contradef.");
@@ -265,6 +489,12 @@ export default function ReduceLogs() {
 
     if (!analysisName.trim()) {
       toast.error("Informe um nome para a validação antes de enviar os arquivos.");
+      return;
+    }
+
+    const shaTrim = sampleSha256Input.trim().toLowerCase();
+    if (shaTrim && !isValidSha256Hex(shaTrim)) {
+      toast.error("SHA-256 da amostra inválido: use 64 caracteres hexadecimais ou deixe em branco.");
       return;
     }
 
@@ -286,6 +516,7 @@ export default function ReduceLogs() {
         focusTerms,
         focusRegexes,
         origin: window.location.origin,
+        sampleSha256: shaTrim || undefined,
       };
       const capabilities = await getReduceLogsUploadCapabilities().catch(() => null);
       const shouldUseLegacy = capabilities?.storageConfigured === false;
@@ -468,26 +699,28 @@ export default function ReduceLogs() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 text-foreground">
+      <div className="mx-auto w-full max-w-[1680px] space-y-6 text-foreground">
         <section>
-          <Card className="border-white/10 bg-slate-950/80 shadow-2xl shadow-cyan-950/10">
-            <CardHeader>
+          <Card className="border-white/10 bg-slate-950/80 shadow-2xl shadow-cyan-950/20">
+            <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-center gap-3">
                 <Badge className="border-cyan-400/25 bg-cyan-500/10 text-cyan-300">Reduzir Logs</Badge>
-                <Badge variant="outline" className="border-white/10 text-zinc-300">Lote atual + monitoramento por arquivo</Badge>
+                <Badge variant="outline" className="border-white/10 text-zinc-300">
+                  Lote atual + monitoramento por arquivo
+                </Badge>
               </div>
-              <CardTitle className="max-w-5xl text-3xl font-semibold tracking-tight sm:text-4xl">
+              <CardTitle className="text-3xl font-semibold tracking-tight text-zinc-100 sm:text-4xl">
                 Redução com acompanhamento individual de cada log submetido
               </CardTitle>
-              <CardDescription className="max-w-5xl text-base leading-7 text-zinc-300">
-                Esta tela passa a tratar a submissão atual como um <span className="font-medium text-zinc-100">lote monitorado</span>. Cada arquivo enviado ganha seu próprio acompanhamento de upload, etapa de redução e resultado final antes/depois.
+              <CardDescription className="text-base leading-7 text-zinc-300">
+                Esta tela passa a tratar a submissão atual como um <strong>lote monitorado</strong>. Cada arquivo enviado ganha seu próprio acompanhamento de upload, etapa de redução e resultado final antes/depois.
               </CardDescription>
             </CardHeader>
           </Card>
         </section>
 
         <section>
-          <Card className="border-cyan-400/15 bg-slate-950/80 shadow-xl shadow-cyan-950/10">
+          <Card className="border-cyan-400/15 bg-slate-950/80 shadow-xl shadow-slate-950/30">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -506,37 +739,89 @@ export default function ReduceLogs() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-2 lg:col-span-2">
                   <label className="text-sm font-medium text-zinc-200">Nome da validação</label>
-                  <Input value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} />
+                  <Input value={analysisName} onChange={(event) => setAnalysisName(event.target.value)} className="bg-slate-950/80" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-200">Arquivos de log</label>
-                  <Input
-                    type="file"
-                    multiple
-                    accept=".cdf,.csv,.json,.log,.txt"
-                    onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
-                  />
-                  <p className="text-xs leading-5 text-zinc-400">
-                    Envie arquivos como <span className="font-medium text-zinc-200">FunctionInterceptor</span>, <span className="font-medium text-zinc-200">TraceFcnCall</span>, <span className="font-medium text-zinc-200">TraceMemory</span>, <span className="font-medium text-zinc-200">TraceInstructions</span> ou <span className="font-medium text-zinc-200">TraceDisassembly</span>.
+              </div>
+
+              <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div>
+                  <p className="text-sm font-medium text-zinc-100">Amostra e VirusTotal (opcional)</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    O hash abaixo deve ser o do <span className="text-zinc-300">mesmo binário</span> que vê no VirusTotal — não o dos logs da Contradef. Pode calcular automaticamente a partir do ficheiro ou colar o SHA-256.
                   </p>
                 </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-200">Ficheiro da amostra (.exe, .dll, …)</label>
+                    <Input
+                      type="file"
+                      accept=".exe,.dll,.sys,.bin,.elf,.msi,.scr,.dat,.ocx,.cpl,.drv,.so"
+                      className="bg-slate-950/80"
+                      disabled={isHashingSample}
+                      onChange={handleSampleExecutableChange}
+                    />
+                    {sampleExecutableLabel ? (
+                      <p className="text-xs text-zinc-500">Origem do hash: {sampleExecutableLabel}</p>
+                    ) : null}
+                    {isHashingSample ? <p className="text-xs text-cyan-300">A calcular SHA-256 no navegador…</p> : null}
+                    {sampleHashError ? <p className="text-xs text-rose-300">{sampleHashError}</p> : null}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-200">Ou cole o SHA-256 (64 hex)</label>
+                    <Input
+                      value={sampleSha256Input}
+                      onChange={(event) => {
+                        setSampleSha256Input(event.target.value);
+                        setSampleHashError(null);
+                        setSampleExecutableLabel(null);
+                      }}
+                      placeholder="36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f"
+                      className="bg-slate-950/80 font-mono text-sm"
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
+                {isValidSha256Hex(sampleSha256Input.trim()) ? (
+                  <ExplicitSha256Block
+                    sha256Lowercase={sampleSha256Input.trim().toLowerCase()}
+                    helperText={
+                      sampleExecutableLabel
+                        ? `Hash calculado a partir de: ${sampleExecutableLabel}. Compare com a página do VirusTotal antes de submeter.`
+                        : "Hash inserido manualmente. Abra o VirusTotal e confirme que o SHA-256 da ficha coincide com o valor abaixo."
+                    }
+                  />
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-200">Arquivos de log</label>
+                <Input
+                  type="file"
+                  multiple
+                  accept=".cdf,.csv,.json,.log,.txt,.7z,.zip,.rar"
+                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+                  className="bg-slate-950/80"
+                />
+                <p className="text-xs leading-5 text-zinc-400">
+                  Envie arquivos como <span className="font-medium text-zinc-200">FunctionInterceptor</span>, <span className="font-medium text-zinc-200">TraceFcnCall</span>, <span className="font-medium text-zinc-200">TraceMemory</span>, <span className="font-medium text-zinc-200">TraceInstructions</span> ou <span className="font-medium text-zinc-200">TraceDisassembly</span>. Contêineres <span className="font-medium text-zinc-200">.7z/.zip/.rar</span> também são aceitos e processados por logs internos.
+                </p>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-zinc-200">Termos prioritários</label>
-                  <Textarea value={focusTerms} onChange={(event) => setFocusTerms(event.target.value)} className="min-h-28" />
+                  <Textarea value={focusTerms} onChange={(event) => setFocusTerms(event.target.value)} className="min-h-28 bg-slate-950/80" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-zinc-200">Regex heurístico complementar</label>
-                  <Textarea value={focusRegexes} onChange={(event) => setFocusRegexes(event.target.value)} className="min-h-28" />
+                  <Textarea value={focusRegexes} onChange={(event) => setFocusRegexes(event.target.value)} className="min-h-28 bg-slate-950/80" />
                 </div>
               </div>
 
               {selectedFiles.length > 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-sm font-medium text-zinc-100">Arquivos selecionados para a próxima execução</p>
                   <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
                     <Table>
@@ -560,13 +845,13 @@ export default function ReduceLogs() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-400">
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-4 text-sm text-zinc-300">
                   Nenhum arquivo foi selecionado ainda. Escolha um ou mais logs para disparar a redução e criar um lote acompanhado nesta tela.
                 </div>
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleReductionSubmit} disabled={isUploading}>
+                <Button onClick={handleReductionSubmit} disabled={isUploading} className="transition duration-200 hover:-translate-y-0.5">
                   {isUploading ? "Enviando lote e iniciando redução..." : "Executar redução com upload"}
                 </Button>
                 <p className="text-sm text-zinc-400">
@@ -578,13 +863,13 @@ export default function ReduceLogs() {
         </section>
 
         <section>
-          <Card className="border-emerald-400/15 bg-slate-950/80 shadow-xl shadow-emerald-950/10">
+          <Card className="border-emerald-400/15 bg-slate-950/80 shadow-xl shadow-slate-950/30">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <CardTitle>Monitoramento do lote atual</CardTitle>
                   <CardDescription>
-                    O bloco abaixo acompanha a submissão mais recente desta tela. Ele mostra o consolidado do lote e, em seguida, o progresso individual de cada log enviado.
+                    Visão única do lote atual: status geral, leitura consolidada e acompanhamento por arquivo.
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -607,7 +892,9 @@ export default function ReduceLogs() {
                       icon={RefreshCw}
                       label="Status do lote"
                       value={uploadedDetail ? getStatusLabel(uploadedDetail.job.status) : isUploading ? "Enviando" : "Em preparação"}
-                      helper={uploadedDetail ? `${uploadedDetail.job.progress}% · ${uploadedDetail.job.stage}` : `${monitoredFiles.length} arquivo(s) no lote atual`}
+                      helper={uploadedDetail
+                        ? `${uploadedDetail.job.progress}% · ${uploadedDetail.job.stage}${staleRunningFiles.length ? ` · ${staleRunningFiles.length} arquivo(s) sem atualização recente` : ""}`
+                        : `${monitoredFiles.length} arquivo(s) no lote atual`}
                     />
                     <MetricCard
                       icon={Database}
@@ -629,9 +916,18 @@ export default function ReduceLogs() {
                     />
                   </div>
 
+                  <Tabs defaultValue="overview" className="space-y-4">
+                    <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
+                      <TabsTrigger value="overview" className="rounded-lg px-3 py-1.5 data-[state=active]:bg-cyan-500/20">Visão geral</TabsTrigger>
+                      <TabsTrigger value="files" className="rounded-lg px-3 py-1.5 data-[state=active]:bg-cyan-500/20">Arquivos</TabsTrigger>
+                      <TabsTrigger value="operational" className="rounded-lg px-3 py-1.5 data-[state=active]:bg-cyan-500/20">Operacional</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="overview" className="space-y-4">
+
                   {showsLocalStorageModeBadge ? (
                     <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
-                      Execução concluída em modo local. O processamento e as métricas foram gerados normalmente, mas os artefatos externos não foram enviados para storage remoto neste ambiente.
+                      Execução concluída sem envio ao storage remoto (Forge). O processamento e as métricas foram gerados normalmente; use os links de download abaixo para acessar a cópia mantida no servidor, quando existir.
                     </div>
                   ) : null}
 
@@ -662,6 +958,7 @@ export default function ReduceLogs() {
                           </TabsList>
 
                           <TabsContent value="resumo" className="space-y-4">
+                            <VirusTotalSampleCard sampleSha256={uploadedDetail.job.sampleSha256} />
                             <div className="grid gap-4 lg:grid-cols-2">
                               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
@@ -680,12 +977,19 @@ export default function ReduceLogs() {
                                   <p><span className="text-zinc-400">Redução (linhas):</span> {uploadedDetail.metrics.originalLineCount} → {uploadedDetail.metrics.reducedLineCount} ({formatPercentFine(uploadedDetail.metrics.reductionPercent)})</p>
                                   <p><span className="text-zinc-400">APIs suspeitas (lista):</span> {uploadedDetail.suspiciousApis.length ? uploadedDetail.suspiciousApis.join(", ") : "—"}</p>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {uploadedDetail.techniques.length
-                                    ? uploadedDetail.techniques.map((technique) => (
-                                      <Badge key={technique} variant="outline" className="border-white/10 text-zinc-200">{technique}</Badge>
-                                    ))
-                                    : <span className="text-xs text-zinc-500">Nenhuma técnica marcada.</span>}
+                                <MitreDefenseEvasionPanel
+                                  mitre={uploadedDetail.mitreDefenseEvasion}
+                                  heuristicTags={uploadedDetail.techniques}
+                                />
+                                <div className="space-y-2">
+                                  <p className="text-xs font-medium text-zinc-400">Heurísticas nos logs</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {uploadedDetail.techniques.length
+                                      ? uploadedDetail.techniques.map((technique) => (
+                                        <Badge key={technique} variant="outline" className="border-white/10 text-zinc-200">{technique}</Badge>
+                                      ))
+                                      : <span className="text-xs text-zinc-500">Nenhuma técnica marcada.</span>}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -713,10 +1017,19 @@ export default function ReduceLogs() {
                                     <p className="text-sm text-zinc-400">Fluxo ainda vazio; aguarde a conclusão da correlação.</p>
                                   )}
                                 </div>
+                                <div className="mt-4 space-y-3">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-zinc-400">Jornada por fase</p>
+                                  <FlowJourneyDiagram
+                                    graph={uploadedDetail.flowGraph}
+                                    selectedNodeId={effectiveReduceLogsGraphNodeId}
+                                    onSelectNode={setReduceLogsGraphNodeId}
+                                  />
+                                </div>
                                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-400">
                                   {uploadedDetail.flowGraph.edges.map((edge) => (
                                     <div key={`${edge.source}-${edge.target}-${edge.relation}`} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1">
                                       <span>{edge.source.replace("phase:", "").replace("event:", "")}</span>
+                                      <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">{edge.relation}</span>
                                       <ArrowRight className="h-3 w-3 shrink-0" />
                                       <span>{edge.target.replace("phase:", "").replace("event:", "")}</span>
                                     </div>
@@ -727,22 +1040,47 @@ export default function ReduceLogs() {
                                 <p className="text-sm font-medium text-zinc-100">Nó selecionado</p>
                                 <p className="mt-1 text-xs text-zinc-400">{selectedReduceLogsGraphNode?.label ?? "Selecione um nó na lista."}</p>
                                 {selectedReduceLogsGraphNode ? (
-                                  <pre className="mt-3 max-h-64 overflow-auto rounded-xl border border-white/10 bg-slate-950/80 p-3 text-[11px] text-zinc-300">{JSON.stringify(selectedReduceLogsGraphNode.metadata ?? {}, null, 2)}</pre>
+                                  <div className="mt-3 space-y-3 text-sm text-zinc-300">
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                                      <p><span className="text-zinc-400">Arquivo de origem:</span> {selectedReduceLogsNodeDetails.sourceFile ?? "—"}</p>
+                                      <p><span className="text-zinc-400">Tipo de log:</span> {selectedReduceLogsNodeDetails.sourceLogType ?? "—"}</p>
+                                      <p><span className="text-zinc-400">Linha:</span> {selectedReduceLogsNodeDetails.sourceLineNumber ?? "—"}</p>
+                                      <p><span className="text-zinc-400">Fase:</span> {selectedReduceLogsNodeDetails.stage ?? "—"}</p>
+                                      <p><span className="text-zinc-400">Transição:</span> {selectedReduceLogsIncomingEdge?.relation ?? "—"}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                                      <p className="text-zinc-200">
+                                        <span className="text-zinc-400">Como foi identificado:</span>{" "}
+                                        {selectedReduceLogsNodeDetails.identification ?? selectedReduceLogsNodeDetails.identifiedBy ?? "Sem descrição de identificação."}
+                                      </p>
+                                      <p className="mt-2 text-zinc-300">{selectedReduceLogsNodeDetails.evidence ?? "Sem evidência textual disponível."}</p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {(selectedReduceLogsNodeDetails.suspiciousApis.length
+                                        ? selectedReduceLogsNodeDetails.suspiciousApis
+                                        : ["Sem APIs mapeadas"]
+                                      ).map((api) => (
+                                        <Badge key={api} variant="outline" className="border-amber-400/25 bg-amber-500/10 text-amber-200">{api}</Badge>
+                                      ))}
+                                    </div>
+                                  </div>
                                 ) : null}
                               </div>
                             </div>
                           </TabsContent>
 
                           <TabsContent value="artefatos" className="space-y-3">
-                            <p className="text-sm text-zinc-400">Artefatos registrados para este job. Links ativos exigem storage remoto configurado.</p>
+                            <p className="text-sm text-zinc-400">
+                              Artefatos registrados para este job. Download usa URL assinada quando o storage remoto está configurado; caso contrário, o servidor oferece cópia local autenticada (mesma sessão) enquanto o arquivo existir em disco.
+                            </p>
                             <div className="space-y-2">
                               {uploadedDetail.artifacts.length ? uploadedDetail.artifacts.map((artifact) => (
                                 <a
                                   key={`${artifact.artifactType}-${artifact.relativePath}`}
-                                  href={artifact.storageUrl ?? "#"}
+                                  href={artifact.downloadUrl ?? artifact.storageUrl ?? "#"}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className={`flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 p-4 transition ${artifact.storageUrl ? "hover:border-cyan-400/30 hover:bg-cyan-500/10" : "pointer-events-none opacity-60"}`}
+                                  className={`flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 p-4 transition ${artifact.downloadUrl || artifact.storageUrl ? "hover:border-cyan-400/30 hover:bg-cyan-500/10" : "pointer-events-none opacity-60"}`}
                                 >
                                   <div>
                                     <p className="text-sm font-medium text-zinc-100">{artifact.label}</p>
@@ -776,25 +1114,91 @@ export default function ReduceLogs() {
                     </Card>
                   ) : null}
 
+                    </TabsContent>
+
+                    <TabsContent value="files" className="space-y-4">
+
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-zinc-100">Acompanhamento por arquivo</p>
                         <p className="mt-1 text-sm leading-6 text-zinc-400">
-                          Cada linha representa um log do lote atual, com progresso de envio, status do processamento e resultado da redução individual.
-                          Assim que o backend concluir a etapa heurística, esta tabela passa a preencher para cada arquivo os campos <span className="font-medium text-zinc-200">Tamanho antes</span>, <span className="font-medium text-zinc-200">Tamanho depois</span>, <span className="font-medium text-zinc-200">Redução</span>, <span className="font-medium text-zinc-200">Sinais críticos</span> e a <span className="font-medium text-zinc-200">próxima etapa analítica</span> refletida em <span className="font-medium text-zinc-200">Etapa atual</span>.
+                          Progresso de upload, processamento e resultado de redução para cada log do lote atual.
                         </p>
                       </div>
                       <Badge variant="outline" className="border-white/10 text-zinc-300">
                         {uploadedDetail?.currentPhase ?? "lote em preparação"}
                       </Badge>
                     </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`border-white/10 ${fileQuickFilter === "stalled" ? "bg-amber-500/15 text-amber-200" : "text-zinc-300"}`}
+                        onClick={() => setFileQuickFilter((current) => current === "stalled" ? "all" : "stalled")}
+                      >
+                        {fileQuickFilter === "stalled" ? "Filtro: possivelmente travados" : "Mostrar só possivelmente travados"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`border-white/10 ${fileQuickFilter === "running" ? "bg-cyan-500/15 text-cyan-200" : "text-zinc-300"}`}
+                        onClick={() => setFileQuickFilter((current) => current === "running" ? "all" : "running")}
+                      >
+                        {fileQuickFilter === "running" ? "Filtro: em processamento" : "Mostrar só em processamento"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`border-white/10 ${fileQuickFilter === "completed" ? "bg-emerald-500/15 text-emerald-200" : "text-zinc-300"}`}
+                        onClick={() => setFileQuickFilter((current) => current === "completed" ? "all" : "completed")}
+                      >
+                        {fileQuickFilter === "completed" ? "Filtro: concluídos" : "Mostrar só concluídos"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`border-white/10 ${sortByPriority ? "bg-violet-500/15 text-violet-200" : "text-zinc-300"}`}
+                        onClick={() => setSortByPriority((current) => !current)}
+                      >
+                        {sortByPriority ? "Ordenação: prioridade analítica" : "Ordenar por prioridade analítica"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`border-white/10 ${focusCriticalMode ? "bg-rose-500/15 text-rose-200" : "text-zinc-300"}`}
+                        onClick={() => setFocusCriticalMode((current) => !current)}
+                      >
+                        {focusCriticalMode ? "Foco crítico automático ativo" : "Ativar foco crítico automático"}
+                      </Button>
+                      <Badge variant="outline" className="border-white/10 text-zinc-300">
+                        {stalledFileNameSet.size} arquivo(s) em atenção
+                      </Badge>
+                    </div>
 
-                    <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
+                    {fileQuickFilter !== "all" && visibleMonitoredFiles.length === 0 ? (
+                      <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-slate-950/50 p-3 text-sm text-zinc-300">
+                        Nenhum arquivo corresponde ao filtro selecionado no momento.
+                      </div>
+                    ) : null}
+
+                    <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3 text-sm text-zinc-300">
+                      <p className="font-medium text-zinc-100">Prioridade de investigação</p>
+                      <p className="mt-1 text-zinc-300">
+                        {visibleMonitoredFiles.length
+                          ? `${visibleMonitoredFiles.slice(0, 3).map((file) => file.fileName).join(" · ")}`
+                          : "Sem arquivos priorizados para o filtro atual."}
+                      </p>
+                      {focusCriticalMode && criticalFocusCandidate ? (
+                        <p className="mt-2 text-rose-200">Foco automático atual: {criticalFocusCandidate.fileName}</p>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4 hidden overflow-hidden rounded-xl border border-white/10 md:block">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Arquivo</TableHead>
+                            <TableHead className="sticky left-0 z-10 bg-slate-950">Arquivo</TableHead>
                             <TableHead>Upload</TableHead>
                             <TableHead>Processamento</TableHead>
                             <TableHead>Tempo de upload</TableHead>
@@ -807,14 +1211,19 @@ export default function ReduceLogs() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {monitoredFiles.map((file) => {
+                          {visibleMonitoredFiles.map((file) => {
                             const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
                             const uploadTone = file.uploadStatus === "failed" ? "rose" : file.uploadStatus === "completed" || file.uploadStatus === "running" ? "emerald" : "cyan";
-                            const processingTone = file.processingStatus === "failed" ? "rose" : file.processingStatus === "completed" ? "emerald" : "cyan";
+                            const processingVisual = getProcessingStatusVisual(file.processingStatus);
+                            const lastEventAt = fileLastEventAtMap.get(file.fileName);
+                            const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000));
+                            const stageSince = fileCurrentStageSinceMap.get(file.fileName);
+                            const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
+                            const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
 
                             return (
-                              <TableRow key={`${submittedJobId ?? "lote"}-${file.fileName}`}>
-                                <TableCell className="font-medium text-zinc-100">{file.fileName}</TableCell>
+                              <TableRow key={`${submittedJobId ?? "lote"}-${file.fileName}`} className={processingVisual.row}>
+                                <TableCell className="sticky left-0 z-10 bg-slate-950 font-medium text-zinc-100">{file.fileName}</TableCell>
                                 <TableCell className="min-w-44">
                                   <div className="space-y-2">
                                     <div className="flex items-center justify-between gap-2 text-xs text-zinc-400">
@@ -826,11 +1235,14 @@ export default function ReduceLogs() {
                                 </TableCell>
                                 <TableCell className="min-w-44">
                                   <div className="space-y-2">
-                                    <div className="flex items-center justify-between gap-2 text-xs text-zinc-400">
-                                      <span>{getStatusLabel(file.processingStatus)}</span>
+                                    <div className={`flex items-center justify-between gap-2 text-xs ${processingVisual.label}`}>
+                                      <span className="flex items-center gap-2">
+                                        <Badge className={processingVisual.badge}>{getStatusLabel(file.processingStatus)}</Badge>
+                                        {isPossiblyStalled ? <span className="text-amber-200">sem atualização recente</span> : null}
+                                      </span>
                                       <span>{file.processingProgress}%</span>
                                     </div>
-                                    <ProgressStrip value={file.processingProgress} tone={processingTone} />
+                                    <ProgressStrip value={file.processingProgress} tone={processingVisual.progressTone} />
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -843,6 +1255,12 @@ export default function ReduceLogs() {
                                   <div>
                                     <p className="font-medium text-zinc-100">{file.currentStage}</p>
                                     <p className="text-xs text-zinc-400">{file.currentStep}</p>
+                                    <p className="text-xs text-zinc-400">{formatLastActivityLabel(lastEventAt)}</p>
+                                    {stageSince ? (
+                                      <p className={`text-xs ${isStageLong ? "text-amber-200" : "text-zinc-400"}`}>
+                                        Na etapa atual há {formatElapsedMs(stageElapsedMs)}
+                                      </p>
+                                    ) : null}
                                   </div>
                                 </TableCell>
                                 <TableCell>{formatBytes(file.originalBytes)}</TableCell>
@@ -856,6 +1274,36 @@ export default function ReduceLogs() {
                         </TableBody>
                       </Table>
                     </div>
+
+                    <div className="mt-4 space-y-3 md:hidden">
+                      {visibleMonitoredFiles.map((file) => {
+                        const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
+                        const processingVisual = getProcessingStatusVisual(file.processingStatus);
+                        const lastEventAt = fileLastEventAtMap.get(file.fileName);
+                        const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000));
+                        const stageSince = fileCurrentStageSinceMap.get(file.fileName);
+                        const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
+                        const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
+                        return (
+                          <div key={`mobile-${submittedJobId ?? "lote"}-${file.fileName}`} className={`rounded-xl border border-white/10 bg-slate-950/60 p-3 ${processingVisual.row}`}>
+                            <p className="text-sm font-medium text-zinc-100">{file.fileName}</p>
+                            <p className="mt-1 text-xs text-zinc-400">{file.currentStage} · {file.currentStep}</p>
+                            <div className="mt-3 space-y-2 text-xs text-zinc-300">
+                              <p>Upload: {getStatusLabel(file.uploadStatus)} ({file.uploadProgress}%)</p>
+                              <p className={processingVisual.label}>
+                                Processamento: {getStatusLabel(file.processingStatus)} ({file.processingProgress}%)
+                                {isPossiblyStalled ? " · sem atualização recente" : ""}
+                              </p>
+                              <p>{formatLastActivityLabel(lastEventAt)}</p>
+                              {stageSince ? <p className={isStageLong ? "text-amber-200" : "text-zinc-300"}>Na etapa atual há {formatElapsedMs(stageElapsedMs)}</p> : null}
+                              <p>Tempo de upload: {file.uploadReused ? "Reaproveitado" : formatDurationMs(file.uploadDurationMs)}</p>
+                              <p>Redução: {formatPercentFine(reduction)} · {file.suspiciousEventCount} eventos / {file.triggerCount} gatilhos</p>
+                              <p>Semáforo: <span className={getSemaforoTone(file)}>{getSemaforo(file)}</span></p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -863,7 +1311,7 @@ export default function ReduceLogs() {
                       <div>
                         <p className="text-sm font-medium text-zinc-100">Sugestões de acompanhamento do lote atual</p>
                         <p className="mt-1 text-sm leading-6 text-zinc-400">
-                          Em vez de usar uma leitura genérica, as recomendações abaixo se ajustam ao lote corrente e indicam como acompanhar cada arquivo reduzido.
+                          Recomendações automáticas por arquivo para orientar a próxima ação do analista.
                         </p>
                       </div>
                       <Badge variant="outline" className="border-white/10 text-zinc-300">
@@ -871,40 +1319,69 @@ export default function ReduceLogs() {
                       </Badge>
                     </div>
 
-                    <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
+                    <div className="mt-4 hidden overflow-hidden rounded-xl border border-white/10 md:block">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Arquivo</TableHead>
+                            <TableHead className="sticky left-0 z-10 bg-slate-950">Arquivo</TableHead>
                             <TableHead>Leitura atual</TableHead>
                             <TableHead>Interpretação</TableHead>
                             <TableHead>Ação sugerida</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {monitoredFiles.map((file) => (
-                            <TableRow key={`guidance-${file.fileName}`}>
-                              <TableCell className="font-medium text-zinc-100">{file.fileName}</TableCell>
-                              <TableCell>{`${getStatusLabel(file.processingStatus)} · ${file.currentStep}`}</TableCell>
+                          {visibleMonitoredFiles.map((file) => {
+                            const processingVisual = getProcessingStatusVisual(file.processingStatus);
+                            return (
+                            <TableRow key={`guidance-${file.fileName}`} className={processingVisual.row}>
+                              <TableCell className="sticky left-0 z-10 bg-slate-950 font-medium text-zinc-100">{file.fileName}</TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <Badge className={processingVisual.badge}>{getStatusLabel(file.processingStatus)}</Badge>
+                                  <p className="text-xs text-zinc-300">{file.currentStep}</p>
+                                </div>
+                              </TableCell>
                               <TableCell>{getFileInterpretation(file)}</TableCell>
                               <TableCell>{getFileRecommendation(file)}</TableCell>
                             </TableRow>
-                          ))}
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </div>
+
+                    <div className="mt-4 space-y-3 md:hidden">
+                      {visibleMonitoredFiles.map((file) => {
+                        const processingVisual = getProcessingStatusVisual(file.processingStatus);
+                        return (
+                        <div key={`guidance-mobile-${file.fileName}`} className={`rounded-xl border border-white/10 bg-slate-950/60 p-3 ${processingVisual.row}`}>
+                          <p className="text-sm font-medium text-zinc-100">{file.fileName}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge className={processingVisual.badge}>{getStatusLabel(file.processingStatus)}</Badge>
+                            <p className="text-xs text-zinc-300">{file.currentStep}</p>
+                          </div>
+                          <p className="mt-2 text-sm text-zinc-300">{getFileInterpretation(file)}</p>
+                          <p className="mt-2 text-sm text-cyan-100">{getFileRecommendation(file)}</p>
+                        </div>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                    </TabsContent>
+
+                    <TabsContent value="operational" className="space-y-4">
 
                   <div className="rounded-2xl border border-cyan-400/15 bg-slate-950/60 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-zinc-100">Painel operacional por arquivo</p>
                         <p className="mt-1 text-sm leading-6 text-zinc-400">
-                          Cada aba abaixo detalha a situação individual do log, as etapas executadas e a leitura antes/depois correspondente ao arquivo selecionado.
+                          Detalhamento técnico do arquivo selecionado (etapas, leitura operacional e eventos).
                         </p>
                       </div>
                       {activeFile ? (
-                        <Badge className={jobStatusBadgeClass(activeFile.processingStatus)}>
+                        <Badge className={getProcessingStatusVisual(activeFile.processingStatus).badge}>
                           {getStatusLabel(activeFile.processingStatus)} · {activeFile.fileName}
                         </Badge>
                       ) : null}
@@ -913,22 +1390,30 @@ export default function ReduceLogs() {
                     {activeFile ? (
                       <Tabs value={activeFileTab} onValueChange={setActiveFileTab} className="mt-4 space-y-4">
                         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0">
-                          {monitoredFiles.map((file) => (
-                            <TabsTrigger
-                              key={`tab-${file.fileName}`}
-                              value={file.fileName}
-                              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 data-[state=active]:border-cyan-400/30 data-[state=active]:bg-cyan-500/10"
-                            >
-                              <div className="text-left">
-                                <p className="text-xs font-medium">{file.fileName}</p>
-                                <p className="text-[11px] text-zinc-400">{getStatusLabel(file.processingStatus)} · {file.processingProgress}%</p>
-                              </div>
-                            </TabsTrigger>
-                          ))}
+                          {visibleMonitoredFiles.map((file) => {
+                            const processingVisual = getProcessingStatusVisual(file.processingStatus);
+                            return (
+                              <TabsTrigger
+                                key={`tab-${file.fileName}`}
+                                value={file.fileName}
+                                className={`rounded-xl border border-white/10 bg-black/20 px-3 py-2 data-[state=active]:border-cyan-400/30 data-[state=active]:bg-cyan-500/10 ${processingVisual.row}`}
+                              >
+                                <div className="text-left">
+                                  <p className="text-xs font-medium">{file.fileName}</p>
+                                  <p className={`text-[11px] ${processingVisual.label}`}>{getStatusLabel(file.processingStatus)} · {file.processingProgress}%</p>
+                                </div>
+                              </TabsTrigger>
+                            );
+                          })}
                         </TabsList>
 
-                        {monitoredFiles.map((file) => {
+                        {visibleMonitoredFiles.map((file) => {
                           const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
+                          const lastEventAt = fileLastEventAtMap.get(file.fileName);
+                          const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000));
+                          const stageSince = fileCurrentStageSinceMap.get(file.fileName);
+                          const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
+                          const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
                           return (
                             <TabsContent key={`content-${file.fileName}`} value={file.fileName} className="space-y-4">
                               <div className="grid gap-4 md:grid-cols-4">
@@ -957,6 +1442,10 @@ export default function ReduceLogs() {
                                     <p><span className="font-medium text-zinc-100">Tempo de upload:</span> {file.uploadReused ? "Reaproveitado do servidor, sem novo envio" : formatDurationMs(file.uploadDurationMs)}</p>
                                     <p><span className="font-medium text-zinc-100">Próxima leitura do analista:</span> {file.currentStep}</p>
                                     <p><span className="font-medium text-zinc-100">Última mensagem:</span> {file.lastMessage}</p>
+                                    <p><span className="font-medium text-zinc-100">Atividade:</span> {formatLastActivityLabel(lastEventAt)}{isPossiblyStalled ? " (verificar se houve pausa prolongada)" : ""}</p>
+                                    {stageSince ? (
+                                      <p><span className="font-medium text-zinc-100">Tempo na etapa atual:</span> <span className={isStageLong ? "text-amber-200" : "text-zinc-300"}>{formatElapsedMs(stageElapsedMs)}{isStageLong ? " (acima do limite esperado)" : ""}</span></p>
+                                    ) : null}
                                     <p><span className="font-medium text-zinc-100">Sinais críticos:</span> {file.suspiciousEventCount} eventos suspeitos e {file.triggerCount} gatilhos preservados.</p>
                                     <p><span className="font-medium text-zinc-100">Ação sugerida:</span> {getFileRecommendation(file)}</p>
                                   </div>
@@ -966,7 +1455,7 @@ export default function ReduceLogs() {
                               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <p className="text-sm font-medium text-zinc-100">Eventos e marcos do arquivo</p>
                                 {activeFileEvents.length > 0 ? (
-                                  <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
+                                  <div className="mt-4 hidden overflow-hidden rounded-xl border border-white/10 md:block">
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
@@ -993,6 +1482,22 @@ export default function ReduceLogs() {
                                       </TableBody>
                                     </Table>
                                   </div>
+                                ) : null}
+
+                                {activeFileEvents.length > 0 ? (
+                                  <div className="mt-4 space-y-2 md:hidden">
+                                    {activeFileEvents.map((event, index) => {
+                                      const createdAtLabel = event.createdAt ? new Date(event.createdAt).toLocaleTimeString("pt-BR") : "—";
+                                      return (
+                                        <div key={`event-mobile-${file.fileName}-${index}`} className="rounded-lg border border-white/10 bg-slate-950/60 p-3">
+                                          <p className="text-xs text-zinc-400">{createdAtLabel}</p>
+                                          <p className="mt-1 text-sm font-medium text-zinc-100">{event.stage}</p>
+                                          <p className="mt-1 text-sm text-zinc-300">{event.message}</p>
+                                          <p className="mt-1 text-xs text-zinc-400">Progresso: {event.progress}%</p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 ) : (
                                   <p className="mt-4 text-sm leading-6 text-zinc-400">
                                     Os eventos deste arquivo aparecerão aqui conforme o backend registrar as etapas da redução para o lote atual.
@@ -1005,6 +1510,9 @@ export default function ReduceLogs() {
                       </Tabs>
                     ) : null}
                   </div>
+
+                    </TabsContent>
+                  </Tabs>
                 </>
               )}
             </CardContent>
@@ -1022,6 +1530,8 @@ function StepRow({ title, status, description }: { title: string; status: string
       ? "border-rose-400/25 bg-rose-500/10 text-rose-200"
       : status === "Em andamento"
         ? "border-cyan-400/25 bg-cyan-500/10 text-cyan-300"
+        : status === "Aguardando"
+          ? "border-amber-400/25 bg-amber-500/10 text-amber-200"
         : "border-white/10 bg-white/5 text-zinc-300";
 
   return (

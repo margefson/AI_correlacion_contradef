@@ -51,6 +51,11 @@ export type FileMonitor = {
   uploadReused: boolean;
 };
 
+function isArchiveContainerFile(fileName: string) {
+  const lowered = fileName.toLowerCase();
+  return lowered.endsWith(".7z") || lowered.endsWith(".zip") || lowered.endsWith(".rar");
+}
+
 export function inferLogType(fileName: string): LogType {
   const lowered = fileName.toLowerCase();
   if (lowered.includes("functioninterceptor") || lowered.includes("function_interceptor")) return "FunctionInterceptor";
@@ -108,10 +113,15 @@ export function getFileRecommendation(file: FileMonitor) {
 }
 
 export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], detailFiles: DetailFileMonitor[]) {
+  const detailNames = new Set(detailFiles.map((file) => file.fileName));
+  const normalizedSubmitted = detailFiles.length
+    ? submittedFiles.filter((file) => !isArchiveContainerFile(file.fileName) || detailNames.has(file.fileName))
+    : submittedFiles;
+
   const detailMap = new Map(detailFiles.map((file) => [file.fileName, file]));
-  const localMap = new Map(submittedFiles.map((file) => [file.fileName, file]));
+  const localMap = new Map(normalizedSubmitted.map((file) => [file.fileName, file]));
   const allNames = Array.from(new Set([
-    ...submittedFiles.map((file) => file.fileName),
+    ...normalizedSubmitted.map((file) => file.fileName),
     ...detailFiles.map((file) => file.fileName),
   ]));
 

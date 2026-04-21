@@ -96,15 +96,15 @@ Alinhar a ferramenta ao artigo proposto para o SBSeg, mantendo o fluxo de análi
 - Garantir compatibilidade e determinismo.
 
 ## 6. Documentação e apoio metodológico
-### GUIA_DE_USO.md
+### docs/web/GUIA_DE_USO.md
 - Atualizar fluxo operacional da ferramenta.
 - Explicar upload, acompanhamento e leitura dos resultados.
 
-### MAPEAMENTO_REDUCAO_HEURISTICA.md
+### docs/web/MAPEAMENTO_REDUCAO_HEURISTICA.md
 - Documentar critérios de redução seletiva.
 - Explicar o que é preservado e o que é filtrado.
 
-### PLANO_ETAPAS_ANALITICAS.md
+### docs/web/PLANO_ETAPAS_ANALITICAS.md
 - Documentar fases do pipeline.
 - Explicar como interpretar status, eventos e artefatos.
 

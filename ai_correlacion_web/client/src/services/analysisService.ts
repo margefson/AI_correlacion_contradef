@@ -57,6 +57,8 @@ type UploadCompleteRequest = {
   focusTerms: string;
   focusRegexes: string;
   origin: string;
+  /** SHA-256 (64 hex) do binário analisado — opcional, para VirusTotal e notas. */
+  sampleSha256?: string;
   files: UploadCompletionFilePayload[];
 };
 
@@ -65,6 +67,7 @@ type LegacyUploadRequest = {
   focusTerms: string;
   focusRegexes: string;
   origin: string;
+  sampleSha256?: string;
   files: File[];
 };
 
@@ -136,6 +139,9 @@ export async function uploadReduceLogsLegacy(payload: LegacyUploadRequest) {
   formData.append("focusTerms", payload.focusTerms);
   formData.append("focusRegexes", payload.focusRegexes);
   formData.append("origin", payload.origin);
+  if (payload.sampleSha256?.trim()) {
+    formData.append("sampleSha256", payload.sampleSha256.trim());
+  }
   payload.files.forEach((file) => formData.append("logs", file, file.name));
 
   const response = await fetch("/api/reduce-logs/upload", {

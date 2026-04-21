@@ -2,7 +2,6 @@ import express, { type Express, type Request, type Response } from "express";
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import Busboy from "busboy";
@@ -14,7 +13,7 @@ import { storageGetBuffer, storagePutExact } from "../storage";
 import { createContext } from "./context";
 import { ENV } from "./env";
 
-const TEMP_UPLOAD_DIR = join(tmpdir(), "contradef-reduce-logs");
+const TEMP_UPLOAD_DIR = join("E:\\", "contradef-tmp", "reduce-logs");
 const MAX_MULTIPART_FILES = 20;
 const MAX_MULTIPART_FILE_BYTES = 6 * 1024 * 1024 * 1024;
 const MAX_CHUNK_BYTES = 16 * 1024 * 1024;
@@ -444,6 +443,7 @@ async function startJobFromPreparedFiles(input: {
   createdByUserId: number;
   preparedFiles: PreparedUploadFile[];
   sessionId: string;
+  sampleSha256?: string | null;
 }) {
   for (const file of input.preparedFiles) {
     if (!file.chunkCount) {
@@ -457,6 +457,7 @@ async function startJobFromPreparedFiles(input: {
     focusRegexes: input.focusRegexes,
     origin: input.origin,
     createdByUserId: input.createdByUserId,
+    sampleSha256: input.sampleSha256 ?? null,
     logFiles: input.preparedFiles.map((file) => ({
       fileName: file.fileName,
       logType: file.logType,
@@ -482,6 +483,7 @@ async function handleLegacyMultipartUpload(req: Request, res: Response, userId: 
     focusTerms: "",
     focusRegexes: "",
     origin: "",
+    sampleSha256: "",
   };
 
   let fatalError: Error | null = null;
@@ -503,6 +505,7 @@ async function handleLegacyMultipartUpload(req: Request, res: Response, userId: 
       if (name === "focusTerms") fields.focusTerms = value;
       if (name === "focusRegexes") fields.focusRegexes = value;
       if (name === "origin") fields.origin = value;
+      if (name === "sampleSha256") fields.sampleSha256 = value;
     });
 
     busboy.on("filesLimit", () => {
@@ -583,6 +586,7 @@ async function handleLegacyMultipartUpload(req: Request, res: Response, userId: 
       focusRegexes: parseCsvInput(fields.focusRegexes),
       origin: fields.origin || undefined,
       createdByUserId: userId,
+      sampleSha256: fields.sampleSha256.trim() || null,
       logFiles: uploadedLogs.map((file) => ({
         fileName: file.fileName,
         logType: file.logType,
@@ -768,6 +772,7 @@ export function registerReduceLogsUploadRoute(app: Express) {
       focusTerms?: unknown;
       focusRegexes?: unknown;
       origin?: unknown;
+      sampleSha256?: unknown;
       files?: Array<{
         fileId?: unknown;
         fileName?: unknown;
@@ -805,6 +810,7 @@ export function registerReduceLogsUploadRoute(app: Express) {
         focusTerms: parseCsvInput(body?.focusTerms),
         focusRegexes: parseCsvInput(body?.focusRegexes),
         origin: parseTextInput(body?.origin) || undefined,
+        sampleSha256: parseTextInput(body?.sampleSha256) || null,
         createdByUserId: Number(user.id),
         preparedFiles: requestedFiles,
       });

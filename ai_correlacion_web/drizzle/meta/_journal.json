@@ -15,6 +15,13 @@
       "when": 1776636779241,
       "tag": "0001_lean_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1776640000000,
+      "tag": "0003_add_sample_sha256",
+      "breakpoints": true
     }
   ]
 }

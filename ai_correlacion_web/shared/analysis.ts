@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { mitreDefenseEvasionSchema } from "./mitreDefenseEvasion";
+
+export type { MitreDefenseEvasion } from "./mitreDefenseEvasion";
+export { buildMitreDefenseEvasion, listHeuristicsOutsideTa0005 } from "./mitreDefenseEvasion";
 
 export const supportedLogTypeSchema = z.enum([
   "FunctionInterceptor",
@@ -41,6 +45,8 @@ export const analysisArtifactSchema = z.object({
   storageKey: z.string().optional().nullable(),
   mimeType: z.string().optional().nullable(),
   sizeBytes: z.number().optional().nullable(),
+  /** Resolved download href: remote storage URL and/or authenticated local `/api/analysis-artifacts/download` URL. */
+  downloadUrl: z.string().nullable().optional(),
 });
 export type AnalysisArtifactDto = z.infer<typeof analysisArtifactSchema>;
 
@@ -130,6 +136,7 @@ export type ReductionFileMetric = z.infer<typeof reductionFileMetricSchema>;
 export const analysisJobSummarySchema = z.object({
   jobId: z.string(),
   sampleName: z.string(),
+  sampleSha256: z.string().length(64).nullable().optional(),
   sourceArchiveName: z.string(),
   focusFunction: z.string(),
   status: jobStatusSchema,
@@ -178,6 +185,7 @@ export const analysisJobDetailSchema = z.object({
   fileMetrics: z.array(reductionFileMetricSchema).default([]),
   suspiciousApis: z.array(z.string()).default([]),
   techniques: z.array(z.string()).default([]),
+  mitreDefenseEvasion: mitreDefenseEvasionSchema,
   recommendations: z.array(z.string()).default([]),
   classification: malwareCategorySchema.default("Unknown"),
   riskLevel: riskLevelSchema.default("low"),

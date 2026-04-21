@@ -5,6 +5,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
+import { registerAnalysisArtifactDownloadRoute } from "../analysisArtifactDownload";
 import { registerReduceLogsUploadRoute } from "./reduceLogsUpload";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -37,6 +38,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerAnalysisArtifactDownloadRoute(app);
   registerReduceLogsUploadRoute(app);
   // tRPC API
   app.use(

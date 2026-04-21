@@ -121,6 +121,7 @@ export async function createAnalysisJob(job: InsertAnalysisJob) {
       jobId: String(job.jobId),
       pipelineJobId: job.pipelineJobId ?? null,
       sampleName: String(job.sampleName),
+      sampleSha256: job.sampleSha256 ?? null,
       sourceArchiveName: String(job.sourceArchiveName),
       sourceArchiveUrl: job.sourceArchiveUrl ?? null,
       sourceArchiveStorageKey: job.sourceArchiveStorageKey ?? null,

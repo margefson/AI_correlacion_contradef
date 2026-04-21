@@ -33,6 +33,7 @@ vi.mock("./db", async () => {
   };
 });
 
+import { buildMitreDefenseEvasion } from "../shared/analysis";
 import { appRouter } from "./routers";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -110,6 +111,7 @@ describe("analysis router", () => {
       focusRegexes: ["VirtualProtect.*RW.*RX"],
       origin: "https://example.com",
       createdByUserId: 7,
+      sampleSha256: null,
     });
     expect(result).toEqual({ job: { jobId: "job-123", status: "queued" } });
   });
@@ -175,6 +177,7 @@ describe("analysis router", () => {
       ],
       suspiciousApis: ["VirtualProtect"],
       techniques: ["Anti-debug"],
+      mitreDefenseEvasion: buildMitreDefenseEvasion(["Anti-debug"], ["VirtualProtect"]),
       recommendations: ["Revisar o ponto de desempacotamento."],
       classification: "Trojan",
       riskLevel: "high",

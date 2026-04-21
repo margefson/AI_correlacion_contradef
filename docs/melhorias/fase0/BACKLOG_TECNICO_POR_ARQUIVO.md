@@ -66,6 +66,6 @@
 - Evitar exportar apenas texto bruto.
 
 ## 12. Documentação
-- Atualizar GUIA_DE_USO.md.
-- Atualizar MAPEAMENTO_REDUCAO_HEURISTICA.md.
-- Atualizar PLANO_ETAPAS_ANALITICAS.md.
+- Atualizar `docs/web/GUIA_DE_USO.md`.
+- Atualizar `docs/web/MAPEAMENTO_REDUCAO_HEURISTICA.md`.
+- Atualizar `docs/web/PLANO_ETAPAS_ANALITICAS.md`.

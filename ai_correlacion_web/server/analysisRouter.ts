@@ -27,6 +27,7 @@ const submitJobInputSchema = z.object({
   focusTerms: z.array(z.string().min(1)).default([]),
   focusRegexes: z.array(z.string().min(1)).default([]),
   origin: z.string().url().optional(),
+  sampleSha256: z.string().trim().max(64).optional(),
 });
 
 const jobIdInputSchema = z.object({
@@ -61,6 +62,7 @@ export const analysisRouter = router({
       focusRegexes: input.focusRegexes,
       origin: input.origin,
       createdByUserId: ctx.user.id,
+      sampleSha256: input.sampleSha256 || null,
     });
   }),
 

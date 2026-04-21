@@ -1,10 +1,15 @@
 import { Buffer } from "node:buffer";
+import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { access, readFile, unlink } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { createWriteStream } from "node:fs";
+import { access, mkdir, mkdtemp, readdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
+import { promisify } from "node:util";
 
+import { path7za } from "7zip-bin";
 import { nanoid } from "nanoid";
 
 import {
@@ -19,20 +24,23 @@ import {
   updateAnalysisJob,
   upsertAnalysisInsight,
 } from "./db";
+import { copyTempFileToLocalArtifact, localArtifactExists, persistJobArtifactBuffer } from "./artifactLocalStore";
 import { invokeLLM } from "./_core/llm";
 import { storageGetBuffer, storagePut } from "./storage";
-import type {
-  AnalysisArtifactDto,
-  AnalysisInsightDto,
-  AnalysisJobDetail,
-  FlowEdge,
-  FlowGraph,
-  FlowNode,
-  MalwareCategory,
-  ReductionFileMetric,
-  ReductionMetrics,
-  RiskLevel,
-  SupportedLogType,
+import { normalizeOptionalSampleSha256 } from "../shared/virusTotal";
+import {
+  buildMitreDefenseEvasion,
+  type AnalysisArtifactDto,
+  type AnalysisInsightDto,
+  type AnalysisJobDetail,
+  type FlowEdge,
+  type FlowGraph,
+  type FlowNode,
+  type MalwareCategory,
+  type ReductionFileMetric,
+  type ReductionMetrics,
+  type RiskLevel,
+  type SupportedLogType,
 } from "../shared/analysis";
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -40,6 +48,10 @@ const MAX_SOURCE_ARTIFACT_UPLOAD_BYTES = 24 * 1024 * 1024;
 const MAX_FILES = 20;
 const MAX_EVENTS = 320;
 const DEFAULT_FOCUS = "Contradef log intelligence";
+const ARCHIVE_EXTENSIONS = new Set([".7z", ".zip", ".rar"]);
+const TEXT_LOG_EXTENSIONS = new Set([".cdf", ".csv", ".txt", ".log", ".json"]);
+const execFileAsync = promisify(execFile);
+const WORK_TMP_ROOT = join("E:\\", "contradef-tmp", "analysis");
 
 const suspiciousApis = [
   "IsDebuggerPresent",
@@ -94,6 +106,8 @@ type StartAnalysisJobInput = {
   logFiles: StartAnalysisLogInput[];
   createdByUserId?: number;
   origin?: string;
+  /** SHA-256 do ficheiro da amostra (não dos logs), para ligar a relatórios como VirusTotal. */
+  sampleSha256?: string | null;
 };
 
 type NormalizedEvent = {
@@ -189,6 +203,150 @@ function hasChunkUploadReference(logFile: StartAnalysisLogInput) {
   );
 }
 
+function isArchiveContainerFile(fileName: string) {
+  return ARCHIVE_EXTENSIONS.has(extname(fileName).toLowerCase());
+}
+
+function isLikelyTextLogFile(fileName: string) {
+  if (TEXT_LOG_EXTENSIONS.has(extname(fileName).toLowerCase())) return true;
+  return inferLogType(fileName) !== "Unknown";
+}
+
+async function listFilesRecursively(rootDir: string): Promise<string[]> {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(async (entry) => {
+    const fullPath = join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      return listFilesRecursively(fullPath);
+    }
+    return [fullPath];
+  }));
+  return nested.flat();
+}
+
+async function createWorkTempDir(prefix: string) {
+  const candidates = [WORK_TMP_ROOT, tmpdir()];
+  let lastError: unknown = null;
+  for (const baseDir of candidates) {
+    try {
+      await mkdir(baseDir, { recursive: true });
+      return await mkdtemp(join(baseDir, prefix));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Não foi possível criar diretório temporário para processamento.");
+}
+
+async function materializeArchiveInput(logFile: StartAnalysisLogInput): Promise<{ archivePath: string; cleanupDir: string | null }> {
+  if (logFile.tempFilePath) {
+    return { archivePath: logFile.tempFilePath, cleanupDir: null };
+  }
+
+  if (hasChunkUploadReference(logFile)) {
+    const tempDir = await createWorkTempDir("contradef-archive-src-");
+    const archivePath = join(tempDir, basename(logFile.fileName));
+    const writer = createWriteStream(archivePath);
+
+    await new Promise<void>(async (resolvePromise, rejectPromise) => {
+      writer.on("error", rejectPromise);
+      writer.on("finish", resolvePromise);
+
+      try {
+        for (let chunkIndex = 0; chunkIndex < (logFile.uploadChunkCount ?? 0); chunkIndex += 1) {
+          const chunkKey = buildUploadedChunkStorageKey(
+            logFile.uploadedByUserId as number,
+            logFile.uploadSessionId as string,
+            logFile.uploadFileId as string,
+            chunkIndex,
+          );
+          const chunkDownload = await storageGetBuffer(chunkKey);
+          writer.write(chunkDownload.buffer);
+        }
+        writer.end();
+      } catch (error) {
+        writer.destroy();
+        rejectPromise(error);
+      }
+    });
+
+    return { archivePath, cleanupDir: tempDir };
+  }
+
+  if (logFile.base64) {
+    const decoded = decodeBase64(logFile.base64);
+    const tempDir = await createWorkTempDir("contradef-archive-src-");
+    const archivePath = join(tempDir, basename(logFile.fileName));
+    await writeFile(archivePath, decoded);
+    return { archivePath, cleanupDir: tempDir };
+  }
+
+  throw new Error(`O arquivo compactado ${logFile.fileName} não possui conteúdo submetido.`);
+}
+
+async function expandArchiveContainer(logFile: StartAnalysisLogInput): Promise<StartAnalysisLogInput[]> {
+  const { archivePath, cleanupDir } = await materializeArchiveInput(logFile);
+  const extractRoot = await createWorkTempDir("contradef-archive-extract-");
+
+  try {
+    await execFileAsync(path7za, ["x", "-y", `-o${extractRoot}`, archivePath], { windowsHide: true });
+    const allFiles = await listFilesRecursively(extractRoot);
+    const extractedLogs = await Promise.all(
+      allFiles
+        .filter((filePath) => isLikelyTextLogFile(filePath))
+        .map(async (filePath) => {
+          const relName = relative(extractRoot, filePath).replace(/\\/g, "/");
+          const fileStats = await stat(filePath);
+          return {
+            fileName: relName || basename(filePath),
+            logType: inferLogType(filePath, logFile.logType),
+            tempFilePath: filePath,
+            sizeBytes: fileStats.size,
+            uploadDurationMs: logFile.uploadDurationMs,
+            uploadReused: logFile.uploadReused,
+          } satisfies StartAnalysisLogInput;
+        }),
+    );
+
+    if (!extractedLogs.length) {
+      throw new Error(`O contêiner ${logFile.fileName} não contém logs suportados para análise.`);
+    }
+
+    return extractedLogs;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/enospc|no space left|espaço insuficiente/i.test(message)) {
+      throw new Error(`Falha ao descompactar ${logFile.fileName}: espaço insuficiente no disco para extração temporária. Libere espaço ou configure o diretório de execução para um disco com mais capacidade.`);
+    }
+    throw new Error(`Falha ao descompactar ${logFile.fileName}: ${message}`);
+  } finally {
+    if (cleanupDir) {
+      await rm(cleanupDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+}
+
+async function normalizeSubmittedLogs(input: StartAnalysisJobInput): Promise<StartAnalysisJobInput> {
+  const expanded = await Promise.all(input.logFiles.map(async (logFile) => {
+    if (!isArchiveContainerFile(logFile.fileName)) return [logFile];
+    return expandArchiveContainer(logFile);
+  }));
+
+  const normalized = expanded.flat();
+  if (!normalized.length) {
+    throw new Error("Nenhum log válido foi encontrado após preparar os arquivos enviados.");
+  }
+  if (normalized.length > MAX_FILES) {
+    throw new Error(`Após descompactar os contêineres, o lote contém ${normalized.length} arquivos. O máximo permitido é ${MAX_FILES}.`);
+  }
+
+  return {
+    ...input,
+    logFiles: normalized,
+  };
+}
+
 function detectApis(line: string) {
   return suspiciousApis.filter((api) => line.includes(api));
 }
@@ -270,6 +428,32 @@ function isTriggerLine(line: string, apis: string[]) {
   return false;
 }
 
+function inferTransitionRelation(event: NormalizedEvent) {
+  const apis = new Set(event.suspiciousApis);
+  const lowered = event.message.toLowerCase();
+  if (["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"].some((api) => apis.has(api))) {
+    return "checagem anti-debug";
+  }
+  if (apis.has("EnumSystemFirmwareTables") || lowered.includes("wmi") || lowered.includes("vm")) {
+    return "checagem anti-VM";
+  }
+  if (apis.has("GetTickCount") || apis.has("RtlQueryPerformanceCounter")) {
+    return "checagem anti-overhead";
+  }
+  if (apis.has("VirtualAlloc")) {
+    return "preparação de memória";
+  }
+  if (apis.has("VirtualProtect")) {
+    return "transição RW->RX (unpacking)";
+  }
+  if (apis.has("WriteProcessMemory") || apis.has("CreateRemoteThread")) {
+    return "injeção/execução remota";
+  }
+  if (lowered.includes("tracefcncall.m1")) return "origem por call direta";
+  if (lowered.includes("tracefcncall.m2")) return "origem por salto indireto";
+  return "progressão da execução";
+}
+
 function classifyMalware(techniques: Set<string>, events: NormalizedEvent[]): MalwareCategory {
   const scores: Record<MalwareCategory, number> = {
     Trojan: 1,
@@ -318,7 +502,12 @@ function deriveCurrentPhase(events: NormalizedEvent[]) {
   return current;
 }
 
-function buildFlowGraph(events: NormalizedEvent[], currentPhase: string): FlowGraph {
+function buildFlowGraph(
+  events: NormalizedEvent[],
+  currentPhase: string,
+  classification: MalwareCategory,
+  riskLevel: RiskLevel,
+): FlowGraph {
   const phaseNodes: FlowNode[] = [];
   const phaseEdges: FlowEdge[] = [];
   const eventNodes: FlowNode[] = [];
@@ -342,19 +531,33 @@ function buildFlowGraph(events: NormalizedEvent[], currentPhase: string): FlowGr
     }
   });
 
-  events.filter((event) => event.suspicious).slice(0, 18).forEach((event, index) => {
+  const suspiciousJourney = events.filter((event) => event.suspicious).slice(0, 28);
+  suspiciousJourney.forEach((event, index) => {
     const apiLabel = event.suspiciousApis[0] ?? event.eventType;
     const nodeId = `event:${index}:${apiLabel}`;
+    const identifiedBy = event.suspiciousApis.length
+      ? `API sensível detectada (${event.suspiciousApis.join(", ")})`
+      : `Evidência ${event.eventType}`;
+    const identification = event.trigger
+      ? `${identifiedBy}; linha marcada como gatilho heurístico.`
+      : `${identifiedBy}; linha marcada como evidência suspeita.`;
+
     eventNodes.push({
       id: nodeId,
       label: apiLabel,
       kind: "api",
       severity: event.trigger ? "critical" : "high",
       metadata: {
-        fileName: event.fileName,
-        logType: event.logType,
-        lineNumber: event.lineNumber,
-        message: event.message,
+        sourceFile: event.fileName,
+        sourceLogType: event.logType,
+        sourceLineNumber: event.lineNumber,
+        stage: event.stage,
+        identifiedBy,
+        identification,
+        trigger: event.trigger,
+        suspiciousApis: event.suspiciousApis,
+        techniques: event.techniqueTags,
+        evidence: event.message,
       },
     });
     eventEdges.push({
@@ -363,7 +566,46 @@ function buildFlowGraph(events: NormalizedEvent[], currentPhase: string): FlowGr
       relation: event.trigger ? "gatilho" : "evidência",
       evidence: event.message,
     });
+
+    if (index > 0) {
+      const previous = suspiciousJourney[index - 1];
+      const previousLabel = previous?.suspiciousApis[0] ?? previous?.eventType ?? "anterior";
+      eventEdges.push({
+        source: `event:${index - 1}:${previousLabel}`,
+        target: nodeId,
+        relation: inferTransitionRelation(event),
+        evidence: `${previous?.fileName ?? "arquivo anterior"} -> ${event.fileName}`,
+        metadata: {
+          sourceFile: event.fileName,
+          sourceLogType: event.logType,
+        },
+      });
+    }
   });
+
+  if (eventNodes.length > 0) {
+    const lastNode = eventNodes[eventNodes.length - 1];
+    const verdictNodeId = "verdict:discovery";
+    eventNodes.push({
+      id: verdictNodeId,
+      label: `Descoberta: ${classification}`,
+      kind: "verdict",
+      severity: riskLevel === "critical" ? "critical" : riskLevel === "high" ? "high" : "medium",
+      metadata: {
+        classification,
+        riskLevel,
+        currentPhase,
+        identifiedBy: "Correlação completa do caminho observado",
+        identification: "Veredito final produzido após encadear os nós e validar as evidências preservadas.",
+        sourceFile: (lastNode?.metadata as Record<string, unknown> | undefined)?.sourceFile ?? null,
+      },
+    });
+    eventEdges.push({
+      source: lastNode.id,
+      target: verdictNodeId,
+      relation: "leva ao veredito",
+    });
+  }
 
   return {
     nodes: [...phaseNodes, ...eventNodes],
@@ -371,6 +613,7 @@ function buildFlowGraph(events: NormalizedEvent[], currentPhase: string): FlowGr
     summary: {
       phases: orderedStages,
       totalSuspiciousEvents: events.filter((event) => event.suspicious).length,
+      pathLength: eventNodes.length,
     },
   };
 }
@@ -405,7 +648,7 @@ function buildFallbackSummary(params: {
 }) {
   const techniqueText = params.techniques.length ? params.techniques.join(", ") : "nenhuma técnica relevante detectada";
   const apiText = params.suspiciousApis.length ? params.suspiciousApis.join(", ") : "nenhuma API sensível identificada";
-  return `# Veredito da análise\n\nA amostra **${params.analysisName}** foi classificada preliminarmente como **${params.classification}**, com nível de risco **${params.riskLevel}** e fase atual estimada em **${params.currentPhase}**.\n\nAs principais técnicas observadas foram: **${techniqueText}**. As APIs com maior relevância analítica foram: **${apiText}**.\n\nO módulo de redução manteve **${params.metrics.reducedLineCount}** de **${params.metrics.originalLineCount}** linhas, resultando em uma redução aproximada de **${params.metrics.reductionPercent.toFixed(1)}%**. Esse recorte privilegia eventos críticos e contextos vizinhos aos gatilhos heurísticos, especialmente transições de memória e chamadas indicativas de evasão.\n\n## Recomendação inicial\n\nRevisar o fluxo reduzido em conjunto com o grafo e a linha do tempo para confirmar o ponto exato em que o malware altera seu comportamento, concentrando a investigação nas chamadas sensíveis e nos artefatos produzidos logo após os gatilhos.`;
+  return `# Veredito da análise\n\nA amostra **${params.analysisName}** foi classificada preliminarmente como **${params.classification}**, com nível de risco **${params.riskLevel}** e fase atual estimada em **${params.currentPhase}**.\n\nAs principais heurísticas observadas nos logs foram: **${techniqueText}**. As APIs com maior relevância analítica foram: **${apiText}**.\n\nO módulo de redução manteve **${params.metrics.reducedLineCount}** de **${params.metrics.originalLineCount}** linhas, resultando em uma redução aproximada de **${params.metrics.reductionPercent.toFixed(1)}%**. Esse recorte privilegia eventos críticos e contextos vizinhos aos gatilhos heurísticos, especialmente transições de memória e chamadas indicativas de evasão.\n\n## MITRE ATT&CK (TA0005)\n\nComportamentos compatíveis com **Defense Evasion** são correlacionados automaticamente à tática [TA0005](https://attack.mitre.org/tactics/TA0005/) na interface, com ID e nome da técnica Enterprise conforme a matriz oficial — separando a **categoria da amostra** (Trojan, Backdoor, etc.) das **técnicas de evasão** observadas.\n\n## Recomendação inicial\n\nRevisar o fluxo reduzido em conjunto com o grafo e a linha do tempo para confirmar o ponto exato em que o malware altera seu comportamento, concentrando a investigação nas chamadas sensíveis e nos artefatos produzidos logo após os gatilhos.`;
 }
 
 async function generateInsight(params: {
@@ -516,6 +759,17 @@ function validateSubmission(input: StartAnalysisJobInput) {
     throw new Error(`Envie no máximo ${MAX_FILES} arquivos por análise.`);
   }
 
+  const trimmedHash = typeof input.sampleSha256 === "string" ? input.sampleSha256.trim() : "";
+  if (trimmedHash) {
+    const normalized = normalizeOptionalSampleSha256(trimmedHash);
+    if (!normalized) {
+      throw new Error("SHA-256 da amostra inválido: use exatamente 64 caracteres hexadecimais (hash do ficheiro executável, não dos logs).");
+    }
+    input.sampleSha256 = normalized;
+  } else {
+    input.sampleSha256 = null;
+  }
+
   for (const logFile of input.logFiles) {
     if (!logFile.base64 && !logFile.tempFilePath && !hasChunkUploadReference(logFile)) {
       throw new Error(`O arquivo ${logFile.fileName} não possui conteúdo submetido.`);
@@ -550,6 +804,11 @@ async function uploadArtifactOptional(
     return await uploadArtifact(jobId, relativePath, buffer, mimeType);
   } catch (error) {
     console.warn(`[Analysis] Não foi possível persistir o artefato ${relativePath} no storage compartilhado.`, error);
+    try {
+      await persistJobArtifactBuffer(jobId, relativePath, buffer);
+    } catch (persistError) {
+      console.warn(`[Analysis] Falha ao gravar cópia local do artefato ${relativePath}.`, persistError);
+    }
     return {
       relativePath,
       storageUrl: null,
@@ -793,10 +1052,11 @@ async function analyzeSingleLogFile(logFile: StartAnalysisLogInput, perFileEvent
 }
 
 async function buildSourceArtifact(jobId: string, logFile: StartAnalysisLogInput, logType: SupportedLogType): Promise<AnalysisArtifactDto> {
-  const fallbackArtifact: AnalysisArtifactDto = {
+  const rel = `source/${logFile.fileName}`;
+  const base: AnalysisArtifactDto = {
     artifactType: "source-log",
     label: `${logType} bruto`,
-    relativePath: `source/${logFile.fileName}`,
+    relativePath: rel,
     sourcePath: logFile.fileName,
     storageUrl: null,
     storageKey: null,
@@ -805,35 +1065,43 @@ async function buildSourceArtifact(jobId: string, logFile: StartAnalysisLogInput
   };
 
   try {
-    let sourceBuffer: Buffer | null = null;
-
     if (logFile.tempFilePath) {
-      if ((logFile.sizeBytes ?? 0) <= MAX_SOURCE_ARTIFACT_UPLOAD_BYTES) {
-        sourceBuffer = await readFile(logFile.tempFilePath);
+      const st = await stat(logFile.tempFilePath);
+      base.sizeBytes = st.size;
+      if (st.size <= MAX_SOURCE_ARTIFACT_UPLOAD_BYTES) {
+        const sourceBuffer = await readFile(logFile.tempFilePath);
+        try {
+          const uploaded = await uploadArtifact(jobId, rel, sourceBuffer, "text/plain");
+          return { ...base, relativePath: uploaded.relativePath, storageUrl: uploaded.storageUrl, storageKey: uploaded.storageKey, sizeBytes: uploaded.sizeBytes };
+        } catch {
+          await persistJobArtifactBuffer(jobId, rel, sourceBuffer);
+          return { ...base, storageUrl: null, storageKey: null, sizeBytes: sourceBuffer.byteLength };
+        }
       }
-    } else if (logFile.base64) {
+      await copyTempFileToLocalArtifact(jobId, rel, logFile.tempFilePath);
+      return { ...base, storageUrl: null, storageKey: null, sizeBytes: st.size };
+    }
+
+    if (logFile.base64) {
       const decoded = decodeBase64(logFile.base64);
+      base.sizeBytes = decoded.byteLength;
       if (decoded.byteLength <= MAX_SOURCE_ARTIFACT_UPLOAD_BYTES) {
-        sourceBuffer = decoded;
+        try {
+          const uploaded = await uploadArtifact(jobId, rel, decoded, "text/plain");
+          return { ...base, relativePath: uploaded.relativePath, storageUrl: uploaded.storageUrl, storageKey: uploaded.storageKey, sizeBytes: uploaded.sizeBytes };
+        } catch {
+          await persistJobArtifactBuffer(jobId, rel, decoded);
+          return { ...base, storageUrl: null, storageKey: null };
+        }
       }
-      fallbackArtifact.sizeBytes = decoded.byteLength;
+      await persistJobArtifactBuffer(jobId, rel, decoded);
+      return { ...base, storageUrl: null, storageKey: null };
     }
 
-    if (!sourceBuffer) {
-      return fallbackArtifact;
-    }
-
-    const uploaded = await uploadArtifact(jobId, `source/${logFile.fileName}`, sourceBuffer, "text/plain");
-    return {
-      ...fallbackArtifact,
-      relativePath: uploaded.relativePath,
-      storageUrl: uploaded.storageUrl,
-      storageKey: uploaded.storageKey,
-      sizeBytes: uploaded.sizeBytes,
-    };
+    return base;
   } catch (error) {
-    console.warn(`[Analysis] Não foi possível persistir o artefato bruto de ${logFile.fileName}.`, error);
-    return fallbackArtifact;
+    console.warn(`[Analysis] Não foi possível preparar o artefato bruto de ${logFile.fileName}.`, error);
+    return base;
   }
 }
 
@@ -1193,7 +1461,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     uploadedFileCount: input.logFiles.length,
   });
   const riskLevel = deriveRiskLevel(techniqueSet, triggerCount, sortedEvents.length);
-  const flowGraph = buildFlowGraph(sortedEvents, currentPhase);
+  const flowGraph = buildFlowGraph(sortedEvents, currentPhase, classification, riskLevel);
   const techniques = Array.from(techniqueSet);
   const suspiciousApisList = Array.from(suspiciousApiSet);
   const recommendations = buildRecommendations(techniques, classification);
@@ -1214,7 +1482,8 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     classification: insight.classification,
     riskLevel: insight.riskLevel,
     currentPhase: insight.currentPhase,
-    techniques: insight.techniques,
+    techniques,
+    mitreDefenseEvasion: buildMitreDefenseEvasion(techniques, suspiciousApisList),
     suspiciousApis: suspiciousApisList,
     recommendations: insight.recommendations,
     metrics,
@@ -1285,7 +1554,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
   };
 }
 
-async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput) {
+async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, sourceLogFiles: StartAnalysisLogInput[] = input.logFiles) {
   await updateAnalysisJob(jobId, {
     status: "running",
     progress: 20,
@@ -1363,25 +1632,27 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput) {
       payloadJson: null,
     });
   } finally {
-    await cleanupSubmittedTempFiles(input.logFiles);
+    await cleanupSubmittedTempFiles([...sourceLogFiles, ...input.logFiles]);
   }
 }
 
 export async function startAnalysisJob(input: StartAnalysisJobInput) {
-  validateSubmission(input);
+  const normalizedInput = await normalizeSubmittedLogs(input);
+  validateSubmission(normalizedInput);
   const jobId = `ctr-${nanoid(10)}`;
-  const sourceName = `${input.analysisName.trim().replace(/\s+/g, "-").toLowerCase()}.bundle`;
+  const sourceName = `${normalizedInput.analysisName.trim().replace(/\s+/g, "-").toLowerCase()}.bundle`;
 
   await createAnalysisJob({
     jobId,
     pipelineJobId: null,
-    sampleName: input.analysisName.trim(),
+    sampleName: normalizedInput.analysisName.trim(),
+    sampleSha256: normalizedInput.sampleSha256 ?? null,
     sourceArchiveName: sourceName,
     sourceArchiveUrl: null,
     sourceArchiveStorageKey: null,
     focusFunction: DEFAULT_FOCUS,
-    focusTermsJson: input.focusTerms ?? [],
-    focusRegexesJson: input.focusRegexes ?? [],
+    focusTermsJson: normalizedInput.focusTerms ?? [],
+    focusRegexesJson: normalizedInput.focusRegexes ?? [],
     status: "queued",
     progress: 5,
     stage: "recebendo logs",
@@ -1390,7 +1661,7 @@ export async function startAnalysisJob(input: StartAnalysisJobInput) {
     stderrTail: null,
     pipelineBaseUrl: null,
     pipelineJobPath: null,
-    resultPath: input.origin ? `${input.origin.replace(/\/$/, "")}/?job=${jobId}` : `/jobs/${jobId}`,
+    resultPath: normalizedInput.origin ? `${normalizedInput.origin.replace(/\/$/, "")}/?job=${jobId}` : `/jobs/${jobId}`,
     errorMessage: null,
     llmSummaryStatus: "pending",
     commitStatus: "skipped",
@@ -1402,27 +1673,55 @@ export async function startAnalysisJob(input: StartAnalysisJobInput) {
     jobId,
     eventType: "submission",
     stage: "recebendo logs",
-    message: `${input.logFiles.length} arquivo(s) recebidos para análise automatizada da Contradef.`,
+    message: `${normalizedInput.logFiles.length} arquivo(s) recebidos para análise automatizada da Contradef.`,
     progress: 5,
     payloadJson: {
-      analysisName: input.analysisName,
-      fileNames: input.logFiles.map((file) => file.fileName),
+      analysisName: normalizedInput.analysisName,
+      fileNames: normalizedInput.logFiles.map((file) => file.fileName),
     },
   });
 
-  void processAnalysisJob(jobId, input);
+  void processAnalysisJob(jobId, normalizedInput, input.logFiles);
   return getAnalysisJobDetail(jobId);
+}
+
+async function enrichArtifactsWithDownloadUrl(
+  jobId: string,
+  rows: Awaited<ReturnType<typeof listAnalysisArtifacts>>,
+): Promise<AnalysisArtifactDto[]> {
+  return Promise.all(rows.map(async (row) => {
+    const dto: AnalysisArtifactDto = {
+      artifactType: row.artifactType,
+      label: row.label,
+      relativePath: row.relativePath,
+      sourcePath: row.sourcePath,
+      storageUrl: row.storageUrl,
+      storageKey: row.storageKey,
+      mimeType: row.mimeType,
+      sizeBytes: row.sizeBytes,
+      downloadUrl: null,
+    };
+    if (row.storageUrl) {
+      dto.downloadUrl = row.storageUrl;
+      return dto;
+    }
+    if (await localArtifactExists(jobId, row.relativePath)) {
+      dto.downloadUrl = `/api/analysis-artifacts/download?${new URLSearchParams({ jobId, relativePath: row.relativePath }).toString()}`;
+    }
+    return dto;
+  }));
 }
 
 export async function getAnalysisJobDetail(jobId: string): Promise<AnalysisJobDetail | null> {
   const job = await getAnalysisJobByJobId(jobId);
   if (!job) return null;
 
-  const [events, artifacts, insight] = await Promise.all([
+  const [events, artifactRows, insight] = await Promise.all([
     listAnalysisEvents(jobId, 500),
     listAnalysisArtifacts(jobId),
     getAnalysisInsight(jobId),
   ]);
+  const artifacts = await enrichArtifactsWithDownloadUrl(jobId, artifactRows);
 
   const summaryJson = insight?.summaryJson && !Array.isArray(insight.summaryJson) ? insight.summaryJson as Record<string, unknown> : {};
   const metrics = (summaryJson.metrics as ReductionMetrics | undefined) ?? {
@@ -1464,6 +1763,10 @@ export async function getAnalysisJobDetail(jobId: string): Promise<AnalysisJobDe
     fileMetrics: buildLiveFileMetrics(events, summaryJson, job.status),
     suspiciousApis: Array.isArray(summaryJson.suspiciousApis) ? summaryJson.suspiciousApis as string[] : [],
     techniques: Array.isArray(summaryJson.techniques) ? summaryJson.techniques as string[] : [],
+    mitreDefenseEvasion: buildMitreDefenseEvasion(
+      Array.isArray(summaryJson.techniques) ? summaryJson.techniques as string[] : [],
+      Array.isArray(summaryJson.suspiciousApis) ? summaryJson.suspiciousApis as string[] : [],
+    ),
     recommendations: Array.isArray(summaryJson.recommendations) ? summaryJson.recommendations as string[] : [],
     classification: (summaryJson.classification as MalwareCategory | undefined) ?? "Unknown",
     riskLevel: (summaryJson.riskLevel as RiskLevel | undefined) ?? "low",

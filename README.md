@@ -41,7 +41,8 @@ Nesta iteração, a validação funcional foi realizada com o conjunto real extr
 | `scripts/generate_generic_report.py` | Geração de relatório Markdown para jobs genéricos |
 | `scripts/generate_generic_docx.py` | Geração de relatório DOCX para jobs genéricos |
 | `scripts/build_mermaid_from_json.py` | Reconstrução de diagramas Mermaid a partir do JSON |
-| `docs/` | Relatórios e documentação técnica |
+| `docs/` | Toda a documentação do repositório (web em `docs/web/`, melhorias em `docs/melhorias/`, legado em `docs/legacy/`) |
+| `ai_correlacion_web/` | Aplicação Node/React (código; documentação da app em `docs/web/`) |
 | `data/jobs/` | Jobs gerados pela CLI genérica |
 | `data/jobs_api/` | Jobs gerados pela API local |
 | `data/derived/`, `data/filtered/`, `data/correlation/`, `data/figures/` | Artefatos específicos do pipeline anterior e saídas consolidadas |

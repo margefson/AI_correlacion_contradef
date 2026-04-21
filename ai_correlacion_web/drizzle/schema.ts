@@ -37,6 +37,8 @@ export const analysisJobs = mysqlTable("analysisJobs", {
   jobId: varchar("jobId", { length: 128 }).notNull().unique(),
   pipelineJobId: varchar("pipelineJobId", { length: 128 }),
   sampleName: varchar("sampleName", { length: 255 }).notNull(),
+  /** SHA-256 (64 hex) do binário da amostra, para correlação externa (ex.: VirusTotal). */
+  sampleSha256: varchar("sampleSha256", { length: 64 }),
   sourceArchiveName: varchar("sourceArchiveName", { length: 255 }).notNull(),
   sourceArchiveUrl: text("sourceArchiveUrl"),
   sourceArchiveStorageKey: varchar("sourceArchiveStorageKey", { length: 512 }),

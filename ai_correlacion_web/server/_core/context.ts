@@ -1,4 +1,5 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import type { Request } from "express";
 import type { User } from "../../drizzle/schema";
 import { ENV } from "./env";
 import { sdk } from "./sdk";
@@ -9,20 +10,17 @@ export type TrpcContext = {
   user: User | null;
 };
 
-export async function createContext(
-  opts: CreateExpressContextOptions
-): Promise<TrpcContext> {
-  let user: User | null = null;
+/** Same identity resolution as tRPC context — use for authenticated Express routes (e.g. artifact download). */
+export async function getSessionUserFromRequest(req: Request): Promise<User | null> {
   const allowDevBypass =
     !ENV.isProduction &&
     (!ENV.oAuthServerUrl || !ENV.appId);
 
   try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
+    return await sdk.authenticateRequest(req);
+  } catch {
     if (allowDevBypass) {
-      // Local development fallback: keep app usable without external OAuth.
-      user = {
+      return {
         id: 1,
         openId: "local-dev-user",
         name: "Local Dev",
@@ -33,11 +31,15 @@ export async function createContext(
         updatedAt: new Date(),
         lastSignedIn: new Date(),
       };
-    } else {
-      // Authentication is optional for public procedures.
-      user = null;
     }
+    return null;
   }
+}
+
+export async function createContext(
+  opts: CreateExpressContextOptions
+): Promise<TrpcContext> {
+  const user = await getSessionUserFromRequest(opts.req);
 
   return {
     req: opts.req,
