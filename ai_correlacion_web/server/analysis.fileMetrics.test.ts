@@ -121,4 +121,52 @@ describe("buildLiveFileMetrics", () => {
       triggerCount: 1,
     }));
   });
+
+  it("ignora a ordem newest-first do banco e mantém o estado final correto (último evento cronológico vence)", () => {
+    const fileName = "TraceMemory.log";
+    const chronological = [
+      {
+        id: 1,
+        eventType: "file-queued",
+        stage: "fila do lote",
+        message: `${fileName} entrou na fila.`,
+        progress: 8,
+        payloadJson: {
+          fileName,
+          logType: "TraceMemory",
+          currentStage: "Fila do lote",
+          currentStep: "Aguardando vez para reduzir",
+        },
+      },
+      {
+        id: 2,
+        eventType: "file-complete",
+        stage: "Sinais críticos preservados",
+        message: `${fileName} concluído.`,
+        progress: 90,
+        payloadJson: {
+          fileName,
+          logType: "TraceMemory",
+          fileProgress: 100,
+          currentStage: "Arquivo concluído",
+          currentStep: "Redução concluída",
+          originalLineCount: 100,
+          reducedLineCount: 10,
+        },
+      },
+    ];
+
+    const newestFirst = [...chronological].reverse();
+
+    const a = buildLiveFileMetrics(chronological, {}, "running");
+    const b = buildLiveFileMetrics(newestFirst, {}, "running");
+
+    expect(a[0]).toEqual(expect.objectContaining({
+      fileName,
+      status: "completed",
+      progress: 100,
+      currentStage: "Arquivo concluído",
+    }));
+    expect(b[0]).toEqual(a[0]);
+  });
 });

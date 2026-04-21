@@ -1,5 +1,7 @@
 # Plano das próximas etapas analíticas
 
+> **Estado integrado (melhorias fases 0–3):** a ingestão robusta (incluindo fallback local), o monitoramento por arquivo na rota **Reduzir Logs**, os relatórios Python genéricos, a API FastAPI com eventos incrementais e a documentação de arquitetura já estão alinhados ao backlog em `melhorias/`. A tela **Reduzir Logs** também expõe interpretação consolidada, fluxo resumido e artefatos do job corrente, complementando o dashboard principal. Itens abaixo permanecem como **roadmap** (parser por tipo ainda mais explícito na UI, SSE, grafo com layout dedicado, etc.).
+
 O estágio atual do produto ainda está concentrado na **ingestão confiável** do lote de logs. A próxima evolução precisa transformar o sistema em uma superfície operacional de análise, permitindo ao analista observar em tempo real o que já foi recebido, o que já foi reduzido, quais sinais foram encontrados e qual hipótese comportamental está emergindo do conjunto analisado.
 
 A priorização recomendada parte do princípio de que o valor para o analista não está apenas em concluir a redução, mas em **entregar contexto acionável enquanto o processamento ainda está em andamento**. Isso exige separar claramente as etapas de transporte, preparação, extração de evidências, correlação de eventos, classificação comportamental e apresentação operacional.

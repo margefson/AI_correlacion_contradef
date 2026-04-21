@@ -41,6 +41,7 @@ import {
 import { Streamdown } from "streamdown";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 type StatusFilter = "all" | "queued" | "running" | "completed" | "failed" | "cancelled";
 type LogType = "FunctionInterceptor" | "TraceFcnCall" | "TraceMemory" | "TraceInstructions" | "TraceDisassembly" | "Unknown";
@@ -262,6 +263,11 @@ export default function Home() {
               <CardDescription className="max-w-3xl text-base leading-7 text-zinc-300">
                 Envie os logs do Contradef, reduza o volume por heurística, acompanhe o fluxo do malware em timeline ou grafo e receba um veredito interpretável com suporte de LLM.
               </CardDescription>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <Button variant="outline" className="border-cyan-400/30 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20" asChild>
+                  <Link href="/reduce-logs">Abrir fluxo Reduzir Logs (validação manual)</Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard icon={FileSearch} label="Análises registradas" value={String(dashboardMetrics.total)} helper="Histórico consultável pelo analista" />

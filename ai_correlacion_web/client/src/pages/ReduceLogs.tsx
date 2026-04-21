@@ -31,8 +31,9 @@ import {
   type ProcessingStatus,
   type SubmittedFileMonitor,
 } from "@/pages/reduceLogsMonitor";
-import { AlertTriangle, Database, FileArchive, RefreshCw, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, BrainCircuit, Database, FileArchive, FileDown, RefreshCw, ShieldCheck, Sparkles, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
 
@@ -51,11 +52,6 @@ function formatBytes(value?: number | null) {
 function formatPercent(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "0%";
   return `${Math.max(0, Math.min(100, value)).toFixed(value >= 10 ? 1 : 2)}%`;
-}
-
-function formatExplorerKilobytes(value?: number | null) {
-  if (!value || value <= 0) return "—";
-  return `${Math.round(value / 1024).toLocaleString("pt-BR")} KB`;
 }
 
 function formatDuration(value?: number | null) {
@@ -112,6 +108,26 @@ function getSemaforoTone(file: FileMonitor) {
   if (label === "Revisar") return "text-amber-200";
   if (label === "Falhou") return "text-rose-200";
   return "text-zinc-300";
+}
+
+function reduceLogsRiskBadgeClass(risk?: string | null) {
+  switch (risk) {
+    case "critical":
+      return "bg-rose-500/15 text-rose-300 border-rose-400/25";
+    case "high":
+      return "bg-amber-500/15 text-amber-300 border-amber-400/25";
+    case "medium":
+      return "bg-cyan-500/15 text-cyan-300 border-cyan-400/25";
+    default:
+      return "bg-emerald-500/15 text-emerald-300 border-emerald-400/25";
+  }
+}
+
+function formatJobTimestamp(value?: Date | string | number | null) {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("pt-BR");
 }
 
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
@@ -189,8 +205,8 @@ export default function ReduceLogs() {
   const [isUploading, setIsUploading] = useState(false);
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFileMonitor[]>([]);
   const [activeFileTab, setActiveFileTab] = useState<string>("");
+  const [reduceLogsGraphNodeId, setReduceLogsGraphNodeId] = useState<string | null>(null);
 
-  const reductionQuery = trpc.analysis.reductionBaseline.useQuery();
   const resumeActiveSync = trpc.analysis.resumeActiveSync.useMutation();
 
   useEffect(() => {
@@ -209,8 +225,6 @@ export default function ReduceLogs() {
     },
   );
 
-  const realDataset = reductionQuery.data?.realDatasetCompression;
-  const sampleSelectiveTest = reductionQuery.data?.sampleSelectiveTest;
   const uploadedDetail = submittedDetailQuery.data;
   const hasRemoteArtifacts = Boolean(
     uploadedDetail?.artifacts?.some((artifact) => Boolean(artifact.storageUrl)),
@@ -219,6 +233,24 @@ export default function ReduceLogs() {
     uploadedDetail
     && (uploadedDetail.job.status === "completed" || uploadedDetail.job.status === "failed")
     && !hasRemoteArtifacts,
+  );
+
+  useEffect(() => {
+    setReduceLogsGraphNodeId(null);
+  }, [submittedJobId]);
+
+  const effectiveReduceLogsGraphNodeId = useMemo(() => {
+    const nodes = uploadedDetail?.flowGraph.nodes ?? [];
+    if (!nodes.length) return null;
+    if (reduceLogsGraphNodeId && nodes.some((node) => node.id === reduceLogsGraphNodeId)) {
+      return reduceLogsGraphNodeId;
+    }
+    return nodes[0]!.id;
+  }, [uploadedDetail?.flowGraph.nodes, reduceLogsGraphNodeId]);
+
+  const selectedReduceLogsGraphNode = useMemo(
+    () => uploadedDetail?.flowGraph.nodes.find((node) => node.id === effectiveReduceLogsGraphNodeId) ?? null,
+    [uploadedDetail?.flowGraph.nodes, effectiveReduceLogsGraphNodeId],
   );
 
   const monitoredFiles = useMemo(
@@ -662,6 +694,147 @@ export default function ReduceLogs() {
                     </div>
                   ) : null}
 
+                  {uploadedDetail ? (
+                    <Card className="border-cyan-400/20 bg-slate-950/70 shadow-lg shadow-cyan-950/10">
+                      <CardHeader>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <CardTitle className="text-lg">Interpretação consolidada do lote atual</CardTitle>
+                            <CardDescription>
+                              Classificação, fluxo correlacionado, artefatos e resumo alinhados ao dashboard principal — sem sair da rota Reduzir Logs.
+                            </CardDescription>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge className={getStatusTone(uploadedDetail.job.status)}>{uploadedDetail.job.status}</Badge>
+                            <Badge className={reduceLogsRiskBadgeClass(uploadedDetail.riskLevel)}>{uploadedDetail.riskLevel}</Badge>
+                            <Badge variant="outline" className="border-white/10 text-zinc-200">{uploadedDetail.classification}</Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <Tabs defaultValue="resumo" className="space-y-4">
+                          <TabsList className="flex h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
+                            <TabsTrigger value="resumo" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 data-[state=active]:border-cyan-400/30 data-[state=active]:bg-cyan-500/10">Resumo</TabsTrigger>
+                            <TabsTrigger value="fluxo" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 data-[state=active]:border-cyan-400/30 data-[state=active]:bg-cyan-500/10">Fluxo</TabsTrigger>
+                            <TabsTrigger value="artefatos" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 data-[state=active]:border-cyan-400/30 data-[state=active]:bg-cyan-500/10">Artefatos</TabsTrigger>
+                            <TabsTrigger value="timeline" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 data-[state=active]:border-cyan-400/30 data-[state=active]:bg-cyan-500/10">Eventos do job</TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="resumo" className="space-y-4">
+                            <div className="grid gap-4 lg:grid-cols-2">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
+                                  <BrainCircuit className="h-4 w-4 text-cyan-300" />
+                                  Resumo interpretativo
+                                </div>
+                                <p className="mt-1 text-xs text-zinc-400">{uploadedDetail.insight?.title ?? "Resumo automático"}</p>
+                                <div className="prose prose-invert mt-3 max-w-none prose-p:text-zinc-300 prose-headings:text-white">
+                                  <Streamdown>{uploadedDetail.insight?.summaryMarkdown ?? "Resumo ainda não disponível para este job."}</Streamdown>
+                                </div>
+                              </div>
+                              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm font-medium text-zinc-100">Indicadores do lote</p>
+                                <div className="grid gap-2 text-sm text-zinc-300">
+                                  <p><span className="text-zinc-400">Fase comportamental:</span> {uploadedDetail.currentPhase}</p>
+                                  <p><span className="text-zinc-400">Redução (linhas):</span> {uploadedDetail.metrics.originalLineCount} → {uploadedDetail.metrics.reducedLineCount} ({formatPercent(uploadedDetail.metrics.reductionPercent)})</p>
+                                  <p><span className="text-zinc-400">APIs suspeitas (lista):</span> {uploadedDetail.suspiciousApis.length ? uploadedDetail.suspiciousApis.join(", ") : "—"}</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {uploadedDetail.techniques.length
+                                    ? uploadedDetail.techniques.map((technique) => (
+                                      <Badge key={technique} variant="outline" className="border-white/10 text-zinc-200">{technique}</Badge>
+                                    ))
+                                    : <span className="text-xs text-zinc-500">Nenhuma técnica marcada.</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="fluxo" className="space-y-4">
+                            <div className="grid gap-4 lg:grid-cols-[1fr,300px]">
+                              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/40 p-4">
+                                <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                                  <Sparkles className="h-4 w-4 text-cyan-300" />
+                                  Clique em um nó para inspecionar metadados no painel ao lado.
+                                </div>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  {uploadedDetail.flowGraph.nodes.length ? uploadedDetail.flowGraph.nodes.map((node) => (
+                                    <button
+                                      key={node.id}
+                                      type="button"
+                                      onClick={() => setReduceLogsGraphNodeId(node.id)}
+                                      className={`rounded-2xl border px-3 py-2 text-left text-sm transition ${effectiveReduceLogsGraphNodeId === node.id ? "border-cyan-400/40 bg-cyan-500/10 text-white" : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"}`}
+                                    >
+                                      <span className="font-medium">{node.label}</span>
+                                      <Badge variant="outline" className="ml-2 border-white/10 text-xs text-zinc-300">{node.kind}</Badge>
+                                    </button>
+                                  )) : (
+                                    <p className="text-sm text-zinc-400">Fluxo ainda vazio; aguarde a conclusão da correlação.</p>
+                                  )}
+                                </div>
+                                <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-400">
+                                  {uploadedDetail.flowGraph.edges.map((edge) => (
+                                    <div key={`${edge.source}-${edge.target}-${edge.relation}`} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1">
+                                      <span>{edge.source.replace("phase:", "").replace("event:", "")}</span>
+                                      <ArrowRight className="h-3 w-3 shrink-0" />
+                                      <span>{edge.target.replace("phase:", "").replace("event:", "")}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <p className="text-sm font-medium text-zinc-100">Nó selecionado</p>
+                                <p className="mt-1 text-xs text-zinc-400">{selectedReduceLogsGraphNode?.label ?? "Selecione um nó na lista."}</p>
+                                {selectedReduceLogsGraphNode ? (
+                                  <pre className="mt-3 max-h-64 overflow-auto rounded-xl border border-white/10 bg-slate-950/80 p-3 text-[11px] text-zinc-300">{JSON.stringify(selectedReduceLogsGraphNode.metadata ?? {}, null, 2)}</pre>
+                                ) : null}
+                              </div>
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="artefatos" className="space-y-3">
+                            <p className="text-sm text-zinc-400">Artefatos registrados para este job. Links ativos exigem storage remoto configurado.</p>
+                            <div className="space-y-2">
+                              {uploadedDetail.artifacts.length ? uploadedDetail.artifacts.map((artifact) => (
+                                <a
+                                  key={`${artifact.artifactType}-${artifact.relativePath}`}
+                                  href={artifact.storageUrl ?? "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 p-4 transition ${artifact.storageUrl ? "hover:border-cyan-400/30 hover:bg-cyan-500/10" : "pointer-events-none opacity-60"}`}
+                                >
+                                  <div>
+                                    <p className="text-sm font-medium text-zinc-100">{artifact.label}</p>
+                                    <p className="text-xs text-zinc-400">{artifact.artifactType} · {formatBytes(artifact.sizeBytes ?? undefined)}</p>
+                                  </div>
+                                  <FileDown className="h-4 w-4 text-zinc-300" />
+                                </a>
+                              )) : (
+                                <p className="text-sm text-zinc-500">Nenhum artefato listado ainda.</p>
+                              )}
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="timeline" className="space-y-3">
+                            <p className="text-sm text-zinc-400">Eventos operacionais e evidências retidas (amostra recente).</p>
+                            <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                              {uploadedDetail.events.slice(0, 40).map((event, index) => (
+                                <div key={`${event.eventType}-${index}-${String(event.createdAt)}`} className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
+                                  <div className="flex flex-wrap gap-2">
+                                    <Badge variant="outline" className="border-white/10 text-zinc-300">{event.stage ?? "—"}</Badge>
+                                    <Badge className="border-white/10 bg-white/5 text-zinc-200">{event.eventType}</Badge>
+                                    <span className="text-xs text-zinc-500">{formatJobTimestamp(event.createdAt)}</span>
+                                  </div>
+                                  <p className="mt-2 text-zinc-200">{event.message ?? "—"}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </TabsContent>
+                        </Tabs>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -892,67 +1065,6 @@ export default function ReduceLogs() {
                     ) : null}
                   </div>
                 </>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section>
-          <Card className="border-white/10 bg-slate-950/80 shadow-xl shadow-slate-950/10">
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle>Baseline metodológico opcional</CardTitle>
-                  <CardDescription>
-                    Estes blocos permanecem apenas como referência secundária. O foco operacional da tela agora está no lote submetido nesta sessão.
-                  </CardDescription>
-                </div>
-                <Badge variant="outline" className="border-white/10 text-zinc-300">referência secundária</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {reductionQuery.isLoading ? (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-zinc-400">
-                  Carregando referências metodológicas...
-                </div>
-              ) : reductionQuery.error ? (
-                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-5 text-sm text-rose-200">
-                  Falha ao carregar as referências: {reductionQuery.error.message}
-                </div>
-              ) : (
-                <div className="grid gap-6 xl:grid-cols-2">
-                  <Card className="border-emerald-400/15 bg-black/20">
-                    <CardHeader>
-                      <CardTitle className="text-lg">Tamanhos reais do dataset</CardTitle>
-                      <CardDescription>Referência dos manifestos do conjunto real da amostra Full-Execution-Sample-1 / PID 2956.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <MetricCard icon={Database} label="Original" value={formatBytes(realDataset?.total_original_size)} helper={formatExplorerKilobytes(realDataset?.total_original_size)} />
-                        <MetricCard icon={FileArchive} label="Reduzido" value={formatBytes(realDataset?.total_compressed_size)} helper={formatPercent(realDataset?.reduction_percent)} />
-                      </div>
-                      {!realDataset?.available ? (
-                        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200">
-                          {realDataset?.errorMessage ?? "Os manifestos do dataset real não estão disponíveis neste ambiente."}
-                        </div>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-cyan-400/15 bg-black/20">
-                    <CardHeader>
-                      <CardTitle className="text-lg">Teste reproduzível do protótipo C++</CardTitle>
-                      <CardDescription>Baseline metodológico do protótipo do redutor, útil como comparação externa ao lote atual.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <MetricCard icon={Database} label="Bytes antes" value={formatBytes(sampleSelectiveTest?.combined.original_bytes)} helper={`${sampleSelectiveTest?.combined.original_lines ?? 0} linhas`} />
-                        <MetricCard icon={FileArchive} label="Bytes depois" value={formatBytes(sampleSelectiveTest?.combined.reduced_bytes)} helper={`${sampleSelectiveTest?.combined.reduced_lines ?? 0} linhas`} />
-                        <MetricCard icon={ShieldCheck} label="Redução" value={formatPercent(sampleSelectiveTest?.combined.reduction_percent)} helper={`gatilho ${sampleSelectiveTest?.trigger_address ?? "—"}`} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
               )}
             </CardContent>
           </Card>

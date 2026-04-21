@@ -30,6 +30,8 @@ As heurísticas já priorizam ocorrências como **`VirtualProtect`**, **`Virtual
 
 Depois que o job sair da fila e a etapa heurística terminar, a tela **Reduzir Logs** passa a exibir, para cada arquivo, os campos **Tamanho antes**, **Tamanho depois**, **Redução**, **Sinais críticos**, **Etapa atual**, **Próxima leitura do analista** e **Última mensagem operacional**. Isso vale tanto na tabela principal do lote quanto no painel operacional por arquivo.
 
+Além disso, quando o detalhe do job estiver disponível, a mesma rota passa a concentrar um bloco de **interpretação do lote** (categoria estimada, nível de risco, fase comportamental), **fluxo resumido** (nós e relações do grafo correlacionado), **lista de artefatos** gerados e **resumo interpretativo** em Markdown — espelhando o que o dashboard principal oferece por abas, sem exigir trocar de tela para uma leitura consolidada do último envio.
+
 ## Comparação com o documento técnico anexado
 
 A tabela abaixo diferencia o que já existe, o que está parcial e o que ainda não foi implementado.

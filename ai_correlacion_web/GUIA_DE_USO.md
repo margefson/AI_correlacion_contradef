@@ -119,3 +119,17 @@ Embora a plataforma já esteja navegável e funcional, esta entrega ainda deve s
 ## Próximas evoluções recomendadas
 
 Como próximos passos, recomenda-se consolidar testes com amostras reais, evoluir a visualização do fluxo para um grafo mais robusto, fortalecer a exportação formal do relatório e expandir os testes automatizados do serviço analítico.
+
+## Desenvolvimento local (Windows) e banco de dados
+
+Para validar o projeto na sua máquina com persistência em **MySQL** e sem depender de OAuth/storage externos:
+
+| Etapa | Ação |
+| --- | --- |
+| **Banco** | Crie o schema e um usuário com permissão (por exemplo `contradef` / `contradef` no banco `contradef`). |
+| **Variáveis** | No arquivo `ai_correlacion_web/.env`, defina `DATABASE_URL` (URL `mysql://...`), `JWT_SECRET` e, se usar OAuth local, `OAUTH_SERVER_URL`. |
+| **Schema** | Na pasta `ai_correlacion_web`, execute `npm.cmd run db:push` para aplicar o schema Drizzle ao banco. |
+| **Servidor** | Execute `npm.cmd run dev`. Em PowerShell, prefira `npm.cmd` se `npm` estiver bloqueado por política de execução. |
+| **Upload** | Se `BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY` não estiverem definidos, a interface pode usar **upload legado** (multipart) e concluir a análise; aparece o aviso de execução em modo local quando não há URLs de artefato remotas. |
+
+A tela **Reduzir Logs** passa a exibir, para o job atual, blocos de **interpretação consolidada** (categoria, risco, fase), **fluxo resumido** (nós e arestas), **lista de artefatos** e **resumo interpretativo**, além do monitoramento por arquivo já existente. O painel principal (**Centro Analítico**) continua sendo a visão completa com abas para histórico de jobs.

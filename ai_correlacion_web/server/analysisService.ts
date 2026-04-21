@@ -871,8 +871,34 @@ function readNumericValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+type BuildLiveFileMetricEvent = {
+  eventType: string | null;
+  stage: string | null;
+  message: string | null;
+  progress: number | null;
+  payloadJson: unknown;
+  id?: number | null;
+  createdAt?: Date | null;
+};
+
+/** DB e store em memória devolvem eventos mais recentes primeiro; o fold precisa da ordem cronológica. */
+function sortEventsForLiveMetricsChronologically(events: BuildLiveFileMetricEvent[]) {
+  return [...events]
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => {
+      const ta = a.event.createdAt ? new Date(a.event.createdAt).getTime() : 0;
+      const tb = b.event.createdAt ? new Date(b.event.createdAt).getTime() : 0;
+      if (ta !== tb) return ta - tb;
+      const ia = typeof a.event.id === "number" ? a.event.id : 0;
+      const ib = typeof b.event.id === "number" ? b.event.id : 0;
+      if (ia !== ib) return ia - ib;
+      return a.index - b.index;
+    })
+    .map(({ event }) => event);
+}
+
 export function buildLiveFileMetrics(
-  events: Array<{ eventType: string | null; stage: string | null; message: string | null; progress: number | null; payloadJson: unknown }>,
+  events: BuildLiveFileMetricEvent[],
   summaryJson: Record<string, unknown>,
   jobStatus: string,
 ) {
@@ -913,7 +939,7 @@ export function buildLiveFileMetrics(
     });
   }
 
-  events.forEach((event) => {
+  sortEventsForLiveMetricsChronologically(events).forEach((event) => {
     const payload = event.payloadJson && !Array.isArray(event.payloadJson) ? event.payloadJson as Record<string, unknown> : null;
     if (!payload) return;
 
