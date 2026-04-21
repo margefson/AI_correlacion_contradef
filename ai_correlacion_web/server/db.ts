@@ -1,6 +1,11 @@
 import { and, desc, eq, gte, like, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
+  AnalysisArtifact,
+  AnalysisCommit,
+  AnalysisEvent,
+  AnalysisInsight,
+  AnalysisJob,
   analysisArtifacts,
   analysisCommits,
   analysisEvents,
@@ -17,6 +22,12 @@ import {
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let inMemoryAnalysisEventId = 1;
+const inMemoryAnalysisJobs = new Map<string, AnalysisJob>();
+const inMemoryAnalysisEvents = new Map<string, AnalysisEvent[]>();
+const inMemoryAnalysisArtifacts = new Map<string, AnalysisArtifact[]>();
+const inMemoryAnalysisInsights = new Map<string, AnalysisInsight>();
+const inMemoryAnalysisCommits = new Map<string, AnalysisCommit>();
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
@@ -104,8 +115,37 @@ export async function getUserByOpenId(openId: string) {
 export async function createAnalysisJob(job: InsertAnalysisJob) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot create analysis job: database not available");
-    return null;
+    const now = new Date();
+    const row: AnalysisJob = {
+      id: inMemoryAnalysisJobs.size + 1,
+      jobId: String(job.jobId),
+      pipelineJobId: job.pipelineJobId ?? null,
+      sampleName: String(job.sampleName),
+      sourceArchiveName: String(job.sourceArchiveName),
+      sourceArchiveUrl: job.sourceArchiveUrl ?? null,
+      sourceArchiveStorageKey: job.sourceArchiveStorageKey ?? null,
+      focusFunction: String(job.focusFunction),
+      focusTermsJson: job.focusTermsJson ?? null,
+      focusRegexesJson: job.focusRegexesJson ?? null,
+      status: job.status ?? "queued",
+      progress: Number(job.progress ?? 0),
+      stage: String(job.stage ?? "queued"),
+      message: job.message ?? null,
+      stdoutTail: job.stdoutTail ?? null,
+      stderrTail: job.stderrTail ?? null,
+      pipelineBaseUrl: job.pipelineBaseUrl ?? null,
+      pipelineJobPath: job.pipelineJobPath ?? null,
+      resultPath: job.resultPath ?? null,
+      errorMessage: job.errorMessage ?? null,
+      llmSummaryStatus: job.llmSummaryStatus ?? "pending",
+      commitStatus: job.commitStatus ?? "pending",
+      createdByUserId: job.createdByUserId ?? null,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: job.completedAt ?? null,
+    };
+    inMemoryAnalysisJobs.set(job.jobId, row);
+    return row;
   }
 
   await db.insert(analysisJobs).values(job);
@@ -115,8 +155,7 @@ export async function createAnalysisJob(job: InsertAnalysisJob) {
 export async function getAnalysisJobByJobId(jobId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get analysis job: database not available");
-    return undefined;
+    return inMemoryAnalysisJobs.get(jobId);
   }
 
   const result = await db.select().from(analysisJobs).where(eq(analysisJobs.jobId, jobId)).limit(1);
@@ -133,8 +172,29 @@ export async function listAnalysisJobs(filters?: {
 }) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot list analysis jobs: database not available");
-    return [];
+    const rows = Array.from(inMemoryAnalysisJobs.values())
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+
+    const filtered = rows.filter((row) => {
+      if (filters?.sampleName && !String(row.sampleName ?? "").toLowerCase().includes(filters.sampleName.toLowerCase())) {
+        return false;
+      }
+      if (filters?.focusFunction && !String(row.focusFunction ?? "").toLowerCase().includes(filters.focusFunction.toLowerCase())) {
+        return false;
+      }
+      if (filters?.createdFrom && row.createdAt < filters.createdFrom) {
+        return false;
+      }
+      if (filters?.createdTo && row.createdAt > filters.createdTo) {
+        return false;
+      }
+      if (filters?.status?.length && !filters.status.includes(row.status)) {
+        return false;
+      }
+      return true;
+    });
+
+    return filtered.slice(0, filters?.limit ?? 50);
   }
 
   const conditions = [];
@@ -166,8 +226,17 @@ export async function listAnalysisJobs(filters?: {
 export async function updateAnalysisJob(jobId: string, patch: Partial<InsertAnalysisJob>) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot update analysis job: database not available");
-    return null;
+    const current = inMemoryAnalysisJobs.get(jobId);
+    if (!current) {
+      return null;
+    }
+    const updated: AnalysisJob = {
+      ...current,
+      ...patch,
+      updatedAt: new Date(),
+    };
+    inMemoryAnalysisJobs.set(jobId, updated);
+    return updated;
   }
 
   await db.update(analysisJobs).set({ ...patch, updatedAt: new Date() }).where(eq(analysisJobs.jobId, jobId));
@@ -177,8 +246,20 @@ export async function updateAnalysisJob(jobId: string, patch: Partial<InsertAnal
 export async function addAnalysisEvent(event: InsertAnalysisEvent) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot add analysis event: database not available");
-    return null;
+    const list = inMemoryAnalysisEvents.get(event.jobId) ?? [];
+    const inserted: AnalysisEvent = {
+      ...event,
+      id: inMemoryAnalysisEventId++,
+      eventType: event.eventType ?? "info",
+      stage: event.stage ?? null,
+      message: event.message ?? null,
+      progress: event.progress ?? null,
+      payloadJson: event.payloadJson ?? null,
+      createdAt: new Date(),
+    };
+    list.unshift(inserted);
+    inMemoryAnalysisEvents.set(event.jobId, list);
+    return inserted;
   }
 
   await db.insert(analysisEvents).values(event);
@@ -189,8 +270,8 @@ export async function addAnalysisEvent(event: InsertAnalysisEvent) {
 export async function listAnalysisEvents(jobId: string, limit = 200) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot list analysis events: database not available");
-    return [];
+    const list = inMemoryAnalysisEvents.get(jobId) ?? [];
+    return list.slice(0, limit);
   }
 
   return db.select().from(analysisEvents).where(eq(analysisEvents.jobId, jobId)).orderBy(desc(analysisEvents.createdAt)).limit(limit);
@@ -199,8 +280,22 @@ export async function listAnalysisEvents(jobId: string, limit = 200) {
 export async function replaceAnalysisArtifacts(jobId: string, artifacts: InsertAnalysisArtifact[]) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot replace analysis artifacts: database not available");
-    return [];
+    const now = new Date();
+    const rows: AnalysisArtifact[] = artifacts.map((artifact, index) => ({
+      id: index + 1,
+      jobId,
+      artifactType: String(artifact.artifactType),
+      label: String(artifact.label),
+      relativePath: String(artifact.relativePath),
+      sourcePath: artifact.sourcePath ?? null,
+      storageUrl: artifact.storageUrl ?? null,
+      storageKey: artifact.storageKey ?? null,
+      mimeType: artifact.mimeType ?? null,
+      sizeBytes: typeof artifact.sizeBytes === "number" ? artifact.sizeBytes : null,
+      createdAt: now,
+    }));
+    inMemoryAnalysisArtifacts.set(jobId, rows);
+    return rows;
   }
 
   await db.delete(analysisArtifacts).where(eq(analysisArtifacts.jobId, jobId));
@@ -215,8 +310,7 @@ export async function replaceAnalysisArtifacts(jobId: string, artifacts: InsertA
 export async function listAnalysisArtifacts(jobId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot list analysis artifacts: database not available");
-    return [];
+    return inMemoryAnalysisArtifacts.get(jobId) ?? [];
   }
 
   return db.select().from(analysisArtifacts).where(eq(analysisArtifacts.jobId, jobId)).orderBy(desc(analysisArtifacts.createdAt));
@@ -225,8 +319,21 @@ export async function listAnalysisArtifacts(jobId: string) {
 export async function upsertAnalysisInsight(jobId: string, insight: InsertAnalysisInsight) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert analysis insight: database not available");
-    return null;
+    const current = inMemoryAnalysisInsights.get(jobId);
+    const now = new Date();
+    const next: AnalysisInsight = {
+      id: current?.id ?? inMemoryAnalysisInsights.size + 1,
+      jobId,
+      modelName: insight.modelName ?? current?.modelName ?? null,
+      riskLevel: insight.riskLevel ?? current?.riskLevel ?? null,
+      title: insight.title ?? current?.title ?? null,
+      summaryMarkdown: insight.summaryMarkdown ?? current?.summaryMarkdown ?? "",
+      summaryJson: insight.summaryJson ?? current?.summaryJson ?? null,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+    };
+    inMemoryAnalysisInsights.set(jobId, next);
+    return next;
   }
 
   await db.insert(analysisInsights).values({ ...insight, jobId }).onDuplicateKeyUpdate({
@@ -246,8 +353,7 @@ export async function upsertAnalysisInsight(jobId: string, insight: InsertAnalys
 export async function getAnalysisInsight(jobId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get analysis insight: database not available");
-    return undefined;
+    return inMemoryAnalysisInsights.get(jobId);
   }
 
   const rows = await db.select().from(analysisInsights).where(eq(analysisInsights.jobId, jobId)).limit(1);
@@ -257,8 +363,22 @@ export async function getAnalysisInsight(jobId: string) {
 export async function upsertAnalysisCommit(jobId: string, commit: InsertAnalysisCommit) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert analysis commit: database not available");
-    return null;
+    const current = inMemoryAnalysisCommits.get(jobId);
+    const now = new Date();
+    const next: AnalysisCommit = {
+      id: current?.id ?? inMemoryAnalysisCommits.size + 1,
+      jobId,
+      repository: commit.repository ?? current?.repository ?? "local",
+      branch: commit.branch ?? current?.branch ?? "main",
+      commitHash: commit.commitHash ?? current?.commitHash ?? null,
+      commitMessage: commit.commitMessage ?? current?.commitMessage ?? null,
+      status: commit.status ?? current?.status ?? "pending",
+      detailsJson: commit.detailsJson ?? current?.detailsJson ?? null,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+    };
+    inMemoryAnalysisCommits.set(jobId, next);
+    return next;
   }
 
   const existing = await getAnalysisCommit(jobId);
@@ -282,8 +402,7 @@ export async function upsertAnalysisCommit(jobId: string, commit: InsertAnalysis
 export async function getAnalysisCommit(jobId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get analysis commit: database not available");
-    return undefined;
+    return inMemoryAnalysisCommits.get(jobId);
   }
 
   const rows = await db.select().from(analysisCommits).where(eq(analysisCommits.jobId, jobId)).limit(1);

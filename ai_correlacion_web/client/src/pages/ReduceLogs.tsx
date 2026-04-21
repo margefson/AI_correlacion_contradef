@@ -15,12 +15,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
+  completeReduceLogsUpload,
+  getReduceLogsUploadCapabilities,
+  initReduceLogsUpload,
+  type UploadCompletionFilePayload,
+  uploadReduceLogsLegacy,
+  uploadReduceLogsChunk,
+} from "@/services/analysisService";
+import {
   buildMonitoredFiles,
   getFileInterpretation,
   getFileRecommendation,
   inferLogType,
   type FileMonitor,
-  type LogType,
   type ProcessingStatus,
   type SubmittedFileMonitor,
 } from "@/pages/reduceLogsMonitor";
@@ -28,25 +35,6 @@ import { AlertTriangle, Database, FileArchive, RefreshCw, ShieldCheck, UploadClo
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-
-type UploadInitResponse = {
-  sessionId: string;
-  maxChunkBytes: number;
-  files: Array<{
-    fileId: string;
-    fileName: string;
-    logType: LogType;
-    sizeBytes: number;
-    chunkCount?: number;
-    reused?: boolean;
-    storageSessionId?: string;
-    storageFileId?: string;
-  }>;
-};
-
-type UploadApiError = {
-  message?: string;
-};
 
 function formatBytes(value?: number | null) {
   if (!value || value <= 0) return "—";
@@ -127,6 +115,7 @@ function getSemaforoTone(file: FileMonitor) {
 }
 
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
+const STORAGE_CREDENTIALS_MISSING_FRAGMENT = "Storage proxy credentials missing";
 
 function buildInitialSubmittedFiles(files: File[]) {
   return files.map((file) => ({
@@ -146,9 +135,9 @@ function updateSubmittedFile(
   return current.map((file) => (file.fileName === fileName ? { ...file, ...patch } : file));
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T> {
-  const responseText = await response.text();
-  return responseText ? JSON.parse(responseText) as T : {} as T;
+function isStorageCredentialsMissingError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes(STORAGE_CREDENTIALS_MISSING_FRAGMENT);
 }
 
 function ProgressStrip({ value, tone = "cyan" }: { value: number; tone?: "cyan" | "emerald" | "rose" | "amber" }) {
@@ -223,6 +212,14 @@ export default function ReduceLogs() {
   const realDataset = reductionQuery.data?.realDatasetCompression;
   const sampleSelectiveTest = reductionQuery.data?.sampleSelectiveTest;
   const uploadedDetail = submittedDetailQuery.data;
+  const hasRemoteArtifacts = Boolean(
+    uploadedDetail?.artifacts?.some((artifact) => Boolean(artifact.storageUrl)),
+  );
+  const showsLocalStorageModeBadge = Boolean(
+    uploadedDetail
+    && (uploadedDetail.job.status === "completed" || uploadedDetail.job.status === "failed")
+    && !hasRemoteArtifacts,
+  );
 
   const monitoredFiles = useMemo(
     () => buildMonitoredFiles(submittedFiles, uploadedDetail?.fileMetrics ?? []),
@@ -311,46 +308,80 @@ export default function ReduceLogs() {
     setActiveFileTab(initialBatch[0]?.fileName ?? "");
 
     try {
-      const initResponse = await fetch("/api/reduce-logs/upload/init", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          analysisName: analysisName.trim(),
-          focusTerms,
-          focusRegexes,
-          origin: window.location.origin,
-          files: selectedFiles.map((file) => ({
-            fileName: file.name,
-            sizeBytes: file.size,
-            logType: inferLogType(file.name),
-            lastModifiedMs: file.lastModified,
-          })),
-        }),
-      });
+      const submissionInput = {
+        analysisName: analysisName.trim(),
+        focusTerms,
+        focusRegexes,
+        origin: window.location.origin,
+      };
+      const capabilities = await getReduceLogsUploadCapabilities().catch(() => null);
+      const shouldUseLegacy = capabilities?.storageConfigured === false;
 
-      const initPayload = await readJsonResponse<UploadInitResponse | UploadApiError>(initResponse);
-      if (!initResponse.ok || !("sessionId" in initPayload)) {
-        const initError = (initPayload as UploadApiError | undefined)?.message;
-        throw new Error(initError ?? "Não foi possível preparar o lote para upload robusto.");
+      if (shouldUseLegacy) {
+        const legacyPayload = await uploadReduceLogsLegacy({
+          ...submissionInput,
+          files: selectedFiles,
+        });
+        setSubmittedFiles((current) => current.map((file) => ({
+          ...file,
+          uploadProgress: 100,
+          uploadStatus: "completed",
+          uploadReused: false,
+        })));
+        const legacyJobId = legacyPayload?.job?.jobId ?? null;
+        toast.success("Storage externo indisponível no ambiente local. Lote enviado pelo modo legado.");
+        setSelectedFiles([]);
+
+        if (legacyJobId) {
+          setSubmittedJobId(legacyJobId);
+          await utils.analysis.detail.invalidate({ jobId: legacyJobId });
+        }
+
+        return;
+      }
+
+      const initPayload = await initReduceLogsUpload({
+        ...submissionInput,
+        files: selectedFiles.map((file) => ({
+          fileName: file.name,
+          sizeBytes: file.size,
+          logType: inferLogType(file.name),
+          lastModifiedMs: file.lastModified,
+        })),
+      }).catch(async (error) => {
+        if (!isStorageCredentialsMissingError(error)) {
+          throw error;
+        }
+
+        // Local/dev fallback: use the legacy multipart route when shared storage is not configured.
+        const legacyPayload = await uploadReduceLogsLegacy({
+          ...submissionInput,
+          files: selectedFiles,
+        });
+        setSubmittedFiles((current) => current.map((file) => ({
+          ...file,
+          uploadProgress: 100,
+          uploadStatus: "completed",
+          uploadReused: false,
+        })));
+        const legacyJobId = legacyPayload?.job?.jobId ?? null;
+        toast.success("Storage externo indisponível no ambiente local. Lote enviado pelo modo legado.");
+        setSelectedFiles([]);
+
+        if (legacyJobId) {
+          setSubmittedJobId(legacyJobId);
+          await utils.analysis.detail.invalidate({ jobId: legacyJobId });
+        }
+
+        return null;
+      });
+      if (!initPayload) {
+        return;
       }
 
       const chunkSizeBytes = Math.min(initPayload.maxChunkBytes || DEFAULT_CHUNK_SIZE_BYTES, DEFAULT_CHUNK_SIZE_BYTES);
 
-      const completionFilesPayload: Array<{
-        fileId: string;
-        fileName: string;
-        sizeBytes: number;
-        logType: LogType;
-        chunkCount: number;
-        lastModifiedMs: number;
-        uploadDurationMs: number;
-        reused: boolean;
-        storageSessionId?: string;
-        storageFileId?: string;
-      }> = [];
+      const completionFilesPayload: UploadCompletionFilePayload[] = [];
 
       for (let index = 0; index < selectedFiles.length; index += 1) {
         const file = selectedFiles[index];
@@ -401,22 +432,7 @@ export default function ReduceLogs() {
         while (sentBytes < file.size) {
           const nextBoundary = Math.min(file.size, sentBytes + chunkSizeBytes);
           const chunk = file.slice(sentBytes, nextBoundary);
-          const chunkResponse = await fetch(
-            `/api/reduce-logs/upload/chunk?sessionId=${encodeURIComponent(initPayload.sessionId)}&fileId=${encodeURIComponent(remoteFile.fileId)}&chunkIndex=${chunkIndex}`,
-            {
-              method: "POST",
-              credentials: "include",
-              headers: {
-                "Content-Type": "application/octet-stream",
-              },
-              body: chunk,
-            },
-          );
-
-          const chunkPayload = await readJsonResponse<{ message?: string; uploadProgress?: number }>(chunkResponse);
-          if (!chunkResponse.ok) {
-            throw new Error(chunkPayload?.message ?? `Falha ao transmitir uma parte de ${file.name}.`);
-          }
+          const chunkPayload = await uploadReduceLogsChunk(initPayload.sessionId, remoteFile.fileId, chunkIndex, chunk);
 
           sentBytes = nextBoundary;
           chunkIndex += 1;
@@ -446,26 +462,11 @@ export default function ReduceLogs() {
         });
       }
 
-      const completeResponse = await fetch("/api/reduce-logs/upload/complete", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionId: initPayload.sessionId,
-          analysisName: analysisName.trim(),
-          focusTerms,
-          focusRegexes,
-          origin: window.location.origin,
-          files: completionFilesPayload,
-        }),
+      const payload = await completeReduceLogsUpload({
+        sessionId: initPayload.sessionId,
+        ...submissionInput,
+        files: completionFilesPayload,
       });
-
-      const payload = await readJsonResponse<{ message?: string; job?: { jobId?: string | null } }>(completeResponse);
-      if (!completeResponse.ok) {
-        throw new Error(payload?.message ?? "Não foi possível iniciar a redução após o upload do lote.");
-      }
 
       setSubmittedFiles((current) => current.map((file) => ({
         ...file,
@@ -654,6 +655,12 @@ export default function ReduceLogs() {
                       helper={`${batchSummary?.discardedLines ?? 0} linhas descartadas no lote atual`}
                     />
                   </div>
+
+                  {showsLocalStorageModeBadge ? (
+                    <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
+                      Execução concluída em modo local. O processamento e as métricas foram gerados normalmente, mas os artefatos externos não foram enviados para storage remoto neste ambiente.
+                    </div>
+                  ) : null}
 
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">

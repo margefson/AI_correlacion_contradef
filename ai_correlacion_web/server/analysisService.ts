@@ -534,6 +534,31 @@ async function uploadArtifact(jobId: string, relativePath: string, content: Buff
   };
 }
 
+async function uploadArtifactOptional(
+  jobId: string,
+  relativePath: string,
+  content: Buffer | string,
+  mimeType: string,
+): Promise<{
+  relativePath: string;
+  storageUrl: string | null;
+  storageKey: string | null;
+  sizeBytes: number;
+}> {
+  const buffer = typeof content === "string" ? Buffer.from(content, "utf-8") : content;
+  try {
+    return await uploadArtifact(jobId, relativePath, buffer, mimeType);
+  } catch (error) {
+    console.warn(`[Analysis] Não foi possível persistir o artefato ${relativePath} no storage compartilhado.`, error);
+    return {
+      relativePath,
+      storageUrl: null,
+      storageKey: null,
+      sizeBytes: buffer.byteLength,
+    };
+  }
+}
+
 function computeMetrics(params: {
   originalLineCount: number;
   reducedLineCount: number;
@@ -1171,7 +1196,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     flowGraph,
   };
 
-  const reportArtifact = await uploadArtifact(jobId, "reports/final-report.md", insight.summaryMarkdown, "text/markdown");
+  const reportArtifact = await uploadArtifactOptional(jobId, "reports/final-report.md", insight.summaryMarkdown, "text/markdown");
   artifacts.push({
     artifactType: "report",
     label: "Relatório final",
@@ -1183,7 +1208,12 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     sizeBytes: reportArtifact.sizeBytes,
   });
 
-  const reducedArtifact = await uploadArtifact(jobId, "reports/reduced-logs.json", JSON.stringify(reducedLogEntries, null, 2), "application/json");
+  const reducedArtifact = await uploadArtifactOptional(
+    jobId,
+    "reports/reduced-logs.json",
+    JSON.stringify(reducedLogEntries, null, 2),
+    "application/json",
+  );
   artifacts.push({
     artifactType: "reduced-log",
     label: "Logs reduzidos",
@@ -1195,7 +1225,12 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     sizeBytes: reducedArtifact.sizeBytes,
   });
 
-  const graphArtifact = await uploadArtifact(jobId, "reports/flow-graph.json", JSON.stringify(flowGraph, null, 2), "application/json");
+  const graphArtifact = await uploadArtifactOptional(
+    jobId,
+    "reports/flow-graph.json",
+    JSON.stringify(flowGraph, null, 2),
+    "application/json",
+  );
   artifacts.push({
     artifactType: "graph",
     label: "Fluxo consolidado",

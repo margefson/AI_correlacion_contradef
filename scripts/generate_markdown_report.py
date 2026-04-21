@@ -133,6 +133,11 @@ def main() -> None:
     md = f"# Relatório técnico dos CDFs reais: fluxo a partir de IsDebuggerPresent\n\n"
     md += "Este relatório consolida a execução do pipeline sobre os arquivos CDF reais extraídos de `Full-Execution-Sample-1.7z`. O objetivo foi reconstruir, a partir de **IsDebuggerPresent**, o encadeamento entre arquivos, produzir recortes reutilizáveis, aplicar compressão adaptativa aos traces completos e materializar os acompanhamentos sugeridos em artefatos operacionais dentro do repositório.\n\n"
     md += "A análise confirmou que o ponto de partida observável do fluxo monitorado combina a resolução inicial de APIs como **LoadLibraryA** com a transição para **IsDebuggerPresent**, seguida por chamadas anti-análise e de preparação de execução. O ponto terminal reconstruído pelo fluxo agregado chega a **FatalExit**, depois de passar por **CheckRemoteDebuggerPresent**, **ZwQueryInformationProcess**, **ZwSetInformationThread**, **GetTickCount**, **QueryPerformanceCounter**, **EnumSystemFirmwareTables**, **LocalAlloc**, **VirtualProtect** e **HeapFree**.\n\n"
+    md += "## Resumo executivo\n\n"
+    md += "A arquitetura operacional aplicada neste processamento transforma entrada bruta em análise interpretável por meio de um fluxo contínuo de ingestão, redução seletiva, correlação de eventos, persistência de artefatos e documentação. O resultado reduz carga cognitiva do analista e acelera a localização de fases de evasão, preparação e execução observáveis na amostra.\n\n"
+    md += "## Fases observadas no fluxo\n\n"
+    phase_rows = [{'Fase': term, 'Posição': idx + 1} for idx, term in enumerate(flow['sequence_terms'])]
+    md += md_table(['Posição', 'Fase'], phase_rows) + '\n\n'
     md += "## Dataset utilizado\n\n"
     md += "O conjunto real processado nesta etapa foi composto pelos seis CDFs abaixo. O pipeline preservou um manifesto com tamanho e hash de cada arquivo para permitir rastreabilidade, reprocessamento e conferência de integridade.\n\n"
     md += md_table(['Arquivo', 'Tamanho', 'SHA-256'], dataset_rows) + '\n\n'

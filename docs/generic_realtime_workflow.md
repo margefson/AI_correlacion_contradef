@@ -57,7 +57,7 @@ A resposta retornará um identificador de job e URLs de acompanhamento.
 | Recurso | Uso |
 | --- | --- |
 | `GET /jobs/{job_id}/status` | Progresso atual, etapa, mensagem e saídas principais |
-| `GET /jobs/{job_id}/events` | Linha do tempo técnica da execução |
+| `GET /jobs/{job_id}/events` | Linha do tempo técnica da execução (com suporte a `since_index` e `limit` para polling incremental) |
 | `GET /jobs/{job_id}/artifacts` | Lista de artefatos já disponíveis |
 | `GET /jobs/{job_id}/stdout` | Saída padrão do processo |
 | `GET /jobs/{job_id}/stderr` | Erros e avisos |

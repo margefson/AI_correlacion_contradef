@@ -30,8 +30,16 @@ def build_report(job_dir: Path) -> str:
     manifest = read_json(job_dir / 'output' / 'manifests' / 'dataset_manifest.json', default=[])
     correlation = read_json(job_dir / 'output' / 'correlation' / 'generic_focus_correlation.json', default={})
     focus_config = read_json(job_dir / 'output' / 'manifests' / 'focus_config.json', default={})
+    events_path = job_dir / 'events.jsonl'
 
     classified_counts = run_summary.get('classified_counts', {})
+    completed_phases = run_summary.get('completed_phases', [])
+    compression_summary = run_summary.get('compression', {})
+    artifact_count = run_summary.get('artifact_count', 0)
+    event_count = 0
+    if events_path.exists():
+        event_count = sum(1 for line in events_path.read_text(encoding='utf-8', errors='ignore').splitlines() if line.strip())
+
     manifest_rows = []
     for item in manifest:
         manifest_rows.append([
@@ -68,6 +76,13 @@ def build_report(job_dir: Path) -> str:
     output_rows = [[key, value] for key, value in output_paths.items()]
     classified_rows = [[key, str(value)] for key, value in classified_counts.items()]
 
+    compression_text = 'N/A'
+    if compression_summary and compression_summary.get('available'):
+        compression_text = (
+            f"{compression_summary.get('reduced_files', 0)} arquivo(s) comprimido(s), "
+            f"redução média estimada de {compression_summary.get('overall_reduction_percent', 0):.2f}%"
+        )
+
     report = f"""# Relatório de Análise Genérica de CDF
 
 Este relatório consolida uma execução do pipeline genérico para correlação de funções em traces CDF ou equivalentes textuais. O objetivo do job foi localizar as funções-alvo informadas, medir sua presença nos arquivos descobertos, reconstruir relações observadas entre chamadas e disponibilizar artefatos reutilizáveis para inspeção contínua.
@@ -82,9 +97,16 @@ Este relatório consolida uma execução do pipeline genérico para correlação
 | Funções literais | `{fmt_list(focus_config.get('focus_terms', []))}` |
 | Expressões regulares | `{fmt_list(focus_config.get('focus_regexes', []))}` |
 | Arquivos descobertos | `{run_summary.get('discovered_file_count', 0)}` |
+| Eventos registrados | `{event_count}` |
+| Artefatos produzidos | `{artifact_count}` |
+| Redução seletiva/compressão | `{compression_text}` |
 | Arquivo principal de correlação | `{status.get('correlation_file', '')}` |
 
 A execução gerou um conjunto de manifestos, saídas derivadas, recortes filtrados e um grafo de correlação. O pipeline foi desenhado para operar sobre pacotes 7z submetidos em novas análises e não depende de um nome de função fixo.
+
+## Fases executadas
+
+{render_table([[str(index + 1), phase] for index, phase in enumerate(completed_phases)] or [['1', status.get('stage', 'desconhecida')]], ['Ordem', 'Fase'])}
 
 ## Distribuição dos arquivos classificados
 
@@ -109,6 +131,8 @@ A execução gerou um conjunto de manifestos, saídas derivadas, recortes filtra
 ## Interpretação operacional
 
 O JSON de correlação deve ser tratado como uma estrutura de evidências. Relações `direct_call` representam chamadas explicitamente observadas em traces de instruções. Relações `cooccurrence_*` representam proximidade contextual ou coocorrência em blocos, úteis para priorização investigativa, mas não suficientes isoladamente para afirmar causalidade. Os contadores por arquivo e por categoria ajudam a diferenciar funções apenas citadas de funções efetivamente encadeadas na execução.
+
+Com a redução seletiva, o fluxo operacional passa de um volume bruto de rastros para um conjunto menor e navegável de evidências. Na prática, isso favorece leitura rápida, triagem em tempo quase real e revisão posterior com rastreabilidade.
 
 ## Próximos passos recomendados
 

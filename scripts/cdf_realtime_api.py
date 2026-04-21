@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 
@@ -158,7 +158,11 @@ def job_status(job_id: str) -> JSONResponse:
 
 
 @app.get('/jobs/{job_id}/events')
-def job_events(job_id: str) -> JSONResponse:
+def job_events(
+    job_id: str,
+    since_index: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> JSONResponse:
     job_dir = jobs_root() / job_id
     events_path = job_dir / 'events.jsonl'
     if not job_dir.exists():
@@ -166,11 +170,22 @@ def job_events(job_id: str) -> JSONResponse:
     events = []
     if events_path.exists():
         with events_path.open('r', encoding='utf-8') as f:
-            for line in f:
+            for index, line in enumerate(f):
                 line = line.strip()
+                if not line or index < since_index:
+                    continue
+                if len(events) >= limit:
+                    break
                 if line:
                     events.append(json.loads(line))
-    return JSONResponse({'job_id': job_id, 'events': events})
+    next_index = since_index + len(events)
+    return JSONResponse({
+        'job_id': job_id,
+        'since_index': since_index,
+        'next_index': next_index,
+        'count': len(events),
+        'events': events,
+    })
 
 
 @app.get('/jobs/{job_id}/artifacts')

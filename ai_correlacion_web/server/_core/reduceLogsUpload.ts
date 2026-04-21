@@ -12,6 +12,7 @@ import type { SupportedLogType } from "../../shared/analysis";
 import { startAnalysisJob } from "../analysisService";
 import { storageGetBuffer, storagePutExact } from "../storage";
 import { createContext } from "./context";
+import { ENV } from "./env";
 
 const TEMP_UPLOAD_DIR = join(tmpdir(), "contradef-reduce-logs");
 const MAX_MULTIPART_FILES = 20;
@@ -600,9 +601,11 @@ async function handleLegacyMultipartUpload(req: Request, res: Response, userId: 
 
 export function registerReduceLogsUploadRoute(app: Express) {
   app.get("/api/reduce-logs/upload/capabilities", async (_req: Request, res: Response) => {
+    const storageConfigured = Boolean(ENV.forgeApiUrl && ENV.forgeApiKey);
     res.json({
       mode: REDUCE_UPLOAD_MODE,
       maxChunkBytes: MAX_CHUNK_BYTES,
+      storageConfigured,
       methods: {
         init: "POST",
         chunk: ["POST", "PUT"],
