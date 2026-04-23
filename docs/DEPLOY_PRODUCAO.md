@@ -13,7 +13,7 @@ A aplicação é **um único servidor Node** (Express + tRPC + ficheiros estáti
 3. Configura o serviço:
    - **Root Directory:** `ai_correlacion_web`
    - **Runtime:** Node
-   - **Build Command:** `npm ci && npm run build`
+   - **Build Command:** `npm ci && npm run build` (o `ai_correlacion_web/.npmrc` define `legacy-peer-deps=true` para o `npm ci` aceitar Vite 7 com `@builder.io/vite-plugin-jsx-loc`)
    - **Start Command:** `npm run start`
    - **Instance type:** escolhe o plano que fizer sentido para carga e disponibilidade (o Render atribui `PORT` automaticamente).
 
