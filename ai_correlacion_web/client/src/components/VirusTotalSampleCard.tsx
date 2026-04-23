@@ -14,7 +14,7 @@ export function VirusTotalSampleCard({ sampleSha256, className = "" }: Props) {
 
   return (
     <div className={`space-y-3 ${className}`}>
-      <p className="text-sm font-medium text-emerald-200">Correlação VirusTotal (amostra registada no job)</p>
+      <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Correlação VirusTotal (amostra registada no job)</p>
       <ExplicitSha256Block
         sha256Lowercase={hex}
         variant="emerald"

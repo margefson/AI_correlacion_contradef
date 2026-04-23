@@ -4,6 +4,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { Toaster } from "./components/ui/sonner";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import ComponentsShowcase from "./pages/ComponentShowcase";
 import Home from "./pages/Home";
 import ReduceLogs from "./pages/ReduceLogs";
 
@@ -12,6 +13,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/reduce-logs" component={ReduceLogs} />
+      <Route path="/component-showcase" component={ComponentsShowcase} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

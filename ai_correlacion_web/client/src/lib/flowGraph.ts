@@ -28,6 +28,8 @@ export type FlowNodeDetails = {
   trigger: boolean | null;
   suspiciousApis: string[];
   techniques: string[];
+  /** Nós de fase: nota quando ficheiro/linha é agregado a partir de várias evidências. */
+  phaseOriginNote: string | null;
 };
 
 export function extractFlowNodeDetails(metadata: unknown): FlowNodeDetails {
@@ -43,7 +45,70 @@ export function extractFlowNodeDetails(metadata: unknown): FlowNodeDetails {
     trigger: typeof record.trigger === "boolean" ? record.trigger : null,
     suspiciousApis: asTextList(record.suspiciousApis),
     techniques: asTextList(record.techniques),
+    phaseOriginNote: null,
   };
+}
+
+/**
+ * Para um nó de fase, deriva ficheiro/tipo/linha a partir das evidências API ligadas no grafo
+ * (o servidor agrega a fase e não grava origem única no metadata da fase).
+ */
+function aggregatePhaseLogOrigin(connected: FlowNode[]): Pick<FlowNodeDetails, "sourceFile" | "sourceLogType" | "sourceLineNumber" | "phaseOriginNote"> {
+  if (!connected.length) {
+    return { sourceFile: null, sourceLogType: null, sourceLineNumber: null, phaseOriginNote: null };
+  }
+
+  const details = connected.map((n) => extractFlowNodeDetails(n.metadata));
+  const withFile = details.filter((d) => d.sourceFile);
+  if (!withFile.length) {
+    return {
+      sourceFile: null,
+      sourceLogType: null,
+      sourceLineNumber: null,
+      phaseOriginNote:
+        "As evidências API desta fase não incluem ficheiro de log no grafo; abra o separador operacional ou o nó de API correspondente.",
+    };
+  }
+
+  const byFile = new Map<string, FlowNodeDetails[]>();
+  for (const d of withFile) {
+    const f = d.sourceFile!;
+    const list = byFile.get(f) ?? [];
+    list.push(d);
+    byFile.set(f, list);
+  }
+
+  const files = Array.from(byFile.keys());
+  const primaryFile = files[0]!;
+  const primaryList = byFile.get(primaryFile)!;
+
+  const sourceFile =
+    files.length === 1 ? primaryFile : `${primaryFile} (+${files.length - 1} outro(s))`;
+
+  const logTypes = Array.from(
+    new Set(primaryList.map((d) => d.sourceLogType).filter(Boolean) as string[]),
+  );
+  let sourceLogType: string | null = null;
+  if (logTypes.length === 1) {
+    sourceLogType = logTypes[0]!;
+  } else if (logTypes.length > 1) {
+    sourceLogType = `${logTypes[0]} (+${logTypes.length - 1})`;
+  }
+
+  const lines = primaryList.map((d) => d.sourceLineNumber).filter((x): x is number => x != null);
+  const uniqLines = Array.from(new Set(lines)).sort((a, b) => a - b);
+  let sourceLineNumber: number | null = null;
+  let phaseOriginNote: string | null = null;
+
+  if (files.length === 1 && uniqLines.length === 1) {
+    sourceLineNumber = uniqLines[0]!;
+  } else if (files.length === 1 && uniqLines.length > 1) {
+    phaseOriginNote = `Várias linhas neste ficheiro nas evidências da fase (ex.: ${uniqLines[0]}–${uniqLines[uniqLines.length - 1]}). Clique num nó de API para ver cada linha.`;
+  } else if (files.length > 1) {
+    phaseOriginNote = "Vários ficheiros de log nas evidências desta fase; mostra-se o primeiro como referência. Abra um nó de API para o detalhe exacto.";
+  }
+
+  return { sourceFile, sourceLogType, sourceLineNumber, phaseOriginNote };
 }
 
 /** Detalhes do nó; para fases sem texto no servidor (jobs antigos), reconstrói a partir das APIs ligadas. */
@@ -52,47 +117,61 @@ export function getFlowNodeDetailsWithFallback(node: FlowNode | null | undefined
     return extractFlowNodeDetails(undefined);
   }
   const direct = extractFlowNodeDetails(node.metadata);
-  if (node.kind !== "phase" || direct.identification) {
+
+  if (node.kind !== "phase") {
     return direct;
   }
+
+  const connected =
+    graph?.nodes.length
+      ? graph.nodes.filter(
+          (n) =>
+            n.kind === "api"
+            && graph.edges.some((e) => e.source === node.id && e.target === n.id),
+        )
+      : [];
+
+  const aggregate = aggregatePhaseLogOrigin(connected);
+
+  const withPhaseOrigin = (d: FlowNodeDetails): FlowNodeDetails => ({
+    ...d,
+    sourceFile: d.sourceFile ?? aggregate.sourceFile,
+    sourceLogType: d.sourceLogType ?? aggregate.sourceLogType,
+    sourceLineNumber: d.sourceLineNumber ?? aggregate.sourceLineNumber,
+    phaseOriginNote: d.phaseOriginNote ?? aggregate.phaseOriginNote,
+  });
+
   if (!graph?.nodes.length) {
-    return {
+    return withPhaseOrigin({
       ...direct,
       stage: direct.stage ?? node.label,
-      identification: `Fase «${node.label}»: sem grafo disponível para reconstruir o resumo.`,
-      evidence: "—",
-      identifiedBy: null,
-      suspiciousApis: [],
-      techniques: [],
-      sourceFile: null,
-      sourceLogType: null,
-      sourceLineNumber: null,
-      trigger: null,
-    };
+      identification: direct.identification ?? `Fase «${node.label}»: sem grafo disponível para reconstruir o resumo.`,
+      evidence: direct.evidence ?? "—",
+      identifiedBy: direct.identifiedBy,
+      suspiciousApis: direct.suspiciousApis,
+      techniques: direct.techniques,
+      trigger: direct.trigger,
+    });
   }
 
-  const connected = graph.nodes.filter(
-    (n) =>
-      n.kind === "api"
-      && graph.edges.some((e) => e.source === node.id && e.target === n.id),
-  );
-
   if (connected.length === 0) {
-    return {
+    return withPhaseOrigin({
       ...direct,
       stage: direct.stage ?? node.label,
       identification:
-        `Fase «${node.label}» sem evidências suspeitas ligadas na jornada reduzida (coluna vazia no diagrama ou job gravado antes do resumo por fase).`,
+        direct.identification
+        ?? `Fase «${node.label}» sem evidências suspeitas ligadas na jornada reduzida (coluna vazia no diagrama ou job gravado antes do resumo por fase).`,
       evidence:
-        "Selecione uma API noutra coluna ou reprocesse o lote para atualizar os metadados agregados da fase.",
-      identifiedBy: "Reconstrução no cliente (fallback)",
-      suspiciousApis: [],
-      techniques: [],
-      sourceFile: null,
-      sourceLogType: null,
-      sourceLineNumber: null,
-      trigger: null,
-    };
+        direct.evidence
+        ?? "Selecione uma API noutra coluna ou reprocesse o lote para atualizar os metadados agregados da fase.",
+      identifiedBy: direct.identifiedBy ?? "Reconstrução no cliente (fallback)",
+      suspiciousApis: direct.suspiciousApis,
+      techniques: direct.techniques,
+      trigger: direct.trigger,
+      phaseOriginNote:
+        direct.phaseOriginNote
+        ?? (!direct.identification ? "Sem ligações fase → API no grafo para agregar origem no log." : null),
+    });
   }
 
   const apis = Array.from(
@@ -109,7 +188,13 @@ export function getFlowNodeDetailsWithFallback(node: FlowNode | null | undefined
     .filter((x): x is string => Boolean(x && x.trim()));
   const triggers = connected.filter((n) => extractFlowNodeDetails(n.metadata).trigger === true).length;
 
-  return {
+  if (direct.identification) {
+    return withPhaseOrigin({
+      ...direct,
+    });
+  }
+
+  return withPhaseOrigin({
     ...direct,
     stage: node.label,
     identification:
@@ -118,11 +203,8 @@ export function getFlowNodeDetailsWithFallback(node: FlowNode | null | undefined
     identifiedBy: `Ligações fase → API no grafo (${apis.length} rotulos distintos)`,
     suspiciousApis: apis,
     techniques,
-    sourceFile: null,
-    sourceLogType: null,
-    sourceLineNumber: null,
     trigger: null,
-  };
+  });
 }
 
 /** Texto contínuo para o painel «Caminho até à identificação» e exportações. */

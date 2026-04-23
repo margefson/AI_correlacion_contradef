@@ -44,7 +44,7 @@ export default function FlowJourneyDiagram({
   }, [graph]);
 
   if (!phases.length) {
-    return <p className="text-sm text-zinc-400">Fluxo ainda vazio; aguarde a conclusão da correlação.</p>;
+    return <p className="text-sm text-muted-foreground">Fluxo ainda vazio; aguarde a conclusão da correlação.</p>;
   }
 
   return (
@@ -55,40 +55,57 @@ export default function FlowJourneyDiagram({
             <div
               className={`w-[280px] rounded-2xl border p-3 transition-colors ${
                 selectedNodeId === entry.phase.id
-                  ? "border-cyan-400/45 bg-cyan-500/[0.12]"
-                  : "border-white/10 bg-slate-950/70"
+                  ? "border-cyan-500/50 bg-cyan-500/15 dark:border-cyan-400/45 dark:bg-cyan-500/[0.12]"
+                  : "border-border bg-muted/60 dark:border-white/10 dark:bg-slate-950/70"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => onSelectNode(entry.phase.id)}
-                  className={`rounded-lg text-left transition ${selectedNodeId === entry.phase.id ? "text-cyan-100" : "text-zinc-100 hover:text-white"}`}
+                  className={`rounded-lg text-left transition ${
+                    selectedNodeId === entry.phase.id
+                      ? "text-cyan-900 dark:text-cyan-100"
+                      : "text-foreground hover:opacity-90 dark:text-zinc-100 dark:hover:text-white"
+                  }`}
                 >
                   <p className="text-sm font-semibold">{entry.phase.label}</p>
-                  <p className="mt-0.5 text-[10px] font-normal text-zinc-500">Ver resumo da fase</p>
+                  <p className="mt-0.5 text-[10px] font-normal text-muted-foreground">Ver resumo da fase</p>
                 </button>
-                <Badge variant="outline" className="shrink-0 border-white/10 text-[10px] uppercase tracking-[0.08em] text-zinc-300">Fase</Badge>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-border text-[10px] uppercase tracking-[0.08em] text-muted-foreground dark:border-white/10 dark:text-zinc-300"
+                >
+                  Fase
+                </Badge>
               </div>
               <div className="mt-3 space-y-2">
-                {entry.events.length ? entry.events.map(({ node, incoming }) => (
-                  <button
-                    key={node.id}
-                    type="button"
-                    onClick={() => onSelectNode(node.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left transition ${selectedNodeId === node.id ? "border-cyan-400/40 bg-cyan-500/10 text-white" : "border-white/10 bg-black/20 text-zinc-200 hover:border-cyan-400/30 hover:bg-white/10"}`}
-                  >
-                    <p className="text-xs font-medium">{node.label}</p>
-                    {incoming?.relation ? (
-                      <p className="mt-1 text-[11px] text-zinc-400">{incoming.relation}</p>
-                    ) : null}
-                  </button>
-                )) : <p className="text-xs text-zinc-400">Sem evidências nesta fase.</p>}
+                {entry.events.length ? (
+                  entry.events.map(({ node, incoming }) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={() => onSelectNode(node.id)}
+                      className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                        selectedNodeId === node.id
+                          ? "border-cyan-500/50 bg-cyan-500/15 text-foreground dark:border-cyan-400/40 dark:bg-cyan-500/10 dark:text-white"
+                          : "border-border bg-muted/50 text-foreground hover:border-cyan-500/40 hover:bg-muted dark:border-white/10 dark:bg-black/20 dark:text-zinc-200 dark:hover:border-cyan-400/30 dark:hover:bg-white/10"
+                      }`}
+                    >
+                      <p className="text-xs font-medium">{node.label}</p>
+                      {incoming?.relation ? (
+                        <p className="mt-1 text-[11px] text-muted-foreground">{incoming.relation}</p>
+                      ) : null}
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">Sem evidências nesta fase.</p>
+                )}
               </div>
             </div>
             {index < phases.length - 1 ? (
               <div className="flex items-center">
-                <ArrowRight className="h-4 w-4 text-cyan-300" />
+                <ArrowRight className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
               </div>
             ) : null}
           </div>

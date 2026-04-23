@@ -157,24 +157,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useTheme } from "@/contexts/ThemeContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import {
-  AlertCircle,
-  CalendarIcon,
-  Check,
-  Clock,
-  Moon,
-  Sun,
-  X,
-} from "lucide-react";
+import { AlertCircle, CalendarIcon, Check, Clock, X } from "lucide-react";
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
 
 export default function ComponentsShowcase() {
-  const { theme, toggleTheme } = useTheme();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [datePickerDate, setDatePickerDate] = useState<Date>();
   const [selectedFruits, setSelectedFruits] = useState<string[]>([]);
@@ -228,24 +219,23 @@ export default function ComponentsShowcase() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <main className="container max-w-6xl mx-auto">
-        <div className="space-y-2 justify-between flex">
-          <h2 className="text-3xl font-bold tracking-tight mb-6">
-            Shadcn/ui Component Library
-          </h2>
-          <Button variant="outline" size="icon" onClick={toggleTheme}>
-            {theme === "light" ? (
-              <Moon className="h-5 w-5" />
-            ) : (
-              <Sun className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
+      <main className="container mx-auto max-w-6xl px-4 pb-12">
+        <header className="mb-10 flex flex-col gap-4 border-b border-border pb-8 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              Biblioteca de componentes (shadcn/ui)
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Pré-visualização dos tokens de cor e componentes no tema claro e escuro. Use o botão ao lado para alternar.
+            </p>
+          </div>
+          <ThemeToggle />
+        </header>
 
         <div className="space-y-12">
           {/* Text Colors Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Text Colors</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Text Colors</h3>
             <Card>
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -324,7 +314,7 @@ export default function ComponentsShowcase() {
 
           {/* Color Combinations Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Color Combinations</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Color Combinations</h3>
             <Card>
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -358,19 +348,19 @@ export default function ComponentsShowcase() {
                       Destructive background with foreground text
                     </p>
                   </div>
-                  <div className="bg-card text-card-foreground rounded-lg p-4 border">
+                  <div className="rounded-lg border border-border bg-card p-4 text-card-foreground">
                     <p className="font-medium mb-1">Card</p>
                     <p className="text-sm opacity-90">
                       Card background with foreground text
                     </p>
                   </div>
-                  <div className="bg-popover text-popover-foreground rounded-lg p-4 border">
+                  <div className="rounded-lg border border-border bg-popover p-4 text-popover-foreground">
                     <p className="font-medium mb-1">Popover</p>
                     <p className="text-sm opacity-90">
                       Popover background with foreground text
                     </p>
                   </div>
-                  <div className="bg-background text-foreground rounded-lg p-4 border">
+                  <div className="rounded-lg border border-border bg-background p-4 text-foreground">
                     <p className="font-medium mb-1">Background</p>
                     <p className="text-sm opacity-90">
                       Default background with foreground text
@@ -383,7 +373,7 @@ export default function ComponentsShowcase() {
 
           {/* Buttons Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Buttons</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Buttons</h3>
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-wrap gap-4">
@@ -405,7 +395,7 @@ export default function ComponentsShowcase() {
 
           {/* Form Inputs Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Form Inputs</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Form Inputs</h3>
             <Card>
               <CardContent className="pt-6 space-y-6">
                 <div className="space-y-2">
@@ -495,7 +485,7 @@ export default function ComponentsShowcase() {
                           selected={datePickerDate}
                           onSelect={setDatePickerDate}
                         />
-                        <div className="border-t pt-3 space-y-2">
+                        <div className="space-y-2 border-t border-border pt-3">
                           <Label className="flex items-center gap-2">
                             <Clock className="h-4 w-4" />
                             Time
@@ -679,7 +669,7 @@ export default function ComponentsShowcase() {
 
           {/* Data Display Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Data Display</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Data Display</h3>
             <Card>
               <CardContent className="pt-6 space-y-6">
                 <div className="space-y-2">
@@ -868,7 +858,7 @@ export default function ComponentsShowcase() {
 
           {/* Alerts Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Alerts</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Alerts</h3>
             <div className="space-y-4">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
@@ -889,7 +879,7 @@ export default function ComponentsShowcase() {
 
           {/* Tabs Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Tabs</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Tabs</h3>
             <Tabs defaultValue="account" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="account">Account</TabsTrigger>
@@ -958,7 +948,7 @@ export default function ComponentsShowcase() {
 
           {/* Accordion Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Accordion</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Accordion</h3>
             <Accordion type="single" collapsible className="w-full">
               <AccordionItem value="item-1">
                 <AccordionTrigger>Is it accessible?</AccordionTrigger>
@@ -985,7 +975,7 @@ export default function ComponentsShowcase() {
 
           {/* Collapsible Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Collapsible</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Collapsible</h3>
             <Collapsible>
               <Card>
                 <CardHeader>
@@ -998,13 +988,13 @@ export default function ComponentsShowcase() {
                 <CollapsibleContent>
                   <CardContent>
                     <div className="space-y-2">
-                      <div className="rounded-md border px-4 py-3 font-mono text-sm">
+                      <div className="rounded-md border border-border bg-muted/40 px-4 py-3 font-mono text-sm text-foreground">
                         @radix-ui/primitives
                       </div>
-                      <div className="rounded-md border px-4 py-3 font-mono text-sm">
+                      <div className="rounded-md border border-border bg-muted/40 px-4 py-3 font-mono text-sm text-foreground">
                         @radix-ui/colors
                       </div>
-                      <div className="rounded-md border px-4 py-3 font-mono text-sm">
+                      <div className="rounded-md border border-border bg-muted/40 px-4 py-3 font-mono text-sm text-foreground">
                         @stitches/react
                       </div>
                     </div>
@@ -1016,7 +1006,7 @@ export default function ComponentsShowcase() {
 
           {/* Dialog, Sheet, Drawer Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Overlays</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Overlays</h3>
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-wrap gap-4">
@@ -1097,7 +1087,7 @@ export default function ComponentsShowcase() {
                     </PopoverTrigger>
                     <PopoverContent>
                       <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Dimensions</h4>
+                        <h4 className="font-medium leading-none text-foreground">Dimensions</h4>
                         <p className="text-sm text-muted-foreground">
                           Set the dimensions for the layer.
                         </p>
@@ -1120,7 +1110,7 @@ export default function ComponentsShowcase() {
 
           {/* Menus Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Menus</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Menus</h3>
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-wrap gap-4">
@@ -1156,8 +1146,8 @@ export default function ComponentsShowcase() {
                     </HoverCardTrigger>
                     <HoverCardContent>
                       <div className="space-y-2">
-                        <h4 className="text-sm font-semibold">@nextjs</h4>
-                        <p className="text-sm">
+                        <h4 className="text-sm font-semibold text-foreground">@nextjs</h4>
+                        <p className="text-sm text-muted-foreground">
                           The React Framework – created and maintained by
                           @vercel.
                         </p>
@@ -1171,14 +1161,14 @@ export default function ComponentsShowcase() {
 
           {/* Calendar Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Calendar</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Calendar</h3>
             <Card>
               <CardContent className="pt-6 flex justify-center">
                 <Calendar
                   mode="single"
                   selected={date}
                   onSelect={setDate}
-                  className="rounded-md border"
+                  className="rounded-md border border-border bg-card"
                 />
               </CardContent>
             </Card>
@@ -1186,7 +1176,7 @@ export default function ComponentsShowcase() {
 
           {/* Carousel Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Carousel</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Carousel</h3>
             <Card>
               <CardContent className="pt-6">
                 <Carousel className="w-full max-w-xs mx-auto">
@@ -1196,7 +1186,7 @@ export default function ComponentsShowcase() {
                         <div className="p-1">
                           <Card>
                             <CardContent className="flex aspect-square items-center justify-center p-6">
-                              <span className="text-4xl font-semibold">
+                              <span className="text-4xl font-semibold text-foreground">
                                 {index + 1}
                               </span>
                             </CardContent>
@@ -1214,7 +1204,7 @@ export default function ComponentsShowcase() {
 
           {/* Toggle Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Toggle</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Toggle</h3>
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="space-y-2">
@@ -1255,7 +1245,7 @@ export default function ComponentsShowcase() {
 
           {/* Aspect Ratio & Scroll Area Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Layout Components</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Layout Components</h3>
             <Card>
               <CardContent className="pt-6 space-y-6">
                 <div className="space-y-2">
@@ -1269,11 +1259,11 @@ export default function ComponentsShowcase() {
                 <Separator />
                 <div className="space-y-2">
                   <Label>Scroll Area</Label>
-                  <ScrollArea className="h-[200px] w-full rounded-md border overflow-hidden">
+                  <ScrollArea className="h-[200px] w-full overflow-hidden rounded-md border border-border">
                     <div className="p-4">
                       <div className="space-y-4">
                         {Array.from({ length: 20 }).map((_, i) => (
-                          <div key={i} className="text-sm">
+                          <div key={i} className="text-sm text-foreground">
                             Item {i + 1}: This is a scrollable content area
                           </div>
                         ))}
@@ -1287,22 +1277,22 @@ export default function ComponentsShowcase() {
 
           {/* Resizable Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Resizable Panels</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Resizable Panels</h3>
             <Card>
               <CardContent className="pt-6">
                 <ResizablePanelGroup
                   direction="horizontal"
-                  className="min-h-[200px] rounded-lg border"
+                  className="min-h-[200px] rounded-lg border border-border bg-muted/20"
                 >
                   <ResizablePanel defaultSize={50}>
                     <div className="flex h-full items-center justify-center p-6">
-                      <span className="font-semibold">Panel One</span>
+                      <span className="font-semibold text-foreground">Panel One</span>
                     </div>
                   </ResizablePanel>
                   <ResizableHandle />
                   <ResizablePanel defaultSize={50}>
                     <div className="flex h-full items-center justify-center p-6">
-                      <span className="font-semibold">Panel Two</span>
+                      <span className="font-semibold text-foreground">Panel Two</span>
                     </div>
                   </ResizablePanel>
                 </ResizablePanelGroup>
@@ -1312,7 +1302,7 @@ export default function ComponentsShowcase() {
 
           {/* Toast Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">Toast</h3>
+            <h3 className="text-2xl font-semibold text-foreground">Toast</h3>
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="space-y-2">
@@ -1393,7 +1383,7 @@ export default function ComponentsShowcase() {
 
           {/* AI ChatBox Section */}
           <section className="space-y-4">
-            <h3 className="text-2xl font-semibold">AI ChatBox</h3>
+            <h3 className="text-2xl font-semibold text-foreground">AI ChatBox</h3>
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-4">
@@ -1427,9 +1417,9 @@ export default function ComponentsShowcase() {
         </div>
       </main>
 
-      <footer className="border-t py-6 mt-12">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>Shadcn/ui Component Showcase</p>
+      <footer className="mt-12 border-t border-border bg-muted/20 py-6">
+        <div className="container mx-auto max-w-6xl px-4 text-center text-sm text-muted-foreground">
+          <p>Demonstração de componentes shadcn/ui</p>
         </div>
       </footer>
     </div>

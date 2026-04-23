@@ -1,7 +1,4 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import FlowCorrelationGraph from "@/components/FlowCorrelationGraph";
-import FlowJourneyDiagram from "@/components/FlowJourneyDiagram";
-import { MitreDefenseEvasionPanel } from "@/components/MitreDefenseEvasionPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,15 +13,10 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
-import { buildFlowJourneyNarrative, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
+import { jobStatusBadgeClass } from "@/lib/analysisUi";
 import { formatBytes, formatDateTimeLocale, formatDurationMs, formatPercentFine } from "@/lib/format";
 import { isReduceLogsDebugEnabled } from "@/lib/reduceLogsDebug";
-import {
-  downloadReduceLogsAnalysisExcel,
-  downloadReduceLogsExcelWorkbook,
-  downloadReduceLogsFlowExcel,
-} from "@/lib/reduceLogsExcelExport";
+import { downloadReduceLogsExcelWorkbook } from "@/lib/reduceLogsExcelExport";
 import { clearPersistedReduceLogsJobId, readPersistedReduceLogsJobId, writePersistedReduceLogsJobId } from "@/lib/reduceLogsSession";
 import { trpc } from "@/lib/trpc";
 import {
@@ -46,8 +38,6 @@ import {
 } from "@/pages/reduceLogsMonitor";
 import {
   AlertTriangle,
-  ArrowRight,
-  BrainCircuit,
   Database,
   FileArchive,
   FileDown,
@@ -57,11 +47,9 @@ import {
   RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   UploadCloud,
 } from "lucide-react";
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
 function getStatusLabel(status?: string | null) {
@@ -267,7 +255,6 @@ export default function ReduceLogs() {
   const [isUploading, setIsUploading] = useState(false);
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFileMonitor[]>([]);
   const [activeFileTab, setActiveFileTab] = useState<string>("");
-  const [reduceLogsGraphNodeId, setReduceLogsGraphNodeId] = useState<string | null>(null);
   const [uiNowMs, setUiNowMs] = useState(() => Date.now());
   const [fileQuickFilter, setFileQuickFilter] = useState<"all" | "stalled" | "running" | "completed">("all");
   const [sortByPriority, setSortByPriority] = useState(true);
@@ -373,45 +360,6 @@ export default function ReduceLogs() {
     submittedDetailQuery.error,
   ]);
 
-  useEffect(() => {
-    setReduceLogsGraphNodeId(null);
-  }, [submittedJobId]);
-
-  const effectiveReduceLogsGraphNodeId = useMemo(() => {
-    const nodes = uploadedDetail?.flowGraph.nodes ?? [];
-    if (!nodes.length) return null;
-    if (reduceLogsGraphNodeId && nodes.some((node) => node.id === reduceLogsGraphNodeId)) {
-      return reduceLogsGraphNodeId;
-    }
-    return nodes[0]!.id;
-  }, [uploadedDetail?.flowGraph.nodes, reduceLogsGraphNodeId]);
-
-  const selectedReduceLogsGraphNode = useMemo(
-    () => uploadedDetail?.flowGraph.nodes.find((node) => node.id === effectiveReduceLogsGraphNodeId) ?? null,
-    [uploadedDetail?.flowGraph.nodes, effectiveReduceLogsGraphNodeId],
-  );
-  const selectedReduceLogsNodeDetails = useMemo(
-    () => getFlowNodeDetailsWithFallback(selectedReduceLogsGraphNode, uploadedDetail?.flowGraph ?? null),
-    [selectedReduceLogsGraphNode, uploadedDetail?.flowGraph],
-  );
-  const selectedReduceLogsIncomingEdge = useMemo(() => {
-    if (!uploadedDetail?.flowGraph.edges.length || !selectedReduceLogsGraphNode) return null;
-    return uploadedDetail.flowGraph.edges.find((edge) => edge.target === selectedReduceLogsGraphNode.id) ?? null;
-  }, [uploadedDetail?.flowGraph.edges, selectedReduceLogsGraphNode]);
-  const selectedReduceLogsIncomingEdgeSourceNode = useMemo(() => {
-    if (!uploadedDetail?.flowGraph.nodes.length || !selectedReduceLogsIncomingEdge) return null;
-    return uploadedDetail.flowGraph.nodes.find((node) => node.id === selectedReduceLogsIncomingEdge.source) ?? null;
-  }, [uploadedDetail?.flowGraph.nodes, selectedReduceLogsIncomingEdge]);
-
-  const flowJourneyNarrativeText = useMemo(() => {
-    if (!uploadedDetail) return "";
-    return buildFlowJourneyNarrative({
-      flowGraph: uploadedDetail.flowGraph,
-      classification: uploadedDetail.classification,
-      riskLevel: uploadedDetail.riskLevel,
-      currentPhase: uploadedDetail.currentPhase,
-    });
-  }, [uploadedDetail]);
   const monitoredFiles = useMemo(
     () => buildMonitoredFiles(submittedFiles, uploadedDetail?.fileMetrics ?? []),
     [submittedFiles, uploadedDetail],
@@ -614,32 +562,6 @@ export default function ReduceLogs() {
       toast.success("Excel gerado com as folhas Resumo, Acompanhamento e Sugestões.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível gerar o Excel.");
-    }
-  }
-
-  function handleExportReduceLogsAnalysisExcel() {
-    if (!uploadedDetail) {
-      toast.error("Não há dados de análise para exportar.");
-      return;
-    }
-    try {
-      downloadReduceLogsAnalysisExcel({ detail: uploadedDetail, jobId: submittedJobId });
-      toast.success("Excel de análise gerado (resumo, indicadores, MITRE, fluxo, eventos…).");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível gerar o Excel de análise.");
-    }
-  }
-
-  function handleExportReduceLogsFlowExcel() {
-    if (!uploadedDetail?.flowGraph.nodes.length) {
-      toast.error("Não há grafo de fluxo para exportar.");
-      return;
-    }
-    try {
-      downloadReduceLogsFlowExcel({ detail: uploadedDetail, jobId: submittedJobId });
-      toast.success("Excel do fluxo gerado (narrativa, fases, APIs, ligações).");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Não foi possível gerar o Excel do fluxo.");
     }
   }
 
@@ -1259,271 +1181,6 @@ export default function ReduceLogs() {
                     <div className="rounded-2xl border border-amber-400/35 bg-amber-500/10 p-4 text-sm leading-6 text-amber-950 dark:border-amber-400/25 dark:text-amber-100">
                       Execução concluída sem envio ao storage remoto (Forge). O processamento e as métricas foram gerados normalmente; use os links de download abaixo para acessar a cópia mantida no servidor, quando existir.
                     </div>
-                  ) : null}
-
-                  {uploadedDetail ? (
-                    <Card className="border-border bg-card text-card-foreground shadow-md dark:border-cyan-400/20 dark:bg-slate-950/70 dark:shadow-lg dark:shadow-cyan-950/10">
-                      <CardHeader>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <CardTitle className="text-lg">Interpretação consolidada do lote atual</CardTitle>
-                            <CardDescription>
-                              Classificação, fluxo correlacionado, artefatos e resumo alinhados ao dashboard principal — sem sair da rota Reduzir Logs.
-                            </CardDescription>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="border-cyan-600/40 text-cyan-900 hover:bg-cyan-500/15 dark:border-cyan-400/35 dark:text-cyan-100"
-                              onClick={handleExportReduceLogsAnalysisExcel}
-                            >
-                              <FileSpreadsheet className="mr-2 h-4 w-4" />
-                              Exportar análise (Excel)
-                            </Button>
-                            <Badge className={jobStatusBadgeClass(uploadedDetail.job.status)}>{uploadedDetail.job.status}</Badge>
-                            <Badge className={riskLevelBadgeClass(uploadedDetail.riskLevel)}>{uploadedDetail.riskLevel}</Badge>
-                            <Badge variant="outline" className="border-border text-foreground dark:border-white/10">{uploadedDetail.classification}</Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <Tabs defaultValue="resumo" className="space-y-4">
-                          <div className="space-y-2">
-                            <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Conteúdo da visão geral</p>
-                            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 rounded-xl border border-border bg-muted p-1.5 dark:border-white/12 dark:bg-slate-950/85">
-                              <TabsTrigger
-                                value="resumo"
-                                className="rounded-lg border border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground data-[state=active]:border-cyan-500/45 data-[state=active]:bg-cyan-500/20 data-[state=active]:font-medium data-[state=active]:text-cyan-900 dark:data-[state=active]:border-cyan-400/45 dark:data-[state=active]:text-cyan-50"
-                              >
-                                Resumo
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="fluxo"
-                                className="rounded-lg border border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground data-[state=active]:border-cyan-500/45 data-[state=active]:bg-cyan-500/20 data-[state=active]:font-medium data-[state=active]:text-cyan-900 dark:data-[state=active]:border-cyan-400/45 dark:data-[state=active]:text-cyan-50"
-                              >
-                                Fluxo
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="artefatos"
-                                className="rounded-lg border border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground data-[state=active]:border-cyan-500/45 data-[state=active]:bg-cyan-500/20 data-[state=active]:font-medium data-[state=active]:text-cyan-900 dark:data-[state=active]:border-cyan-400/45 dark:data-[state=active]:text-cyan-50"
-                              >
-                                Artefatos
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="timeline"
-                                className="rounded-lg border border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground data-[state=active]:border-cyan-500/45 data-[state=active]:bg-cyan-500/20 data-[state=active]:font-medium data-[state=active]:text-cyan-900 dark:data-[state=active]:border-cyan-400/45 dark:data-[state=active]:text-cyan-50"
-                              >
-                                Eventos do job
-                              </TabsTrigger>
-                            </TabsList>
-                          </div>
-
-                          <TabsContent value="resumo" className="space-y-4">
-                            <div className="grid gap-4 lg:grid-cols-2">
-                              <div className="rounded-2xl border border-border bg-muted/50 dark:border-white/10 dark:bg-black/20 p-4">
-                                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                  <BrainCircuit className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
-                                  Resumo interpretativo
-                                </div>
-                                <p className="mt-1 text-xs text-muted-foreground">{uploadedDetail.insight?.title ?? "Resumo automático"}</p>
-                                <div className="prose mt-3 max-w-none text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground dark:prose-headings:text-white dark:prose-p:text-muted-foreground">
-                                  <Streamdown>{uploadedDetail.insight?.summaryMarkdown ?? "Resumo ainda não disponível para este job."}</Streamdown>
-                                </div>
-                              </div>
-                              <div className="space-y-3 rounded-2xl border border-border bg-muted/50 dark:border-white/10 dark:bg-black/20 p-4">
-                                <p className="text-sm font-medium text-foreground">Indicadores do lote</p>
-                                <div className="grid gap-2 text-sm text-muted-foreground">
-                                  <p><span className="text-muted-foreground">Fase comportamental:</span> {uploadedDetail.currentPhase}</p>
-                                  <p><span className="text-muted-foreground">Redução (linhas):</span> {uploadedDetail.metrics.originalLineCount} → {uploadedDetail.metrics.reducedLineCount} ({formatPercentFine(uploadedDetail.metrics.reductionPercent)})</p>
-                                  <p><span className="text-muted-foreground">APIs suspeitas (lista):</span> {uploadedDetail.suspiciousApis.length ? uploadedDetail.suspiciousApis.join(", ") : "—"}</p>
-                                </div>
-                                <MitreDefenseEvasionPanel
-                                  mitre={uploadedDetail.mitreDefenseEvasion}
-                                  heuristicTags={uploadedDetail.techniques}
-                                />
-                                <div className="space-y-2">
-                                  <p className="text-xs font-medium text-muted-foreground">Heurísticas nos logs</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {uploadedDetail.techniques.length
-                                      ? uploadedDetail.techniques.map((technique) => (
-                                        <Badge key={technique} variant="outline" className="border-border text-foreground dark:border-white/10">{technique}</Badge>
-                                      ))
-                                      : <span className="text-xs text-muted-foreground">Nenhuma técnica marcada.</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </TabsContent>
-
-                          <TabsContent value="fluxo" className="space-y-4">
-                            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 dark:border-cyan-400/25 dark:bg-cyan-500/[0.07]">
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-800 dark:text-cyan-200/90">
-                                    Caminho até à identificação
-                                  </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    Leitura contínua da jornada por fase até ao veredito; útil para relatório ou integrações.
-                                  </p>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="shrink-0 border-cyan-600/40 text-cyan-900 hover:bg-cyan-500/15 dark:border-cyan-400/35 dark:text-cyan-100"
-                                  onClick={handleExportReduceLogsFlowExcel}
-                                >
-                                  <FileSpreadsheet className="mr-2 h-4 w-4" />
-                                  Exportar fluxo (Excel)
-                                </Button>
-                              </div>
-                              <p className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                                {flowJourneyNarrativeText || "Sem dados de fluxo para este job."}
-                              </p>
-                            </div>
-                            <div className="grid gap-4 lg:grid-cols-[1fr,320px]">
-                              <div className="rounded-3xl border border-border bg-gradient-to-br from-muted/80 via-background to-cyan-500/10 p-4 dark:border-white/10 dark:from-slate-950 dark:via-slate-900 dark:to-cyan-950/40">
-                                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                  <Sparkles className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
-                                  Clique num nó (fase ou API) ou no título da coluna da jornada; o painel à direita mostra o detalhe.
-                                </div>
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                  {uploadedDetail.flowGraph.nodes.length ? uploadedDetail.flowGraph.nodes.map((node) => (
-                                    <button
-                                      key={node.id}
-                                      type="button"
-                                      onClick={() => setReduceLogsGraphNodeId(node.id)}
-                                      className={`rounded-2xl border px-3 py-2 text-left text-sm transition ${effectiveReduceLogsGraphNodeId === node.id ? "border-cyan-500/50 bg-cyan-500/15 text-foreground dark:border-cyan-400/40 dark:bg-cyan-500/10 dark:text-white" : "border-border bg-muted/50 text-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"}`}
-                                    >
-                                      <span className="font-medium">{node.label}</span>
-                                      <Badge variant="outline" className="ml-2 border-border text-xs text-muted-foreground dark:border-white/10">{node.kind}</Badge>
-                                    </button>
-                                  )) : (
-                                    <p className="text-sm text-muted-foreground">Fluxo ainda vazio; aguarde a conclusão da correlação.</p>
-                                  )}
-                                </div>
-                                <div className="mt-4 space-y-3">
-                                  <FlowCorrelationGraph
-                                    graph={uploadedDetail.flowGraph}
-                                    selectedNodeId={effectiveReduceLogsGraphNodeId}
-                                    onSelectNode={setReduceLogsGraphNodeId}
-                                  />
-                                </div>
-                                <div className="mt-4 space-y-3">
-                                  <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Jornada por fase</p>
-                                  <FlowJourneyDiagram
-                                    graph={uploadedDetail.flowGraph}
-                                    selectedNodeId={effectiveReduceLogsGraphNodeId}
-                                    onSelectNode={setReduceLogsGraphNodeId}
-                                  />
-                                </div>
-                                <details className="mt-4 rounded-2xl border border-border bg-muted/40 px-3 py-2 dark:border-white/10 dark:bg-black/15">
-                                  <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">
-                                    Arestas do fluxo (lista) — {uploadedDetail.flowGraph.edges.length} ligações
-                                  </summary>
-                                  <div className="mt-3 flex max-h-48 flex-wrap gap-2 overflow-y-auto text-xs text-muted-foreground">
-                                    {uploadedDetail.flowGraph.edges.map((edge) => (
-                                      <div key={`${edge.source}-${edge.target}-${edge.relation}`} className="flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-1 dark:border-white/10 dark:bg-white/5">
-                                        <span>{edge.source.replace("phase:", "").replace("event:", "")}</span>
-                                        <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">{edge.relation}</span>
-                                        <ArrowRight className="h-3 w-3 shrink-0" />
-                                        <span>{edge.target.replace("phase:", "").replace("event:", "")}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </details>
-                              </div>
-                              <div className="rounded-2xl border border-border bg-muted/50 dark:border-white/10 dark:bg-black/20 p-4">
-                                <p className="text-sm font-medium text-foreground">Nó selecionado</p>
-                                <p className="mt-1 text-xs text-muted-foreground">{selectedReduceLogsGraphNode?.label ?? "Selecione um nó na lista."}</p>
-                                {selectedReduceLogsGraphNode ? (
-                                  <div className="mt-3 space-y-3 text-sm text-muted-foreground">
-                                    <div className="rounded-xl border border-border bg-muted/80 dark:border-white/10 dark:bg-slate-950/70 p-3">
-                                      <p><span className="text-muted-foreground">Arquivo de origem:</span> {selectedReduceLogsNodeDetails.sourceFile ?? "—"}</p>
-                                      <p><span className="text-muted-foreground">Tipo de log:</span> {selectedReduceLogsNodeDetails.sourceLogType ?? "—"}</p>
-                                      <p><span className="text-muted-foreground">Linha:</span> {selectedReduceLogsNodeDetails.sourceLineNumber ?? "—"}</p>
-                                      <p><span className="text-muted-foreground">Fase:</span> {selectedReduceLogsNodeDetails.stage ?? "—"}</p>
-                                      <p>
-                                        <span className="text-muted-foreground">Transição:</span>{" "}
-                                        {selectedReduceLogsIncomingEdge
-                                          ? `${selectedReduceLogsIncomingEdge.relation}${
-                                              selectedReduceLogsIncomingEdgeSourceNode
-                                                ? ` (desde «${selectedReduceLogsIncomingEdgeSourceNode.label}»)`
-                                                : ""
-                                            }`
-                                          : "—"}
-                                      </p>
-                                    </div>
-                                    <div className="rounded-xl border border-border bg-muted/80 dark:border-white/10 dark:bg-slate-950/70 p-3">
-                                      <p className="text-foreground">
-                                        <span className="text-muted-foreground">Como foi identificado:</span>{" "}
-                                        {selectedReduceLogsNodeDetails.identification
-                                          ?? selectedReduceLogsNodeDetails.identifiedBy
-                                          ?? "Sem descrição de identificação."}
-                                      </p>
-                                      <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
-                                        {selectedReduceLogsNodeDetails.evidence ?? "Sem evidência textual disponível."}
-                                      </p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                      {(selectedReduceLogsNodeDetails.suspiciousApis.length
-                                        ? selectedReduceLogsNodeDetails.suspiciousApis
-                                        : ["Sem APIs mapeadas"]
-                                      ).map((api) => (
-                                        <Badge key={api} variant="outline" className="border-amber-400/25 bg-amber-500/10 text-amber-200">{api}</Badge>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-                          </TabsContent>
-
-                          <TabsContent value="artefatos" className="space-y-3">
-                            <p className="text-sm text-muted-foreground">
-                              Artefatos registrados para este job. Download usa URL assinada quando o storage remoto está configurado; caso contrário, o servidor oferece cópia local autenticada (mesma sessão) enquanto o arquivo existir em disco.
-                            </p>
-                            <div className="space-y-2">
-                              {uploadedDetail.artifacts.length ? uploadedDetail.artifacts.map((artifact) => (
-                                <a
-                                  key={`${artifact.artifactType}-${artifact.relativePath}`}
-                                  href={artifact.downloadUrl ?? artifact.storageUrl ?? "#"}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className={`flex items-center justify-between rounded-2xl border border-border bg-muted/80 p-4 transition dark:border-white/10 dark:bg-slate-950/70 ${artifact.downloadUrl || artifact.storageUrl ? "hover:border-cyan-400/30 hover:bg-cyan-500/10" : "pointer-events-none opacity-60"}`}
-                                >
-                                  <div>
-                                    <p className="text-sm font-medium text-foreground">{artifact.label}</p>
-                                    <p className="text-xs text-muted-foreground">{artifact.artifactType} · {formatBytes(artifact.sizeBytes ?? undefined)}</p>
-                                  </div>
-                                  <FileDown className="h-4 w-4 text-muted-foreground" />
-                                </a>
-                              )) : (
-                                <p className="text-sm text-muted-foreground">Nenhum artefato listado ainda.</p>
-                              )}
-                            </div>
-                          </TabsContent>
-
-                          <TabsContent value="timeline" className="space-y-3">
-                            <p className="text-sm text-muted-foreground">Eventos operacionais e evidências retidas (amostra recente).</p>
-                            <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
-                              {uploadedDetail.events.slice(0, 40).map((event, index) => (
-                                <div key={`${event.eventType}-${index}-${String(event.createdAt)}`} className="rounded-xl border border-border bg-muted/50 dark:border-white/10 dark:bg-black/20 p-3 text-sm">
-                                  <div className="flex flex-wrap gap-2">
-                                    <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">{event.stage ?? "—"}</Badge>
-                                    <Badge className="border-border bg-muted/60 text-foreground dark:border-white/10 dark:bg-white/5">{event.eventType}</Badge>
-                                    <span className="text-xs text-muted-foreground">{formatDateTimeLocale(event.createdAt)}</span>
-                                  </div>
-                                  <p className="mt-2 text-foreground">{event.message ?? "—"}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </TabsContent>
-                        </Tabs>
-                      </CardContent>
-                    </Card>
                   ) : null}
 
                     </TabsContent>
