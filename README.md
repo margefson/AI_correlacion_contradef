@@ -152,6 +152,10 @@ A versão atual foi validada tanto pela CLI quanto pela API local sobre o datase
 
 O classificador de arquivos reconhece padrões como `FunctionInterceptor`, `TraceFcnCall`, `TraceInstructions`, `TraceMemory` e `TraceDisassembly`. Arquivos textuais desconhecidos também são preservados no manifesto e passam por um scanner genérico de contexto. Ainda assim, a qualidade da correlação depende da riqueza dos traces presentes na amostra. Se um tipo de trace não existir, o pipeline continuará funcionando, mas com menos evidências disponíveis.
 
+## App web (`ai_correlacion_web`) — deploy gratuito
+
+A UI React e a API tRPC correm no **mesmo processo Node**. Para testes em produção sem custo (ex.: **Render**), segue o guia **[docs/DEPLOY_GRATUITO.md](docs/DEPLOY_GRATUITO.md)** e o blueprint **[render.yaml](render.yaml)** na raiz do repositório. O **Vercel** não é o encaixe natural deste stack completo; ver explicação no guia.
+
 ## Observações práticas
 
 Os arquivos CDF originais e seus equivalentes comprimidos completos podem ter tamanho elevado. Por isso, o repositório privilegia o versionamento de **scripts, manifestos, relatórios, amostras de saída e artefatos derivados**, mantendo a rastreabilidade necessária sem inflar indevidamente o histórico Git. Os hashes do dataset e a configuração do job preservam a reprodutibilidade operacional.

@@ -3,12 +3,14 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { pingDatabaseIfConfigured } from "../db";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { registerAnalysisArtifactDownloadRoute } from "../analysisArtifactDownload";
 import { registerReduceLogsUploadRoute } from "./reduceLogsUpload";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { validateProductionEnv } from "./env";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -62,6 +64,15 @@ async function startServer() {
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  }
+
+  try {
+    await pingDatabaseIfConfigured();
+  } catch (error) {
+    console.error("[Database] Connection check failed:", error);
+    if (process.env.NODE_ENV === "production") {
+      process.exit(1);
+    }
   }
 
   server.listen(port, () => {

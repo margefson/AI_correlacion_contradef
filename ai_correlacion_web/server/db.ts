@@ -1,5 +1,6 @@
-import { and, desc, eq, gte, like, lte } from "drizzle-orm";
+import { and, desc, eq, gte, like, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import type { PoolOptions } from "mysql2";
 import {
   AnalysisArtifact,
   AnalysisCommit,
@@ -21,6 +22,18 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
+function mysqlPoolOptionsFromEnv(databaseUrl: string): PoolOptions {
+  const sslFlag = process.env.DATABASE_SSL?.trim().toLowerCase();
+  const useSsl =
+    sslFlag === "true" || sslFlag === "1" || sslFlag === "require";
+
+  return {
+    uri: databaseUrl,
+    supportBigNumbers: true,
+    ...(useSsl ? { ssl: {} } : {}),
+  };
+}
+
 let _db: ReturnType<typeof drizzle> | null = null;
 let inMemoryAnalysisEventId = 1;
 const inMemoryAnalysisJobs = new Map<string, AnalysisJob>();
@@ -33,13 +46,27 @@ const inMemoryAnalysisCommits = new Map<string, AnalysisCommit>();
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle({
+        connection: mysqlPoolOptionsFromEnv(process.env.DATABASE_URL),
+      });
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] Failed to initialize pool:", error);
+      if (ENV.isProduction) {
+        throw error;
+      }
       _db = null;
     }
   }
   return _db;
+}
+
+/** Runs a trivial query when DATABASE_URL is set; fails fast on wrong credentials or network. */
+export async function pingDatabaseIfConfigured(): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    return;
+  }
+  await db.execute(sql`SELECT 1`);
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

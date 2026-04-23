@@ -1,0 +1,31 @@
+# Render Blueprint: https://docs.render.com/docs/blueprint-spec
+# Liga o repositório no Render → Blueprint → aponta para este ficheiro.
+#
+# Segredos (sync: false): preencher no painel após criar o serviço.
+# VITE_*: devem existir no ambiente do Render antes do build — o Vite embute-as no cliente.
+# OAuth: regista no portal o redirect https://<serviço>.onrender.com/api/oauth/callback
+
+services:
+  - type: web
+    name: contradef-log-analyzer
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: ai_correlacion_web
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: OAUTH_SERVER_URL
+        sync: false
+      - key: VITE_APP_ID
+        sync: false
+      - key: VITE_OAUTH_PORTAL_URL
+        sync: false
+      - key: OWNER_OPEN_ID
+        sync: false

@@ -1,3 +1,30 @@
+const isNonEmpty = (value: string | undefined): boolean =>
+  typeof value === "string" && value.trim().length > 0;
+
+/**
+ * Ensures production deployments have a real database, session secret, and OAuth
+ * configuration. Call once at process startup (before accepting traffic).
+ */
+export function validateProductionEnv(): void {
+  if (process.env.NODE_ENV !== "production") {
+    return;
+  }
+
+  const missing: string[] = [];
+  if (!isNonEmpty(process.env.JWT_SECRET)) missing.push("JWT_SECRET");
+  if (!isNonEmpty(process.env.DATABASE_URL)) missing.push("DATABASE_URL");
+  if (!isNonEmpty(process.env.OAUTH_SERVER_URL)) missing.push("OAUTH_SERVER_URL");
+  if (!isNonEmpty(process.env.VITE_APP_ID)) missing.push("VITE_APP_ID");
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[Production] Missing required environment variables: ${missing.join(", ")}. ` +
+        "Set them on the Render service (and rebuild after adding any VITE_* vars). " +
+        "See docs/DEPLOY_GRATUITO.md."
+    );
+  }
+}
+
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret:
