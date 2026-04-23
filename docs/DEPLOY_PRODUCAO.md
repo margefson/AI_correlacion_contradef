@@ -13,7 +13,7 @@ A aplicação é **um único servidor Node** (Express + tRPC + ficheiros estáti
 3. Configura o serviço:
    - **Root Directory:** `ai_correlacion_web`
    - **Runtime:** Node
-   - **Build Command:** `npm ci && npm run build` (o `ai_correlacion_web/.npmrc` define `legacy-peer-deps=true` para o `npm ci` aceitar Vite 7 com `@builder.io/vite-plugin-jsx-loc`)
+   - **Build Command:** `npm ci --include=dev && npm run build` — com `NODE_ENV=production` no painel, o `npm ci` **não** instala `devDependencies` por omissão; Vite e esbuild estão em devDependencies, por isso é preciso `--include=dev`. O ficheiro `ai_correlacion_web/.npmrc` mantém `legacy-peer-deps=true` para o plugin Builder.io com Vite 7.
    - **Start Command:** `npm run start`
    - **Instance type:** escolhe o plano que fizer sentido para carga e disponibilidade (o Render atribui `PORT` automaticamente).
 
@@ -48,7 +48,7 @@ Podes usar **Blueprint → New Blueprint Instance** no Render e apontar para o `
 Qualquer fornecedor que permita um **processo Node de longa duração** com comandos de **build** e **start** personalizados pode seguir o mesmo padrão:
 
 - diretório de trabalho: `ai_correlacion_web`
-- build: `npm ci && npm run build`
+- build: `npm ci --include=dev && npm run build` (se `NODE_ENV=production` durante o build)
 - start: `npm run start`
 - mesmas variáveis de ambiente que na tabela acima
 

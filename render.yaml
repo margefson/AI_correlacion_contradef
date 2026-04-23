@@ -4,6 +4,7 @@
 # Segredos (sync: false): preencher no painel após criar o serviço.
 # VITE_*: devem existir no ambiente do Render antes do build — o Vite embute-as no cliente.
 # OAuth: regista no portal o redirect https://<serviço>.onrender.com/api/oauth/callback
+# NODE_ENV=production faz o npm omitir devDependencies; o build precisa de Vite → npm ci --include=dev
 
 services:
   - type: web
@@ -12,7 +13,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: ai_correlacion_web
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
