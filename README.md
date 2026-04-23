@@ -154,7 +154,7 @@ O classificador de arquivos reconhece padrões como `FunctionInterceptor`, `Trac
 
 ## App web (`ai_correlacion_web`) — produção
 
-A UI React e a API tRPC correm no **mesmo processo Node** (Express). O caminho mais simples em produção é alojar essa app como **serviço web Node contínuo** (processo de longa duração, mesmo domínio para estáticos e para `/api/...`). O repositório inclui o blueprint **[render.yaml](render.yaml)** na raiz e os detalhes operacionais (variáveis de ambiente, MySQL, OAuth e build) em **[docs/DEPLOY_GRATUITO.md](docs/DEPLOY_GRATUITO.md)**.
+A UI React e a API tRPC correm no **mesmo processo Node** (Express). O caminho mais simples em produção é alojar essa app como **serviço web Node contínuo** (processo de longa duração, mesmo domínio para estáticos e para `/api/...`). O repositório inclui o blueprint **[render.yaml](render.yaml)** na raiz e os detalhes operacionais (variáveis de ambiente, MySQL, OAuth e build) em **[docs/DEPLOY_PRODUCAO.md](docs/DEPLOY_PRODUCAO.md)**.
 
 ## Observações práticas
 

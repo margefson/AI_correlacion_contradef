@@ -20,7 +20,7 @@ export function validateProductionEnv(): void {
     throw new Error(
       `[Production] Missing required environment variables: ${missing.join(", ")}. ` +
         "Set them on the Render service (and rebuild after adding any VITE_* vars). " +
-        "See docs/DEPLOY_GRATUITO.md."
+        "See docs/DEPLOY_PRODUCAO.md."
     );
   }
 }
