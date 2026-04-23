@@ -16,12 +16,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarRail,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { FileArchive, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { FileArchive, LayoutDashboard, LogOut } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -109,7 +111,7 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -156,24 +158,19 @@ function DashboardLayoutContent({
     <>
       <div className="relative" ref={sidebarRef}>
         <Sidebar
-          collapsible="icon"
+          collapsible="offcanvas"
           className="border-r-0"
           disableTransition={isResizing}
         >
           <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
-              >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
-              </button>
+            <div className="flex w-full items-center gap-3 px-2 transition-all">
+              <SidebarTrigger
+                className="h-8 w-8 shrink-0"
+                title="Recolher ou expandir menu"
+              />
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Contradef Analyzer
-                  </span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-semibold tracking-tight">Contradef Analyzer</span>
                 </div>
               ) : null}
             </div>
@@ -232,6 +229,7 @@ function DashboardLayoutContent({
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarFooter>
+          <SidebarRail />
         </Sidebar>
         <div
           className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
@@ -243,22 +241,25 @@ function DashboardLayoutContent({
         />
       </div>
 
-      <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Contradef Analyzer"}
-                  </span>
-                </div>
-              </div>
+      <SidebarInset className="min-h-svh">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background/90 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur md:px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <SidebarTrigger
+              className="h-9 w-9 shrink-0"
+              title={isMobile ? "Abrir menu" : "Mostrar menu lateral"}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
+                {activeMenuItem?.label ?? "Contradef Analyzer"}
+              </p>
+              {!isMobile ? (
+                <p className="truncate text-xs text-muted-foreground">Área principal · mais espaço com o menu recolhido</p>
+              ) : null}
             </div>
           </div>
-        )}
-        <main className="flex-1 p-4">{children}</main>
+          <ThemeToggle />
+        </header>
+        <div className="flex-1 overflow-auto p-4">{children}</div>
       </SidebarInset>
     </>
   );

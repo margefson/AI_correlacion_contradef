@@ -607,6 +607,79 @@ function buildFlowGraph(
     });
   }
 
+  const apiEventNodes = eventNodes.filter((n) => n.kind === "api");
+  const trimEvidenceSnippet = (value: string, max = 450) => {
+    const t = value.trim();
+    return t.length <= max ? t : `${t.slice(0, max)}…`;
+  };
+
+  for (const phaseNode of phaseNodes) {
+    const connectedEvents = apiEventNodes.filter((n) =>
+      eventEdges.some((e) => e.source === phaseNode.id && e.target === n.id),
+    );
+    const base = (phaseNode.metadata ?? {}) as Record<string, unknown>;
+    const stageName = phaseNode.label;
+
+    if (connectedEvents.length === 0) {
+      phaseNode.metadata = {
+        ...base,
+        stage: stageName,
+        identification:
+          `Fase «${stageName}» sem evidências suspeitas ligadas na jornada reduzida: nenhuma API ou gatilho heurístico foi associado a esta coluna (atividade não classificada como suspeita, lacuna nos logs ou fase só de transição).`,
+        evidence:
+          "Não há mensagens de eventos suspeitos agregadas a esta fase. Use as outras colunas do diagrama ou o painel operacional por ficheiro para mais detalhe.",
+        identifiedBy: "Agregação automática da jornada (Contradef)",
+      };
+      continue;
+    }
+
+    const apis = Array.from(
+      new Set(
+        connectedEvents.flatMap((n) => {
+          const m = n.metadata as Record<string, unknown>;
+          const arr = m.suspiciousApis;
+          if (Array.isArray(arr) && arr.length) {
+            return arr.filter((x): x is string => typeof x === "string");
+          }
+          return [n.label];
+        }),
+      ),
+    );
+
+    const techniques = Array.from(
+      new Set(
+        connectedEvents.flatMap((n) => {
+          const m = n.metadata as Record<string, unknown>;
+          const arr = m.techniques;
+          return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+        }),
+      ),
+    );
+
+    const evidenceSnippets = connectedEvents
+      .map((n) => {
+        const m = n.metadata as Record<string, unknown>;
+        return typeof m.evidence === "string" ? trimEvidenceSnippet(m.evidence) : "";
+      })
+      .filter(Boolean);
+
+    const triggerCount = connectedEvents.filter((n) => {
+      const m = n.metadata as Record<string, unknown>;
+      return m.trigger === true;
+    }).length;
+
+    phaseNode.metadata = {
+      ...base,
+      stage: stageName,
+      identification:
+        `Fase «${stageName}» agrega ${connectedEvents.length} evidência(s) suspeita(s) na jornada (${triggerCount} gatilho(s) heurístico(s)): sequência de APIs e comportamentos correlacionados sob esta etapa antes do veredito.`,
+      evidence: evidenceSnippets.join("\n\n---\n\n"),
+      identifiedBy: `Correlação por fase: ${apis.slice(0, 14).join(", ")}${apis.length > 14 ? "…" : ""}`,
+      suspiciousApis: apis,
+      techniques,
+    };
+  }
+
   return {
     nodes: [...phaseNodes, ...eventNodes],
     edges: [...phaseEdges, ...eventEdges],

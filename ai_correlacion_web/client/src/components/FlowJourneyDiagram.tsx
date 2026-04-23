@@ -52,10 +52,23 @@ export default function FlowJourneyDiagram({
       <div className="flex min-w-max items-stretch gap-3">
         {phases.map((entry, index) => (
           <div key={entry.phase.id} className="flex items-stretch gap-3">
-            <div className="w-[280px] rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+            <div
+              className={`w-[280px] rounded-2xl border p-3 transition-colors ${
+                selectedNodeId === entry.phase.id
+                  ? "border-cyan-400/45 bg-cyan-500/[0.12]"
+                  : "border-white/10 bg-slate-950/70"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-zinc-100">{entry.phase.label}</p>
-                <Badge variant="outline" className="border-white/10 text-[10px] uppercase tracking-[0.08em] text-zinc-300">Fase</Badge>
+                <button
+                  type="button"
+                  onClick={() => onSelectNode(entry.phase.id)}
+                  className={`rounded-lg text-left transition ${selectedNodeId === entry.phase.id ? "text-cyan-100" : "text-zinc-100 hover:text-white"}`}
+                >
+                  <p className="text-sm font-semibold">{entry.phase.label}</p>
+                  <p className="mt-0.5 text-[10px] font-normal text-zinc-500">Ver resumo da fase</p>
+                </button>
+                <Badge variant="outline" className="shrink-0 border-white/10 text-[10px] uppercase tracking-[0.08em] text-zinc-300">Fase</Badge>
               </div>
               <div className="mt-3 space-y-2">
                 {entry.events.length ? entry.events.map(({ node, incoming }) => (

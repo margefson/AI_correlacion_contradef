@@ -6,7 +6,16 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Contradef Log Analyzer</title>    
+    <title>Contradef Log Analyzer</title>
+    <script>
+      (function () {
+        try {
+          document.documentElement.classList.toggle("dark", localStorage.getItem("theme") !== "light");
+        } catch {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
     <!-- THIS IS THE START OF A COMMENT BLOCK, BLOCK TO BE DELETED: Google Fonts here, example:
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
