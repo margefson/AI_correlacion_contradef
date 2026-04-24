@@ -33,7 +33,12 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  validateProductionEnv();
+
   const app = express();
+  // PaaS (Render, etc.) terminam TLS no proxy; necessário para cookies Secure e req.secure.
+  app.set("trust proxy", 1);
+
   const server = createServer(app);
   // Configure body parser with larger size limit for metadata and control payloads
   app.use(express.json({ limit: "50mb" }));
@@ -59,10 +64,14 @@ async function startServer() {
 
   server.requestTimeout = 0;
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  const preferredPort = parseInt(process.env.PORT || "3000", 10);
+  // Em produção o host (Render, Fly, etc.) expõe só process.env.PORT — não procurar porta alternativa.
+  const port =
+    process.env.NODE_ENV === "production"
+      ? preferredPort
+      : await findAvailablePort(preferredPort);
 
-  if (port !== preferredPort) {
+  if (process.env.NODE_ENV !== "production" && port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
@@ -70,14 +79,33 @@ async function startServer() {
     await pingDatabaseIfConfigured();
   } catch (error) {
     console.error("[Database] Connection check failed:", error);
+    console.error(
+      "[Database] Confirma DATABASE_URL, firewall do MySQL (IPs do Render), e DATABASE_SSL se o fornecedor exigir TLS."
+    );
     if (process.env.NODE_ENV === "production") {
       process.exit(1);
     }
   }
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  const listenHost = process.env.NODE_ENV === "production" ? "0.0.0.0" : undefined;
+
+  server.once("error", (err: NodeJS.ErrnoException) => {
+    console.error("[Server] Failed to listen:", err);
+    process.exit(1);
   });
+
+  if (listenHost) {
+    server.listen(port, listenHost, () => {
+      console.log(`Server listening on http://${listenHost}:${port}/`);
+    });
+  } else {
+    server.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+    });
+  }
 }
 
-startServer().catch(console.error);
+startServer().catch((error: unknown) => {
+  console.error("[Startup] Fatal error:", error);
+  process.exit(1);
+});
