@@ -1,39 +1,63 @@
 import {
   bigint,
-  double,
-  int,
+  doublePrecision,
+  integer,
   json,
-  mysqlEnum,
-  mysqlTable,
+  pgEnum,
+  pgTable,
+  serial,
   text,
   timestamp,
   varchar,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/pg-core";
+
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+
+export const jobStatusEnum = pgEnum("job_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const llmSummaryStatusEnum = pgEnum("llm_summary_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+
+export const pipelineCommitStatusEnum = pgEnum("pipeline_commit_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+]);
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
-export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
-  id: int("id").autoincrement().primaryKey(),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   /** OAuth subject identifier (openId) returned from the provider callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  role: userRoleEnum("role").default("user").notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  lastSignedIn: timestamp("lastSignedIn", { mode: "date" }).defaultNow().notNull(),
 });
 
-export const analysisJobs = mysqlTable("analysisJobs", {
-  id: int("id").autoincrement().primaryKey(),
+export const analysisJobs = pgTable("analysisJobs", {
+  id: serial("id").primaryKey(),
   jobId: varchar("jobId", { length: 128 }).notNull().unique(),
   pipelineJobId: varchar("pipelineJobId", { length: 128 }),
   sampleName: varchar("sampleName", { length: 255 }).notNull(),
@@ -45,8 +69,8 @@ export const analysisJobs = mysqlTable("analysisJobs", {
   focusFunction: varchar("focusFunction", { length: 255 }).notNull(),
   focusTermsJson: json("focusTermsJson"),
   focusRegexesJson: json("focusRegexesJson"),
-  status: mysqlEnum("status", ["queued", "running", "completed", "failed", "cancelled"]).default("queued").notNull(),
-  progress: double("progress").default(0).notNull(),
+  status: jobStatusEnum("status").default("queued").notNull(),
+  progress: doublePrecision("progress").default(0).notNull(),
   stage: varchar("stage", { length: 128 }).default("queued").notNull(),
   message: text("message"),
   stdoutTail: text("stdoutTail"),
@@ -55,27 +79,30 @@ export const analysisJobs = mysqlTable("analysisJobs", {
   pipelineJobPath: text("pipelineJobPath"),
   resultPath: text("resultPath"),
   errorMessage: text("errorMessage"),
-  llmSummaryStatus: mysqlEnum("llmSummaryStatus", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
-  commitStatus: mysqlEnum("commitStatus", ["pending", "running", "completed", "failed", "skipped"]).default("pending").notNull(),
-  createdByUserId: int("createdByUserId"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  completedAt: timestamp("completedAt"),
+  llmSummaryStatus: llmSummaryStatusEnum("llmSummaryStatus").default("pending").notNull(),
+  commitStatus: pipelineCommitStatusEnum("commitStatus").default("pending").notNull(),
+  createdByUserId: integer("createdByUserId"),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+  completedAt: timestamp("completedAt", { mode: "date" }),
 });
 
-export const analysisEvents = mysqlTable("analysisEvents", {
-  id: int("id").autoincrement().primaryKey(),
+export const analysisEvents = pgTable("analysisEvents", {
+  id: serial("id").primaryKey(),
   jobId: varchar("jobId", { length: 128 }).notNull(),
   eventType: varchar("eventType", { length: 64 }).default("info").notNull(),
   stage: varchar("stage", { length: 128 }),
   message: text("message"),
-  progress: double("progress"),
+  progress: doublePrecision("progress"),
   payloadJson: json("payloadJson"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
-export const analysisArtifacts = mysqlTable("analysisArtifacts", {
-  id: int("id").autoincrement().primaryKey(),
+export const analysisArtifacts = pgTable("analysisArtifacts", {
+  id: serial("id").primaryKey(),
   jobId: varchar("jobId", { length: 128 }).notNull(),
   artifactType: varchar("artifactType", { length: 64 }).notNull(),
   label: varchar("label", { length: 255 }).notNull(),
@@ -84,33 +111,39 @@ export const analysisArtifacts = mysqlTable("analysisArtifacts", {
   storageUrl: text("storageUrl"),
   storageKey: varchar("storageKey", { length: 512 }),
   mimeType: varchar("mimeType", { length: 255 }),
-  sizeBytes: bigint("sizeBytes", { mode: "number", unsigned: true }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  sizeBytes: bigint("sizeBytes", { mode: "number" }),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
 
-export const analysisInsights = mysqlTable("analysisInsights", {
-  id: int("id").autoincrement().primaryKey(),
+export const analysisInsights = pgTable("analysisInsights", {
+  id: serial("id").primaryKey(),
   jobId: varchar("jobId", { length: 128 }).notNull().unique(),
   modelName: varchar("modelName", { length: 128 }),
   riskLevel: varchar("riskLevel", { length: 64 }),
   title: varchar("title", { length: 255 }),
   summaryMarkdown: text("summaryMarkdown").notNull(),
   summaryJson: json("summaryJson"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
-export const analysisCommits = mysqlTable("analysisCommits", {
-  id: int("id").autoincrement().primaryKey(),
+export const analysisCommits = pgTable("analysisCommits", {
+  id: serial("id").primaryKey(),
   jobId: varchar("jobId", { length: 128 }).notNull(),
   repository: varchar("repository", { length: 255 }).notNull(),
   branch: varchar("branch", { length: 128 }).default("main").notNull(),
   commitHash: varchar("commitHash", { length: 64 }),
   commitMessage: text("commitMessage"),
-  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "skipped"]).default("pending").notNull(),
+  status: pipelineCommitStatusEnum("status").default("pending").notNull(),
   detailsJson: json("detailsJson"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type User = typeof users.$inferSelect;

@@ -80,7 +80,7 @@ async function startServer() {
   } catch (error) {
     console.error("[Database] Connection check failed:", error);
     console.error(
-      "[Database] Confirma DATABASE_URL, firewall do MySQL (IPs do Render), e DATABASE_SSL se o fornecedor exigir TLS."
+      "[Database] Confirma DATABASE_URL (PostgreSQL), firewall / rede do fornecedor, e DATABASE_SSL ou sslmode na URL se for necessário TLS."
     );
     if (process.env.NODE_ENV === "production") {
       process.exit(1);

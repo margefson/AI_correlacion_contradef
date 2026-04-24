@@ -2,6 +2,7 @@
 # Liga o repositório no Render → Blueprint → aponta para este ficheiro.
 #
 # Segredos (sync: false): preencher no painel após criar o serviço.
+# DATABASE_URL: PostgreSQL (ex.: instância Render Postgres → postgresql://...)
 # VITE_*: devem existir no ambiente do Render antes do build — o Vite embute-as no cliente.
 # OAuth: regista no portal o redirect https://<serviço>.onrender.com/api/oauth/callback
 # NODE_ENV=production faz o npm omitir devDependencies; o build precisa de Vite → npm ci --include=dev

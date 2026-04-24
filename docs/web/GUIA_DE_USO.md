@@ -122,12 +122,12 @@ Como próximos passos, recomenda-se consolidar testes com amostras reais, evolui
 
 ## Desenvolvimento local (Windows) e banco de dados
 
-Para validar o projeto na sua máquina com persistência em **MySQL** e sem depender de OAuth/storage externos:
+Para validar o projeto na sua máquina com persistência em **PostgreSQL** e sem depender de OAuth/storage externos:
 
 | Etapa | Ação |
 | --- | --- |
 | **Banco** | Crie o schema e um usuário com permissão (por exemplo `contradef` / `contradef` no banco `contradef`). |
-| **Variáveis** | No arquivo `ai_correlacion_web/.env`, defina `DATABASE_URL` (URL `mysql://...`), `JWT_SECRET` e, se usar OAuth local, `OAUTH_SERVER_URL`. |
+| **Variáveis** | No arquivo `ai_correlacion_web/.env`, defina `DATABASE_URL` (URL `postgresql://...`), `JWT_SECRET` e, se usar OAuth local, `OAUTH_SERVER_URL`. |
 | **Schema** | Na pasta `ai_correlacion_web`, execute `npm.cmd run db:push` para aplicar o schema Drizzle ao banco. |
 | **Servidor** | Execute `npm.cmd run dev`. Em PowerShell, prefira `npm.cmd` se `npm` estiver bloqueado por política de execução. |
 | **Upload** | Se `BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY` não estiverem definidos, a interface pode usar **upload legado** (multipart) e concluir a análise; aparece o aviso de execução em modo local quando não há URLs de artefato remotas. |

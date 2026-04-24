@@ -10,7 +10,7 @@ A aplicação web **AI Correlacion Web** será uma camada de orquestração e vi
 | --- | --- | --- |
 | Frontend React | Upload, dashboard em tempo real, histórico, grafo interativo, exportações e resumo interpretativo | React 19 + Tailwind 4 + tRPC client |
 | Backend Express/tRPC | Orquestração de jobs, persistência, polling/SSE interno, integração com LLM, notificações e GitHub | Express 4 + tRPC 11 + Drizzle |
-| Banco de dados | Registro de jobs, snapshots de progresso, artefatos, resumo LLM e auditoria de commit | MySQL/TiDB via Drizzle |
+| Banco de dados | Registro de jobs, snapshots de progresso, artefatos, resumo LLM e auditoria de commit | PostgreSQL via Drizzle |
 | Pipeline existente | Execução real da análise de CDF, extração, correlação e geração de artefatos | `cdf_realtime_api.py` + `run_generic_cdf_analysis.py` |
 | Armazenamento | Retenção de uploads e artefatos derivados quando necessário | S3 via `storagePut` |
 

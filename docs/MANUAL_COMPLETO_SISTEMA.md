@@ -40,7 +40,7 @@ flowchart TB
   subgraph web["ai_correlacion_web — aplicação web"]
     FE[Frontend React]
     BE[Backend Express + tRPC]
-    DB[(MySQL via Drizzle)]
+    DB[(PostgreSQL via Drizzle)]
     ST[Storage de artefatos<br/>S3 / local]
     LLM[Serviço LLM opcional<br/>Forge API]
   end
@@ -85,7 +85,7 @@ flowchart LR
   TRPCS --> ASVC
   EXP --> UP
   TRPCS --> AUTH
-  ASVC --> DB[(MySQL)]
+  ASVC --> DB[(PostgreSQL)]
   ASVC --> ST2[Storage]
 ```
 
@@ -116,7 +116,7 @@ flowchart LR
 | **`_core/context.ts`** | Contexto tRPC: utilizador autenticado (ou bypass local em dev). |
 | **`_core/reduceLogsUpload.ts`** | Upload multipart e por chunks para ficheiros grandes; integração com `startAnalysisJob`. |
 | **`analysisArtifactDownload.ts`** | Download autenticado de artefatos quando não há URL de objeto direta. |
-| **`db.ts` + `drizzle/schema.ts`** | Persistência MySQL (jobs, eventos, artefatos, insights, commits). |
+| **`db.ts` + `drizzle/schema.ts`** | Persistência PostgreSQL (jobs, eventos, artefatos, insights, commits). |
 
 ### 4.3. Scripts Python (raiz do repositório)
 
@@ -154,7 +154,7 @@ sequenceDiagram
   participant FE as Frontend
   participant TRPC as tRPC Express
   participant SVC as analysisService
-  participant DB as MySQL
+  participant DB as PostgreSQL
   participant BG as processAnalysisJob<br/>(assíncrono)
 
   U->>FE: Preenche nome, anexa logs, submete
@@ -176,7 +176,7 @@ O método `startAnalysisJob` **cria o job**, regista eventos e devolve o detalhe
 
 ### 5.3. Servidor ↔ base de dados
 
-- **Drizzle ORM** com schema MySQL: utilizadores, jobs de análise, eventos append-only, artefatos, insights (resumo + JSON estruturado com `flowGraph`), commits opcionais.
+- **Drizzle ORM** com schema PostgreSQL: utilizadores, jobs de análise, eventos append-only, artefatos, insights (resumo + JSON estruturado com `flowGraph`), commits opcionais.
 - Migrações / push: script `db:push` no `package.json` da web app.
 
 ### 5.4. Servidor ↔ storage e LLM
@@ -221,7 +221,7 @@ Os requisitos abaixo referem-se sobretudo à **aplicação web**; entre parênte
 | RNF-04 | **Performance** | Redução e parsing em Node; complexidade depende do tamanho dos logs. Recomenda-se monitorizar tempo por ficheiro e tamanho de resposta do detalhe do job. |
 | RNF-05 | **Manutenibilidade** | Tipos partilhados (`shared/`), testes Vitest em rotas e métricas; documentação em `docs/web/`. |
 | RNF-06 | **Auditabilidade** | Tabela `analysisEvents` com histórico; artefatos imutáveis por versão de job. |
-| RNF-07 | **Portabilidade** | App Node + MySQL; Python 3.11+ para scripts; variáveis de ambiente documentadas no código (`_core/env.ts`) e `.env` local. |
+| RNF-07 | **Portabilidade** | App Node + PostgreSQL; Python 3.11+ para scripts; variáveis de ambiente documentadas no código (`_core/env.ts`) e `.env` local. |
 | RNF-08 | **Usabilidade** | Tema escuro, componentes acessíveis (Radix), textos em português na UI analítica. |
 
 ---
@@ -232,7 +232,7 @@ Os requisitos abaixo referem-se sobretudo à **aplicação web**; entre parênte
 
 Definidas ou lidas tipicamente via `.env` (ver `server/_core/env.ts`):
 
-- **`DATABASE_URL`** — ligação MySQL para Drizzle.
+- **`DATABASE_URL`** — ligação PostgreSQL para Drizzle (`postgresql://...`).
 - **`JWT_SECRET`** — segredo de cookies/sessão em produção.
 - **`OAUTH_SERVER_URL`**, **`VITE_APP_ID`** — integração OAuth.
 - **`BUILT_IN_FORGE_API_URL`**, **`BUILT_IN_FORGE_API_KEY`** — opcional, para LLM.
@@ -251,7 +251,7 @@ Definidas ou lidas tipicamente via `.env` (ver `server/_core/env.ts`):
 
 ### 8.3. Deploy
 
-- Gerar build de produção, definir variáveis de ambiente no alvo, garantir MySQL acessível e storage (S3 ou compatível) se usado.
+- Gerar build de produção, definir variáveis de ambiente no alvo, garantir PostgreSQL acessível e storage (S3 ou compatível) se usado.
 - Rever limites de corpo HTTP e timeouts para uploads muito grandes.
 - O caminho temporário de upload no módulo Reduce Logs pode ser específico do ambiente — validar em `reduceLogsUpload.ts` antes de colocar em produção.
 

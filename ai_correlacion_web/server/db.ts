@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, like, lte, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import type { PoolOptions } from "mysql2";
+import { and, desc, eq, gte, inArray, like, lte, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import {
   AnalysisArtifact,
   AnalysisCommit,
@@ -22,15 +22,20 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
-function mysqlPoolOptionsFromEnv(databaseUrl: string): PoolOptions {
+function pgPoolConfigFromEnv(databaseUrl: string): pg.PoolConfig {
   const sslFlag = process.env.DATABASE_SSL?.trim().toLowerCase();
-  const useSsl =
+  const useSslFromEnv =
     sslFlag === "true" || sslFlag === "1" || sslFlag === "require";
+  const useSslFromUrl =
+    /sslmode=require|sslmode=no-verify|ssl=true/i.test(databaseUrl);
 
   return {
-    uri: databaseUrl,
-    supportBigNumbers: true,
-    ...(useSsl ? { ssl: {} } : {}),
+    connectionString: databaseUrl,
+    max: 10,
+    ssl:
+      useSslFromEnv || useSslFromUrl
+        ? { rejectUnauthorized: false }
+        : undefined,
   };
 }
 
@@ -46,9 +51,8 @@ const inMemoryAnalysisCommits = new Map<string, AnalysisCommit>();
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle({
-        connection: mysqlPoolOptionsFromEnv(process.env.DATABASE_URL),
-      });
+      const pool = new pg.Pool(pgPoolConfigFromEnv(process.env.DATABASE_URL));
+      _db = drizzle({ client: pool });
     } catch (error) {
       console.warn("[Database] Failed to initialize pool:", error);
       if (ENV.isProduction) {
@@ -119,9 +123,13 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    await db
+      .insert(users)
+      .values(values)
+      .onConflictDoUpdate({
+        target: users.openId,
+        set: updateSet as typeof users.$inferInsert,
+      });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -239,15 +247,12 @@ export async function listAnalysisJobs(filters?: {
     conditions.push(lte(analysisJobs.createdAt, filters.createdTo));
   }
   if (filters?.status?.length) {
-    conditions.push(like(analysisJobs.status, `%`));
+    conditions.push(inArray(analysisJobs.status, filters.status));
   }
 
   const query = db.select().from(analysisJobs);
   const rows = conditions.length ? await query.where(and(...conditions)).orderBy(desc(analysisJobs.createdAt)).limit(filters?.limit ?? 50) : await query.orderBy(desc(analysisJobs.createdAt)).limit(filters?.limit ?? 50);
 
-  if (filters?.status?.length) {
-    return rows.filter((row) => filters.status?.includes(row.status));
-  }
   return rows;
 }
 
@@ -364,16 +369,20 @@ export async function upsertAnalysisInsight(jobId: string, insight: InsertAnalys
     return next;
   }
 
-  await db.insert(analysisInsights).values({ ...insight, jobId }).onDuplicateKeyUpdate({
-    set: {
-      modelName: insight.modelName ?? null,
-      riskLevel: insight.riskLevel ?? null,
-      title: insight.title ?? null,
-      summaryMarkdown: insight.summaryMarkdown,
-      summaryJson: insight.summaryJson ?? null,
-      updatedAt: new Date(),
-    },
-  });
+  await db
+    .insert(analysisInsights)
+    .values({ ...insight, jobId })
+    .onConflictDoUpdate({
+      target: analysisInsights.jobId,
+      set: {
+        modelName: insight.modelName ?? null,
+        riskLevel: insight.riskLevel ?? null,
+        title: insight.title ?? null,
+        summaryMarkdown: insight.summaryMarkdown,
+        summaryJson: insight.summaryJson ?? null,
+        updatedAt: new Date(),
+      },
+    });
 
   return getAnalysisInsight(jobId);
 }
