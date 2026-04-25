@@ -4,6 +4,18 @@ import type { User } from "../../drizzle/schema";
 import { ENV } from "./env";
 import { sdk } from "./sdk";
 
+const NO_AUTH_BYPASS_USER: User = {
+  id: 1,
+  openId: "no-auth",
+  name: "Utilizador (auth desligada)",
+  email: "noauth@local",
+  loginMethod: "none",
+  role: "admin",
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  lastSignedIn: new Date(),
+};
+
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
   res: CreateExpressContextOptions["res"];
@@ -12,6 +24,10 @@ export type TrpcContext = {
 
 /** Same identity resolution as tRPC context — use for authenticated Express routes (e.g. artifact download). */
 export async function getSessionUserFromRequest(req: Request): Promise<User | null> {
+  if (ENV.authMode === "none") {
+    return NO_AUTH_BYPASS_USER;
+  }
+
   const hasWebdev = Boolean(ENV.oAuthServerUrl && ENV.appId);
   const hasOidc =
     ENV.authMode === "oidc" &&

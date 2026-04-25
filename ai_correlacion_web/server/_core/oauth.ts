@@ -206,6 +206,9 @@ p{font-size:0.875rem;color:#94a3b8;margin-top:1rem;}</style></head>
 }
 
 export function registerOAuthRoutes(app: Express) {
+  if (ENV.authMode === "none") {
+    return;
+  }
   if (ENV.authMode === "oidc") {
     registerOidcRoutes(app);
   } else {

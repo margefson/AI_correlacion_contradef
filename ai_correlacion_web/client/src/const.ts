@@ -17,6 +17,9 @@ export const getLoginUrl = () => {
   const fallback = window.location.origin;
   try {
     const authMode = String(import.meta.env.VITE_AUTH_MODE ?? "").trim().toLowerCase();
+    if (authMode === "none" || authMode === "disabled") {
+      return fallback;
+    }
     if (authMode === "oidc") {
       return `${window.location.origin}/api/oauth/login`;
     }
