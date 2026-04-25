@@ -1,6 +1,8 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { uploadedLogSchema } from "../shared/analysis";
+import { removeLocalJobWorkspace } from "./artifactLocalStore";
 import {
   getAnalysisJobDetail,
   getReductionBaselineMetrics,
@@ -8,7 +10,7 @@ import {
   syncActiveAnalysisJobs,
   syncAnalysisJob,
 } from "./analysisService";
-import { listAnalysisJobs } from "./db";
+import { deleteAnalysisJobAndRelatedData, getAnalysisJobByJobId, listAnalysisJobs } from "./db";
 import { protectedProcedure, router } from "./_core/trpc";
 
 const listJobsInputSchema = z.object({
@@ -34,8 +36,24 @@ const jobIdInputSchema = z.object({
   jobId: z.string().min(1),
 });
 
+/**
+ * Só o perfil `admin` vê a lista e o detalhe de todas as análises do sistema; os restantes
+ * utilizadores autenticados vêem apenas o que submeteram (`createdByUserId` = sessão).
+ */
+function isGlobalAnalysisScope(user: { role: string }): boolean {
+  return user.role === "admin";
+}
+
+function canAccessJob(user: { id: number; role: string }, job: { createdByUserId: number | null }): boolean {
+  if (isGlobalAnalysisScope(user)) {
+    return true;
+  }
+  return job.createdByUserId != null && job.createdByUserId === user.id;
+}
+
 export const analysisRouter = router({
-  list: protectedProcedure.input(listJobsInputSchema).query(async ({ input }) => {
+  list: protectedProcedure.input(listJobsInputSchema).query(async ({ ctx, input }) => {
+    const listOwnOnly = !isGlobalAnalysisScope(ctx.user);
     return listAnalysisJobs({
       sampleName: input?.sampleName,
       focusFunction: input?.focusFunction,
@@ -43,11 +61,49 @@ export const analysisRouter = router({
       createdTo: input?.createdTo,
       status: input?.status,
       limit: input?.limit ?? 50,
+      ...(listOwnOnly ? { createdByUserId: ctx.user.id } : {}),
     });
   }),
 
-  detail: protectedProcedure.input(jobIdInputSchema).query(async ({ input }) => {
+  detail: protectedProcedure.input(jobIdInputSchema).query(async ({ ctx, input }) => {
+    const job = await getAnalysisJobByJobId(input.jobId);
+    if (!job) {
+      return null;
+    }
+    if (!canAccessJob(ctx.user, job)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Só pode ver o detalhe dos lotes que submeteu.",
+      });
+    }
     return getAnalysisJobDetail(input.jobId);
+  }),
+
+  /**
+   * Remove o lote do Postgres (e tabelas derivadas) e a pasta de artefatos local do processo, se existir.
+   * Só o utilizador que submeteu o lote (`createdByUserId`) — não há apagar lotes alheios (nem via admin, nesta rota).
+   */
+  deleteJob: protectedProcedure.input(jobIdInputSchema).mutation(async ({ ctx, input }) => {
+    const job = await getAnalysisJobByJobId(input.jobId);
+    if (!job) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Lote não encontrado." });
+    }
+    if (job.createdByUserId == null || job.createdByUserId !== ctx.user.id) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Só pode apagar lotes que submeteu.",
+      });
+    }
+    const removed = await deleteAnalysisJobAndRelatedData(input.jobId);
+    if (!removed) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Lote não encontrado após verificação." });
+    }
+    try {
+      await removeLocalJobWorkspace(input.jobId);
+    } catch (error) {
+      console.warn("[analysis.deleteJob] pastas locais (opcional):", error);
+    }
+    return { ok: true as const };
   }),
 
   reductionBaseline: protectedProcedure.query(async () => {
@@ -66,13 +122,25 @@ export const analysisRouter = router({
     });
   }),
 
-  sync: protectedProcedure.input(jobIdInputSchema).mutation(async ({ input }) => {
+  sync: protectedProcedure.input(jobIdInputSchema).mutation(async ({ ctx, input }) => {
+    const job = await getAnalysisJobByJobId(input.jobId);
+    if (!job) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Lote não encontrado." });
+    }
+    if (!canAccessJob(ctx.user, job)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Só pode sincronizar lotes que submeteu.",
+      });
+    }
     return syncAnalysisJob(input.jobId);
   }),
 
-  resumeActiveSync: protectedProcedure.mutation(async () => {
+  resumeActiveSync: protectedProcedure.mutation(async ({ ctx }) => {
     try {
-      const resumedJobs = await syncActiveAnalysisJobs();
+      const resumedJobs = await syncActiveAnalysisJobs(
+        isGlobalAnalysisScope(ctx.user) ? undefined : { createdByUserId: ctx.user.id },
+      );
       return { resumedJobs };
     } catch (error) {
       // Best-effort: a falha em listar jobs ativos não deve derrubar a página Reduzir logs

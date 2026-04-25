@@ -30,7 +30,7 @@ function getSemaforoLabel(file: FileMonitor) {
   if (file.processingStatus === "failed") return "Falhou";
   if (file.processingStatus === "queued" || file.processingStatus === "uploading") return "Aguardando";
   if (file.triggerCount > 0 || file.suspiciousEventCount > 0) return "Preservado";
-  if (file.processingStatus === "completed") return "Revisar";
+  if (file.processingStatus === "completed") return "Rotina";
   return "Em análise";
 }
 

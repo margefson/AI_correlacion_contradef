@@ -26,6 +26,7 @@ import {
   writeSelectedJobId,
   writeTrackedJobIds,
 } from "@/lib/reduceLogsSession";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import {
   completeReduceLogsUpload,
@@ -162,14 +163,15 @@ function getSemaforo(file: FileMonitor) {
   if (file.processingStatus === "failed") return "Falhou";
   if (file.processingStatus === "queued" || file.processingStatus === "uploading") return "Aguardando";
   if (file.triggerCount > 0 || file.suspiciousEventCount > 0) return "Preservado";
-  if (file.processingStatus === "completed") return "Revisar";
+  /* Concluído sem sinais destacados: não indica falha, apenas caso de rotina de leitura. */
+  if (file.processingStatus === "completed") return "Rotina";
   return "Em análise";
 }
 
 function getSemaforoTone(file: FileMonitor) {
   const label = getSemaforo(file);
   if (label === "Preservado") return "text-emerald-300";
-  if (label === "Revisar") return "text-amber-200";
+  if (label === "Rotina") return "text-cyan-200/90";
   if (label === "Falhou") return "text-rose-200";
   return "text-muted-foreground";
 }
@@ -288,6 +290,7 @@ function MetricCard({
 }
 
 export default function ReduceLogs() {
+  const { user, loading: authLoading } = useAuth();
   const utils = trpc.useUtils();
   const logFilesInputRef = useRef<HTMLInputElement>(null);
   const [analysisName, setAnalysisName] = useState(ANALYSIS_NAME_PREFIX);
@@ -348,6 +351,7 @@ export default function ReduceLogs() {
       });
     },
   });
+  const deleteJobMutation = trpc.analysis.deleteJob.useMutation();
 
   useEffect(() => {
     resumeActiveSync.mutate();
@@ -397,16 +401,35 @@ export default function ReduceLogs() {
   );
 
   const jobRowById = useMemo(() => {
-    const map = new Map<string, { sampleName: string; status: string; progress: number }>();
+    const map = new Map<
+      string,
+      { sampleName: string; status: string; progress: number; createdByUserId: number | null }
+    >();
     for (const row of jobListQuery.data ?? []) {
+      const created = row.createdByUserId;
       map.set(row.jobId, {
         sampleName: String(row.sampleName ?? "").trim() || row.jobId,
         status: String(row.status ?? ""),
         progress: Number(row.progress ?? 0) || 0,
+        createdByUserId: typeof created === "number" && Number.isFinite(created) ? created : null,
       });
     }
     return map;
   }, [jobListQuery.data]);
+
+  function canServerDeleteJob(lotId: string) {
+    if (authLoading || !user) {
+      return false;
+    }
+    if (lotId === uploadSessionJobId) {
+      return true;
+    }
+    const row = jobRowById.get(lotId);
+    if (!row) {
+      return false;
+    }
+    return row.createdByUserId != null && row.createdByUserId === user.id;
+  }
 
   const submittedDetailQuery = trpc.analysis.detail.useQuery(
     { jobId: selectedJobId ?? "" },
@@ -716,7 +739,7 @@ export default function ReduceLogs() {
     void utils.analysis.list.invalidate();
   }
 
-  function removeLotFromPanel(jobId: string) {
+  function afterRemoveFromPanelState(jobId: string) {
     setTrackedJobIds((prev) => prev.filter((x) => x !== jobId));
     if (uploadSessionJobId === jobId) {
       setUploadSessionJobId(null);
@@ -729,9 +752,42 @@ export default function ReduceLogs() {
     } catch {
       /* ignore */
     }
-    toast.message("Lote removido do painel local", {
-      description: "O processamento no servidor continua. Use o Centro Analítico para ver o histórico de todos os jobs.",
+  }
+
+  function removeFromPanelLocalOnly(jobId: string) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Retirar este lote do painel local? (Não apaga dados do servidor: não submeteu este lote com esta conta.)",
+      )
+    ) {
+      return;
+    }
+    afterRemoveFromPanelState(jobId);
+    toast.message("Lote retirado do painel", {
+      description: "Continua no Centro Analítico para quem o submeteu.",
     });
+  }
+
+  async function removeMyLotFromServerAndPanel(jobId: string) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Apagar este lote no servidor? Só lhe é permitido porque o submeteu. Deixará de aparecer no Centro Analítico.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteJobMutation.mutateAsync({ jobId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível apagar o lote no servidor.");
+      return;
+    }
+    afterRemoveFromPanelState(jobId);
+    void utils.analysis.list.invalidate();
+    void utils.analysis.detail.invalidate({ jobId });
+    toast.success("Lote apagado no servidor. Já não aparece no Centro Analítico.");
   }
 
   function dismissAllTrackedLots() {
@@ -1238,7 +1294,23 @@ export default function ReduceLogs() {
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {selectedJobId ? (
+                  {selectedJobId && !authLoading && canServerDeleteJob(selectedJobId) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-border bg-transparent text-foreground hover:bg-muted dark:border-white/15 dark:hover:bg-white/10"
+                      disabled={deleteJobMutation.isPending}
+                      onClick={() => {
+                        if (selectedJobId) {
+                          void removeMyLotFromServerAndPanel(selectedJobId);
+                        }
+                      }}
+                    >
+                      Apagar lote (meu)
+                    </Button>
+                  ) : null}
+                  {selectedJobId && !authLoading && !canServerDeleteJob(selectedJobId) ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -1246,11 +1318,11 @@ export default function ReduceLogs() {
                       className="border-border bg-transparent text-foreground hover:bg-muted dark:border-white/15 dark:hover:bg-white/10"
                       onClick={() => {
                         if (selectedJobId) {
-                          removeLotFromPanel(selectedJobId);
+                          removeFromPanelLocalOnly(selectedJobId);
                         }
                       }}
                     >
-                      Remover lote selecionado
+                      Retirar lote selecionado do painel
                     </Button>
                   ) : null}
                   {trackedJobIds.length > 0 ? (
@@ -1326,18 +1398,41 @@ export default function ReduceLogs() {
                               {row ? `${getStatusLabel(row.status)} · ${row.progress}%` : "a carregar…"}
                             </span>
                           </button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-1.5 text-[10px] text-muted-foreground"
-                            onClick={() => {
-                              removeLotFromPanel(lotId);
-                            }}
-                            aria-label={`Remover ${lotId} da lista`}
-                          >
-                            ✕
-                          </Button>
+                          {authLoading ? (
+                            <span
+                              className="inline-flex h-7 min-w-7 items-center justify-center text-[10px] text-muted-foreground/50"
+                              title="A carregar sessão…"
+                            >
+                              …
+                            </span>
+                          ) : canServerDeleteJob(lotId) ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-1.5 text-[10px] text-muted-foreground"
+                              disabled={deleteJobMutation.isPending}
+                              onClick={() => {
+                                void removeMyLotFromServerAndPanel(lotId);
+                              }}
+                              aria-label={`Apagar o lote ${lotId} no servidor (só o autor)`}
+                            >
+                              ✕
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-1.5 text-[10px] text-muted-foreground"
+                              onClick={() => {
+                                removeFromPanelLocalOnly(lotId);
+                              }}
+                              aria-label={`Retirar ${lotId} do painel local (não apaga o servidor)`}
+                            >
+                              ✕
+                            </Button>
+                          )}
                         </div>
                       );
                     })}

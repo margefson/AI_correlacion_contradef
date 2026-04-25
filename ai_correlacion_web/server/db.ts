@@ -204,6 +204,8 @@ export async function listAnalysisJobs(filters?: {
   createdFrom?: Date;
   createdTo?: Date;
   status?: Array<"queued" | "running" | "completed" | "failed" | "cancelled">;
+  /** Se definido, só devolve jobs com este `createdByUserId` (Centro: cada analista vê os seus). */
+  createdByUserId?: number;
   limit?: number;
 }) {
   const db = await getDb();
@@ -212,6 +214,9 @@ export async function listAnalysisJobs(filters?: {
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
     const filtered = rows.filter((row) => {
+      if (filters?.createdByUserId != null && row.createdByUserId !== filters.createdByUserId) {
+        return false;
+      }
       if (filters?.sampleName && !String(row.sampleName ?? "").toLowerCase().includes(filters.sampleName.toLowerCase())) {
         return false;
       }
@@ -234,6 +239,9 @@ export async function listAnalysisJobs(filters?: {
   }
 
   const conditions = [];
+  if (filters?.createdByUserId != null) {
+    conditions.push(eq(analysisJobs.createdByUserId, filters.createdByUserId));
+  }
   if (filters?.sampleName) {
     conditions.push(like(analysisJobs.sampleName, `%${filters.sampleName}%`));
   }
@@ -444,4 +452,31 @@ export async function getAnalysisCommit(jobId: string) {
 
   const rows = await db.select().from(analysisCommits).where(eq(analysisCommits.jobId, jobId)).limit(1);
   return rows[0];
+}
+
+/**
+ * Apaga o job e linhas dependentes. Retorna `true` se o job existia.
+ * Em memória, remove o job e toda a cadeia associada ao `jobId`.
+ */
+export async function deleteAnalysisJobAndRelatedData(jobId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    inMemoryAnalysisEvents.delete(jobId);
+    inMemoryAnalysisArtifacts.delete(jobId);
+    inMemoryAnalysisInsights.delete(jobId);
+    inMemoryAnalysisCommits.delete(jobId);
+    return inMemoryAnalysisJobs.delete(jobId);
+  }
+
+  return await db.transaction(async (tx) => {
+    await tx.delete(analysisEvents).where(eq(analysisEvents.jobId, jobId));
+    await tx.delete(analysisArtifacts).where(eq(analysisArtifacts.jobId, jobId));
+    await tx.delete(analysisInsights).where(eq(analysisInsights.jobId, jobId));
+    await tx.delete(analysisCommits).where(eq(analysisCommits.jobId, jobId));
+    const removed = await tx
+      .delete(analysisJobs)
+      .where(eq(analysisJobs.jobId, jobId))
+      .returning({ id: analysisJobs.id });
+    return removed.length > 0;
+  });
 }

@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, normalize, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -12,6 +12,15 @@ function preferredArtifactRoot() {
 
 export function jobArtifactsDirectory(jobId: string) {
   return resolve(join(preferredArtifactRoot(), jobId, "artifacts"));
+}
+
+/** Remove a pasta de trabalho local do job (artefactos, etc.); best-effort. */
+export async function removeLocalJobWorkspace(jobId: string) {
+  if (!/^ctr-[A-Za-z0-9_-]+$/.test(jobId)) {
+    return;
+  }
+  const safeRoot = resolve(join(preferredArtifactRoot(), jobId));
+  await rm(safeRoot, { recursive: true, force: true });
 }
 
 export function assertSafeRelativeArtifactPath(relativePath: string) {

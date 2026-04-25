@@ -8,6 +8,7 @@ const {
   mockSyncAnalysisJob,
   mockSyncActiveAnalysisJobs,
   mockListAnalysisJobs,
+  mockRemoveLocalJobWorkspace,
 } = vi.hoisted(() => ({
   mockStartAnalysisJob: vi.fn(),
   mockGetAnalysisJobDetail: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockSyncAnalysisJob: vi.fn(),
   mockSyncActiveAnalysisJobs: vi.fn(),
   mockListAnalysisJobs: vi.fn(),
+  mockRemoveLocalJobWorkspace: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./analysisService", () => ({
@@ -33,12 +35,16 @@ vi.mock("./db", async () => {
   };
 });
 
+vi.mock("./artifactLocalStore", () => ({
+  removeLocalJobWorkspace: mockRemoveLocalJobWorkspace,
+}));
+
 import { buildMitreDefenseEvasion } from "../shared/analysis";
 import { appRouter } from "./routers";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAuthContext(): TrpcContext {
+function createAuthContext(userOverrides: Partial<AuthenticatedUser> = {}): TrpcContext {
   const user: AuthenticatedUser = {
     id: 7,
     openId: "analyst-user",
@@ -49,6 +55,7 @@ function createAuthContext(): TrpcContext {
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
+    ...userOverrides,
   };
 
   return {
@@ -140,13 +147,31 @@ describe("analysis router", () => {
       createdTo,
       status: ["completed"],
       limit: 25,
+      createdByUserId: 7,
     });
     expect(result).toEqual([{ jobId: "job-1" }, { jobId: "job-2" }]);
+  });
+
+  it("lista jobs sem filtrar por autor (admin vê o histórico global)", async () => {
+    const ctx = createAuthContext({ role: "admin" });
+    const caller = appRouter.createCaller(ctx);
+    mockListAnalysisJobs.mockResolvedValue([]);
+
+    await caller.analysis.list({ limit: 20 });
+
+    const listArg = mockListAnalysisJobs.mock.calls[0][0];
+    expect(listArg).toMatchObject({ limit: 20 });
+    expect(listArg).not.toHaveProperty("createdByUserId");
   });
 
   it("retorna o detalhe agregado do job", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
+    const db = await import("./db");
+    const getJobSpy = vi.spyOn(db, "getAnalysisJobByJobId").mockResolvedValue({
+      jobId: "job-123",
+      createdByUserId: 7,
+    } as Awaited<ReturnType<typeof db.getAnalysisJobByJobId>>);
     const detail = {
       job: { jobId: "job-123", status: "completed" },
       events: [],
@@ -188,8 +213,37 @@ describe("analysis router", () => {
 
     const result = await caller.analysis.detail({ jobId: "job-123" });
 
+    expect(getJobSpy).toHaveBeenCalledWith("job-123");
     expect(mockGetAnalysisJobDetail).toHaveBeenCalledWith("job-123");
     expect(result).toEqual(detail);
+    getJobSpy.mockRestore();
+  });
+
+  it("recusa o detalhe de lote submetido por outro utilizador", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const db = await import("./db");
+    const getJobSpy = vi.spyOn(db, "getAnalysisJobByJobId").mockResolvedValue({
+      jobId: "job-alien",
+      createdByUserId: 99,
+    } as Awaited<ReturnType<typeof db.getAnalysisJobByJobId>>);
+
+    await expect(caller.analysis.detail({ jobId: "job-alien" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(mockGetAnalysisJobDetail).not.toHaveBeenCalled();
+    getJobSpy.mockRestore();
+  });
+
+  it("retoma sync ativo: admin chama a listagem de jobs ativos sem filtro de autor", async () => {
+    const ctx = createAuthContext({ role: "admin" });
+    const caller = appRouter.createCaller(ctx);
+    mockSyncActiveAnalysisJobs.mockResolvedValue(["j1"]);
+
+    const resumeResult = await caller.analysis.resumeActiveSync();
+
+    expect(mockSyncActiveAnalysisJobs).toHaveBeenCalledWith(undefined);
+    expect(resumeResult).toEqual({ resumedJobs: ["j1"] });
   });
 
   it("retorna as métricas validadas do teste de redução em C++", async () => {
@@ -275,6 +329,11 @@ describe("analysis router", () => {
   it("sincroniza um job específico e retoma a sincronização dos jobs ativos", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
+    const db = await import("./db");
+    const getJobSpy = vi.spyOn(db, "getAnalysisJobByJobId").mockResolvedValue({
+      jobId: "job-123",
+      createdByUserId: 7,
+    } as Awaited<ReturnType<typeof db.getAnalysisJobByJobId>>);
 
     mockSyncAnalysisJob.mockResolvedValue({ job: { jobId: "job-123", status: "running" } });
     mockSyncActiveAnalysisJobs.mockResolvedValue(["job-1", "job-2"]);
@@ -284,7 +343,66 @@ describe("analysis router", () => {
 
     expect(mockSyncAnalysisJob).toHaveBeenCalledWith("job-123");
     expect(syncResult).toEqual({ job: { jobId: "job-123", status: "running" } });
-    expect(mockSyncActiveAnalysisJobs).toHaveBeenCalledTimes(1);
+    expect(mockSyncActiveAnalysisJobs).toHaveBeenCalledWith({ createdByUserId: 7 });
     expect(resumeResult).toEqual({ resumedJobs: ["job-1", "job-2"] });
+    getJobSpy.mockRestore();
+  });
+
+  it("deleteJob: apaga no servidor (dono) e chama remoção de workspace local", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const db = await import("./db");
+    const getSpy = vi.spyOn(db, "getAnalysisJobByJobId").mockResolvedValue({
+      jobId: "ctr-test-job",
+      createdByUserId: 7,
+    } as Awaited<ReturnType<typeof db.getAnalysisJobByJobId>>);
+    const delSpy = vi.spyOn(db, "deleteAnalysisJobAndRelatedData").mockResolvedValue(true);
+
+    const result = await caller.analysis.deleteJob({ jobId: "ctr-test-job" });
+
+    expect(result).toEqual({ ok: true });
+    expect(getSpy).toHaveBeenCalledWith("ctr-test-job");
+    expect(delSpy).toHaveBeenCalledWith("ctr-test-job");
+    expect(mockRemoveLocalJobWorkspace).toHaveBeenCalledWith("ctr-test-job");
+
+    getSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
+  it("deleteJob: recusa lote de outro utilizador (não chama apagar na BD)", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const db = await import("./db");
+    const getSpy = vi.spyOn(db, "getAnalysisJobByJobId").mockResolvedValue({
+      jobId: "ctr-other",
+      createdByUserId: 999,
+    } as Awaited<ReturnType<typeof db.getAnalysisJobByJobId>>);
+    const delSpy = vi.spyOn(db, "deleteAnalysisJobAndRelatedData").mockResolvedValue(true);
+
+    await expect(caller.analysis.deleteJob({ jobId: "ctr-other" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+
+    expect(delSpy).not.toHaveBeenCalled();
+    getSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
+  it("deleteJob: recusa lote sem createdByUserId (legado)", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const db = await import("./db");
+    const getSpy = vi.spyOn(db, "getAnalysisJobByJobId").mockResolvedValue({
+      jobId: "ctr-legacy",
+      createdByUserId: null,
+    } as Awaited<ReturnType<typeof db.getAnalysisJobByJobId>>);
+    const delSpy = vi.spyOn(db, "deleteAnalysisJobAndRelatedData").mockResolvedValue(true);
+
+    await expect(caller.analysis.deleteJob({ jobId: "ctr-legacy" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(delSpy).not.toHaveBeenCalled();
+    getSpy.mockRestore();
+    delSpy.mockRestore();
   });
 });

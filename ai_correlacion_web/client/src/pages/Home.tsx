@@ -30,6 +30,7 @@ import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
 import { buildFlowJourneyNarrative, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
 import { formatBytes, formatDateTimeShort, formatPercentFine, formatPercentRounded } from "@/lib/format";
 import { downloadReduceLogsAnalysisExcel, downloadReduceLogsFlowExcel } from "@/lib/reduceLogsExcelExport";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { asRecord, type PayloadRecord } from "@/lib/payload";
 import { trpc } from "@/lib/trpc";
 import {
@@ -53,6 +54,7 @@ import { toast } from "sonner";
 type StatusFilter = "all" | "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export default function Home() {
+  const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sampleFilter, setSampleFilter] = useState("");
   const [eventSearch, setEventSearch] = useState("");
@@ -206,6 +208,15 @@ export default function Home() {
                 <div>
                   <CardTitle>Fila e histórico</CardTitle>
                   <CardDescription>Selecione uma análise para abrir o dashboard detalhado.</CardDescription>
+                  {user && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      {user.role === "admin" ? (
+                        <>Perfil de administrador: esta lista e os detalhes refletem <span className="font-medium">todas as análises do sistema</span>.</>
+                      ) : (
+                        <>Com esta conta, só vê análises <span className="font-medium">submetidas por si</span>.</>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <Badge className={jobStatusBadgeClass(statusFilter === "all" ? undefined : statusFilter)}>{statusFilter === "all" ? "Todos" : statusFilter}</Badge>
               </div>

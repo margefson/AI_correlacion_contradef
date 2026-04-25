@@ -210,9 +210,14 @@ async function maybeFlushParseProgress(
   const stdoutTail = [`Leitura em curso: ${progress.fileLabel}`, ...state.logLines].join("\n");
   const jobEventProgress = Math.min(90, 38 + Math.round(fileProgress * 0.55));
 
+  /**
+   * A linha `analysisJobs.progress` alimenta a fila (Centro / listagens). Só tínhamos `startProgress`
+   * ao trocar de ficheiro; durante MB/GB a ler, o valor ficava "preso" (ex. 60% no 5.º/6 ficheiros).
+   */
   await updateAnalysisJob(progress.jobId, {
     message: msg,
     stdoutTail,
+    progress: jobEventProgress,
   });
 
   if (!options.force && fileProgress === state.lastEmittedFileProgress) {
@@ -2130,8 +2135,12 @@ export async function syncAnalysisJob(jobId: string) {
   return getAnalysisJobDetail(jobId);
 }
 
-export async function syncActiveAnalysisJobs() {
-  const jobs = await listAnalysisJobs({ status: ["queued", "running"], limit: 100 });
+export async function syncActiveAnalysisJobs(options?: { createdByUserId?: number }) {
+  const jobs = await listAnalysisJobs({
+    status: ["queued", "running"],
+    limit: 100,
+    ...(options?.createdByUserId != null ? { createdByUserId: options.createdByUserId } : {}),
+  });
   return jobs.map((job) => job.jobId);
 }
 
