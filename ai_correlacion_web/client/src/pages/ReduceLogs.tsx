@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { jobStatusBadgeClass } from "@/lib/analysisUi";
-import { formatBytes, formatDateTimeLocale, formatPercentFine } from "@/lib/format";
+import { formatBytes, formatDateTimeLocale, formatPercentFine, formatPercentRounded } from "@/lib/format";
 import { isReduceLogsDebugEnabled } from "@/lib/reduceLogsDebug";
 import { downloadReduceLogsExcelWorkbook } from "@/lib/reduceLogsExcelExport";
 import {
@@ -315,6 +315,8 @@ export default function ReduceLogs() {
   const [showRestoreHint, setShowRestoreHint] = useState(false);
   const [logDropHover, setLogDropHover] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  /** Mensagem de alto nível durante init/envio/completação (o utilizador vê o que o servidor está a fazer). */
+  const [uploadPipelineStatus, setUploadPipelineStatus] = useState<string | null>(null);
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFileMonitor[]>([]);
   const [activeFileTab, setActiveFileTab] = useState<string>("");
   const [uiNowMs, setUiNowMs] = useState(() => Date.now());
@@ -521,10 +523,20 @@ export default function ReduceLogs() {
     [includeSubmittedFilesInMerge, submittedFiles, uploadedDetail],
   );
 
+  /** Primeira resposta do `detail` ainda não chegou (servidor a responder ou instância a acordar). */
   const monitorDetailLoading = Boolean(
     selectedJobId &&
     !monitoredFiles.length &&
-    submittedDetailQuery.isLoading &&
+    !uploadedDetail &&
+    (submittedDetailQuery.isLoading || submittedDetailQuery.isPending) &&
+    !submittedDetailQuery.isError,
+  );
+
+  /** O job existe mas ainda não há linhas de ficheiro (ex.: .7z a extrair no servidor, ou fila a aquecer). */
+  const showJobStatusWithoutFileTable = Boolean(
+    selectedJobId &&
+    uploadedDetail &&
+    !monitoredFiles.length &&
     !submittedDetailQuery.isError,
   );
 
@@ -871,6 +883,7 @@ export default function ReduceLogs() {
 
     setIsUploading(true);
     setUploadSessionJobId(null);
+    setUploadPipelineStatus("A preparar a lista de ficheiros e a contactar o servidor…");
 
     const initialBatch = buildInitialSubmittedFiles(selectedFiles);
     setSubmittedFiles(initialBatch);
@@ -883,10 +896,12 @@ export default function ReduceLogs() {
         focusRegexes,
         origin: window.location.origin,
       };
+      setUploadPipelineStatus("A obter definições de envio (armazenamento / partes) no servidor…");
       const capabilities = await getReduceLogsUploadCapabilities().catch(() => null);
       const shouldUseLegacy = capabilities?.storageConfigured === false;
 
       if (shouldUseLegacy) {
+        setUploadPipelineStatus("A enviar o lote (modo directo) — ficheiros grandes demoram; não recarregue a página…");
         const legacyPayload = await uploadReduceLogsLegacy({
           ...submissionInput,
           files: selectedFiles,
@@ -904,6 +919,7 @@ export default function ReduceLogs() {
         setSelectedFiles([]);
 
         if (legacyJobId) {
+          setUploadPipelineStatus("A sincronizar o painel com o novo job…");
           registerNewJobInPanel(legacyJobId);
           await utils.analysis.detail.invalidate({ jobId: legacyJobId });
         }
@@ -911,6 +927,7 @@ export default function ReduceLogs() {
         return;
       }
 
+      setUploadPipelineStatus("A iniciar sessão de upload no servidor…");
       const initPayload = await initReduceLogsUpload({
         ...submissionInput,
         files: selectedFiles.map((file) => ({
@@ -925,6 +942,7 @@ export default function ReduceLogs() {
         }
 
         // Local/dev fallback: use the legacy multipart route when shared storage is not configured.
+        setUploadPipelineStatus("A enviar o lote (modo directo) — caindo de volta para multipart…");
         const legacyPayload = await uploadReduceLogsLegacy({
           ...submissionInput,
           files: selectedFiles,
@@ -942,6 +960,7 @@ export default function ReduceLogs() {
         setSelectedFiles([]);
 
         if (legacyJobId) {
+          setUploadPipelineStatus("A sincronizar o painel com o novo job…");
           registerNewJobInPanel(legacyJobId);
           await utils.analysis.detail.invalidate({ jobId: legacyJobId });
         }
@@ -952,6 +971,7 @@ export default function ReduceLogs() {
         return;
       }
 
+      setUploadPipelineStatus("A enviar ficheiros (arquivos .7z grandes podem demorar muitos minutos)…");
       const chunkSizeBytes = Math.min(initPayload.maxChunkBytes || DEFAULT_CHUNK_SIZE_BYTES, DEFAULT_CHUNK_SIZE_BYTES);
 
       const completionFilesPayload: UploadCompletionFilePayload[] = [];
@@ -997,6 +1017,9 @@ export default function ReduceLogs() {
           uploadReused: false,
           uploadDurationMs: 0,
         }));
+        setUploadPipelineStatus(
+          `A enviar ${file.name} (ficheiro ${index + 1}/${selectedFiles.length}) — 0%…`,
+        );
 
         const uploadStartedAt = Date.now();
         let sentBytes = 0;
@@ -1010,6 +1033,12 @@ export default function ReduceLogs() {
           sentBytes = nextBoundary;
           chunkIndex += 1;
           const uploadDurationMs = Date.now() - uploadStartedAt;
+          const pct = Math.round((sentBytes / file.size) * 100);
+          if (chunkIndex % 2 === 0 || sentBytes >= file.size) {
+            setUploadPipelineStatus(
+              `A enviar ${file.name} (${index + 1}/${selectedFiles.length}) — ${pct}% do ficheiro…`,
+            );
+          }
 
           setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
             uploadStatus: sentBytes >= file.size ? "completed" : "uploading",
@@ -1035,6 +1064,7 @@ export default function ReduceLogs() {
         });
       }
 
+      setUploadPipelineStatus("A finalizar o upload no armazenamento e a criar o job de redução no servidor…");
       const payload = await completeReduceLogsUpload({
         sessionId: initPayload.sessionId,
         ...submissionInput,
@@ -1052,8 +1082,12 @@ export default function ReduceLogs() {
       setSelectedFiles([]);
 
       if (jobId) {
+        setUploadPipelineStatus("A abrir o painel do job e a pedir o estado ao servidor…");
         registerNewJobInPanel(jobId);
         await utils.analysis.detail.invalidate({ jobId });
+        await utils.analysis.list.invalidate();
+      } else {
+        setUploadPipelineStatus("Upload concluído, mas o servidor não devolveu o ID do job — veja o Centro Analítico.");
       }
     } catch (error) {
       setSubmittedFiles((current) => current.map((file) => ({
@@ -1063,6 +1097,7 @@ export default function ReduceLogs() {
       toast.error(error instanceof Error ? error.message : "Não foi possível iniciar a redução.");
     } finally {
       setIsUploading(false);
+      setUploadPipelineStatus(null);
     }
   }
 
@@ -1346,11 +1381,20 @@ export default function ReduceLogs() {
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
+              {uploadPipelineStatus && (
+                <div className="rounded-2xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-950 dark:border-cyan-400/30 dark:bg-cyan-950/40 dark:text-cyan-50">
+                  <p className="font-medium text-cyan-900 dark:text-cyan-100">Estado do envio (servidor)</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-cyan-900/95 dark:text-cyan-100/95">{uploadPipelineStatus}</p>
+                  <p className="mt-2 text-[11px] text-cyan-800/80 dark:text-cyan-200/80">
+                    Se o ecrã demorar, o alojamento pode estar a iniciar a instância. Não recarregue até terminar a barra de envio ou a mensagem de conclusão.
+                  </p>
+                </div>
+              )}
               {isUploading && submittedFiles.length > 0 ? (
                 <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/5 dark:text-amber-50">
                   <p className="font-medium text-amber-900 dark:text-amber-100">Envio do lote em curso</p>
                   <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-100/90">
-                    Os ficheiros abaixo só entram nas métricas do painel depois do servidor criar o job; multi-GB pode demorar vários minutos por ficheiro no envio em partes.
+                    Os ficheiros abaixo mostram o progresso de cada parte. Depois do envio, o servidor cria o job, extrai 7z/zip se for o caso, e só aí a tabela de redução fica preenchida — pode levar minutos.
                   </p>
                   <ul className="mt-2 max-h-40 list-inside list-disc space-y-1 overflow-y-auto text-xs">
                     {submittedFiles.map((f) => (
@@ -1476,14 +1520,61 @@ export default function ReduceLogs() {
                   </button>
                   .
                 </div>
+              ) : selectedJobId && submittedDetailQuery.isSuccess && !uploadedDetail && !submittedDetailQuery.isFetching ? (
+                <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-5 text-sm leading-6 text-amber-950 dark:border-amber-400/30 dark:text-amber-100">
+                  O servidor devolveu resposta vazia para o job <span className="font-mono">{selectedJobId}</span>. Pode não existir para esta conta, ou ainda não estar indexado.{" "}
+                  <Link className="font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-200" href="/">Abrir o Centro Analítico</Link> para confirmar.
+                </div>
               ) : monitorDetailLoading ? (
                 <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-cyan-500/35 bg-cyan-500/10 p-10 text-center text-sm text-muted-foreground dark:border-cyan-400/20 dark:bg-cyan-500/5">
                   <RefreshCw className="h-8 w-8 animate-spin text-cyan-600/80 dark:text-cyan-300/80" />
-                  <p>A carregar o estado do lote no servidor…</p>
+                  <p className="max-w-md text-foreground">A aguardar o primeiro estado do lote a partir do servidor…</p>
+                  <p className="max-w-md text-xs text-muted-foreground">
+                    Em alojamento gratuito o contentor pode estar a &quot;acordar&quot; após inatividade (30–60+ s). O ID do lote fica no chip acima, se já foi criado.
+                  </p>
+                </div>
+              ) : showJobStatusWithoutFileTable && uploadedDetail ? (
+                <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-5 text-sm leading-6 dark:border-white/10 dark:bg-slate-950/60">
+                  <p className="font-medium text-foreground">Lote ativo no servidor (lista de ficheiros a carregar)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Comum ao enviar um <span className="font-medium">.7z / .zip</span>: o job já existe, mas a lista por ficheiro só aparece após a extração e os primeiros eventos. Abaixo segue o estado geral; aguarde ou veja o registo.
+                  </p>
+                  <div className="grid gap-2 rounded-xl border border-border/80 bg-background/80 px-3 py-2.5 text-xs font-mono dark:border-white/10">
+                    <div className="flex flex-wrap justify-between gap-2 text-foreground">
+                      <span>Job</span>
+                      <span className="truncate pl-2">{uploadedDetail.job.jobId}</span>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-muted-foreground">Estado</span>
+                      <span>
+                        {getStatusLabel(uploadedDetail.job.status)} · {formatPercentRounded(uploadedDetail.job.progress)}%
+                      </span>
+                    </div>
+                    <div className="text-muted-foreground">Etapa: {uploadedDetail.job.stage}</div>
+                    {uploadedDetail.job.message ? (
+                      <p className="pt-1 text-[11px] leading-relaxed text-foreground/90">{uploadedDetail.job.message}</p>
+                    ) : null}
+                  </div>
+                  {uploadedDetail.job.stdoutTail ? (
+                    <div>
+                      <p className="mb-1 text-xs font-medium text-muted-foreground">Última actividade (servidor)</p>
+                      <pre className="max-h-32 overflow-y-auto rounded-lg border border-border/60 bg-black/20 p-2 text-[10px] text-emerald-200/90 dark:border-white/10">
+                        {uploadedDetail.job.stdoutTail}
+                      </pre>
+                    </div>
+                  ) : null}
                 </div>
               ) : !monitoredFiles.length ? (
-                <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-5 text-sm leading-6 text-muted-foreground dark:border-white/10 dark:bg-black/20">
-                  Assim que você submeter um lote, esta área mostrará o status consolidado da redução, o progresso individual de cada log e as etapas executadas para cada arquivo. Se já enviou antes, o painel reabre automaticamente ao voltar a esta página no mesmo navegador.
+                <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/40 p-5 text-sm leading-6 text-muted-foreground dark:border-white/10 dark:bg-black/20">
+                  <p>
+                    Ainda sem lote nesta vista: escolha ficheiros acima e use <span className="font-medium text-foreground">Executar redução com upload</span>, ou
+                    {" "}
+                    <Link className="font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300" href="/">abra o Centro Analítico</Link>{" "}
+                    se o job já tiver sido criado.
+                  </p>
+                  <p className="text-xs">
+                    Se submeteu e recarregou, a lista de lotes a acompanhar vem do navegador: sem chip acima, adicione o lote a partir do Centro ou volte a enviar. Em produção, um refresh longo pode ocorrer enquanto o serviço inicia.
+                  </p>
                 </div>
               ) : (
                 <>
