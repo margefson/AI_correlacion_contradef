@@ -51,6 +51,19 @@ const ARCHIVE_EXTENSIONS = new Set([".7z", ".zip", ".rar"]);
 const TEXT_LOG_EXTENSIONS = new Set([".cdf", ".csv", ".txt", ".log", ".json"]);
 const execFileAsync = promisify(execFile);
 
+function isNoSpaceError(error: unknown): boolean {
+  const e = error as NodeJS.ErrnoException & { stderr?: Buffer; stdout?: Buffer };
+  if (e?.code === "ENOSPC") {
+    return true;
+  }
+  const blob = [e?.message, e?.stderr, e?.stdout]
+    .map((part) => (Buffer.isBuffer(part) ? part.toString("utf-8") : (part as string | undefined) ?? ""))
+    .join(" ");
+  return /enospc|no space left|espaço insuficiente|write could not be completed|NSPOSIXErrorDomain.*28|errno:\s*28/i.test(
+    blob,
+  );
+}
+
 const WORK_TMP_ROOT = process.env.CONTRADEF_WORK_TMP?.trim()
   ? process.env.CONTRADEF_WORK_TMP.trim()
   : process.platform === "win32"
@@ -335,10 +348,14 @@ async function expandArchiveContainer(logFile: StartAnalysisLogInput): Promise<S
 
     return extractedLogs;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/enospc|no space left|espaço insuficiente/i.test(message)) {
-      throw new Error(`Falha ao descompactar ${logFile.fileName}: espaço insuficiente no disco para extração temporária. Libere espaço ou configure o diretório de execução para um disco com mais capacidade.`);
+    if (isNoSpaceError(error)) {
+      throw new Error(
+        `Falha ao descompactar ${logFile.fileName}: espaço insuficiente no volume temporário (extração 7z). ` +
+          `No Render, o disco do contentor é pequeno; defina CONTRADEF_WORK_TMP, reduza o 7z ou descompacte ficheiros maiores. ` +
+          `Mensagem original: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
+    const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Falha ao descompactar ${logFile.fileName}: ${message}`);
   } finally {
     if (cleanupDir) {
@@ -1310,13 +1327,15 @@ export function buildLiveFileMetrics(
     const previous = fileMap.get(fileName) ?? createEmptyReductionFileMetric(fileName, payload.logType as SupportedLogType | undefined);
     const nextStatus = event.eventType === "file-complete"
       ? "completed"
-      : event.eventType === "error"
+      : event.eventType === "file-failed"
         ? "failed"
-        : event.eventType === "file-queued"
-          ? "queued"
-          : event.eventType === "file-start" || event.eventType === "file-stage"
-            ? "running"
-            : previous.status;
+        : event.eventType === "error"
+          ? "failed"
+          : event.eventType === "file-queued"
+            ? "queued"
+            : event.eventType === "file-start" || event.eventType === "file-stage"
+              ? "running"
+              : previous.status;
 
     fileMap.set(fileName, {
       ...previous,
@@ -1406,125 +1425,101 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     const startProgress = Math.min(90, 20 + Math.round((index / Math.max(1, input.logFiles.length)) * 60));
     const inferredLogType = inferLogType(logFile.fileName, logFile.logType);
 
-    await updateAnalysisJob(jobId, {
-      status: "running",
-      progress: startProgress,
-      stage: `reduzindo arquivo ${fileOrdinal}/${input.logFiles.length}`,
-      message: `Processando ${logFile.fileName}.`,
-      llmSummaryStatus: "running",
-    });
-
-    await addAnalysisEvent({
-      jobId,
-      eventType: "file-start",
-      stage: "preparando redução",
-      message: `Iniciando a preparação de ${logFile.fileName}.`,
-      progress: startProgress,
-      payloadJson: {
-        fileName: logFile.fileName,
-        logType: inferredLogType,
+    try {
+      await updateAnalysisJob(jobId, {
         status: "running",
-        fileProgress: 10,
-        currentStage: "Preparação do arquivo",
-        currentStep: "Validando cabeçalho e contexto do log",
-        lastMessage: `Preparando ${logFile.fileName} para redução heurística.`,
-        originalBytes: logFile.sizeBytes ?? 0,
-      },
-    });
+        progress: startProgress,
+        stage: `reduzindo arquivo ${fileOrdinal}/${input.logFiles.length}`,
+        message: `Processando ${logFile.fileName}.`,
+        llmSummaryStatus: "running",
+      });
 
-    await addAnalysisEvent({
-      jobId,
-      eventType: "file-stage",
-      stage: "redução heurística",
-      message: `Aplicando filtragem heurística em ${logFile.fileName}.`,
-      progress: Math.min(90, startProgress + 8),
-      payloadJson: {
-        fileName: logFile.fileName,
-        logType: inferredLogType,
-        status: "running",
-        fileProgress: 45,
-        currentStage: "Redução heurística",
-        currentStep: "Filtrando linhas e preservando gatilhos críticos",
-        lastMessage: `Filtragem heurística em andamento para ${logFile.fileName}.`,
-        originalBytes: logFile.sizeBytes ?? 0,
-      },
-    });
+      await addAnalysisEvent({
+        jobId,
+        eventType: "file-start",
+        stage: "preparando redução",
+        message: `Iniciando a preparação de ${logFile.fileName}.`,
+        progress: startProgress,
+        payloadJson: {
+          fileName: logFile.fileName,
+          logType: inferredLogType,
+          status: "running",
+          fileProgress: 10,
+          currentStage: "Preparação do arquivo",
+          currentStep: "Validando cabeçalho e contexto do log",
+          lastMessage: `Preparando ${logFile.fileName} para redução heurística.`,
+          originalBytes: logFile.sizeBytes ?? 0,
+        },
+      });
 
-    const parsed = await analyzeSingleLogFile(logFile, perFileEventLimit);
+      await addAnalysisEvent({
+        jobId,
+        eventType: "file-stage",
+        stage: "redução heurística",
+        message: `Aplicando filtragem heurística em ${logFile.fileName}.`,
+        progress: Math.min(90, startProgress + 8),
+        payloadJson: {
+          fileName: logFile.fileName,
+          logType: inferredLogType,
+          status: "running",
+          fileProgress: 45,
+          currentStage: "Redução heurística",
+          currentStep: "Filtrando linhas e preservando gatilhos críticos",
+          lastMessage: `Filtragem heurística em andamento para ${logFile.fileName}.`,
+          originalBytes: logFile.sizeBytes ?? 0,
+        },
+      });
 
-    parsed.suspiciousApis.forEach((api) => suspiciousApiSet.add(api));
-    parsed.techniqueTags.forEach((tag) => techniqueSet.add(tag));
+      const parsed = await analyzeSingleLogFile(logFile, perFileEventLimit);
 
-    triggerCount += parsed.triggerCount;
-    originalLineCount += parsed.originalLineCount;
-    reducedLineCount += parsed.reducedLineCount;
-    originalBytes += parsed.originalBytes;
-    reducedBytes += parsed.reducedBytes;
+      parsed.suspiciousApis.forEach((api) => suspiciousApiSet.add(api));
+      parsed.techniqueTags.forEach((tag) => techniqueSet.add(tag));
 
-    reducedLogEntries.push({
-      fileName: logFile.fileName,
-      logType: parsed.logType,
-      keptLines: parsed.keptLines,
-    });
+      triggerCount += parsed.triggerCount;
+      originalLineCount += parsed.originalLineCount;
+      reducedLineCount += parsed.reducedLineCount;
+      originalBytes += parsed.originalBytes;
+      reducedBytes += parsed.reducedBytes;
 
-    await addAnalysisEvent({
-      jobId,
-      eventType: "file-stage",
-      stage: "consolidação do resultado",
-      message: `Consolidando métricas e artefatos reduzidos de ${logFile.fileName}.`,
-      progress: Math.min(94, startProgress + 20),
-      payloadJson: {
+      reducedLogEntries.push({
         fileName: logFile.fileName,
         logType: parsed.logType,
-        status: "running",
-        fileProgress: 82,
-        currentStage: "Consolidação",
-        currentStep: "Agregando métricas e preparando artefatos",
-        lastMessage: `Consolidando o resultado reduzido de ${logFile.fileName}.`,
-        originalLineCount: parsed.originalLineCount,
-        reducedLineCount: parsed.reducedLineCount,
-        originalBytes: parsed.originalBytes,
-        reducedBytes: parsed.reducedBytes,
-        suspiciousEventCount: parsed.suspiciousEventCount,
-        triggerCount: parsed.triggerCount,
-      },
-    });
+        keptLines: parsed.keptLines,
+      });
 
-    const completionStep = parsed.triggerCount > 0 || parsed.suspiciousEventCount > 0
-      ? "Sinais críticos preservados"
-      : "Redução concluída";
-    const completionMessage = `${logFile.fileName} concluído: ${parsed.reducedLineCount}/${parsed.originalLineCount} linhas mantidas após a redução.`;
+      await addAnalysisEvent({
+        jobId,
+        eventType: "file-stage",
+        stage: "consolidação do resultado",
+        message: `Consolidando métricas e artefatos reduzidos de ${logFile.fileName}.`,
+        progress: Math.min(94, startProgress + 20),
+        payloadJson: {
+          fileName: logFile.fileName,
+          logType: parsed.logType,
+          status: "running",
+          fileProgress: 82,
+          currentStage: "Consolidação",
+          currentStep: "Agregando métricas e preparando artefatos",
+          lastMessage: `Consolidando o resultado reduzido de ${logFile.fileName}.`,
+          originalLineCount: parsed.originalLineCount,
+          reducedLineCount: parsed.reducedLineCount,
+          originalBytes: parsed.originalBytes,
+          reducedBytes: parsed.reducedBytes,
+          suspiciousEventCount: parsed.suspiciousEventCount,
+          triggerCount: parsed.triggerCount,
+        },
+      });
 
-    fileMetrics.push({
-      fileName: logFile.fileName,
-      logType: parsed.logType,
-      status: "completed",
-      progress: 100,
-      currentStage: "Arquivo concluído",
-      currentStep: completionStep,
-      lastMessage: completionMessage,
-      originalLineCount: parsed.originalLineCount,
-      reducedLineCount: parsed.reducedLineCount,
-      originalBytes: parsed.originalBytes,
-      reducedBytes: parsed.reducedBytes,
-      suspiciousEventCount: parsed.suspiciousEventCount,
-      triggerCount: parsed.triggerCount,
-      uploadDurationMs: logFile.uploadDurationMs ?? 0,
-      uploadReused: logFile.uploadReused ?? false,
-    });
+      const completionStep = parsed.triggerCount > 0 || parsed.suspiciousEventCount > 0
+        ? "Sinais críticos preservados"
+        : "Redução concluída";
+      const completionMessage = `${logFile.fileName} concluído: ${parsed.reducedLineCount}/${parsed.originalLineCount} linhas mantidas após a redução.`;
 
-    const endProgress = Math.min(95, 25 + Math.round((fileOrdinal / Math.max(1, input.logFiles.length)) * 60));
-    await addAnalysisEvent({
-      jobId,
-      eventType: "file-complete",
-      stage: completionStep,
-      message: completionMessage,
-      progress: endProgress,
-      payloadJson: {
+      fileMetrics.push({
         fileName: logFile.fileName,
         logType: parsed.logType,
         status: "completed",
-        fileProgress: 100,
+        progress: 100,
         currentStage: "Arquivo concluído",
         currentStep: completionStep,
         lastMessage: completionMessage,
@@ -1534,11 +1529,85 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
         reducedBytes: parsed.reducedBytes,
         suspiciousEventCount: parsed.suspiciousEventCount,
         triggerCount: parsed.triggerCount,
-      },
-    });
+        uploadDurationMs: logFile.uploadDurationMs ?? 0,
+        uploadReused: logFile.uploadReused ?? false,
+      });
 
-    normalizedEvents.push(...parsed.events);
-    artifacts.push(await buildSourceArtifact(jobId, logFile, parsed.logType));
+      const endProgress = Math.min(95, 25 + Math.round((fileOrdinal / Math.max(1, input.logFiles.length)) * 60));
+      await addAnalysisEvent({
+        jobId,
+        eventType: "file-complete",
+        stage: completionStep,
+        message: completionMessage,
+        progress: endProgress,
+        payloadJson: {
+          fileName: logFile.fileName,
+          logType: parsed.logType,
+          status: "completed",
+          fileProgress: 100,
+          currentStage: "Arquivo concluído",
+          currentStep: completionStep,
+          lastMessage: completionMessage,
+          originalLineCount: parsed.originalLineCount,
+          reducedLineCount: parsed.reducedLineCount,
+          originalBytes: parsed.originalBytes,
+          reducedBytes: parsed.reducedBytes,
+          suspiciousEventCount: parsed.suspiciousEventCount,
+          triggerCount: parsed.triggerCount,
+        },
+      });
+
+      normalizedEvents.push(...parsed.events);
+      artifacts.push(await buildSourceArtifact(jobId, logFile, parsed.logType));
+    } catch (caught) {
+      const base = caught instanceof Error ? caught.message : String(caught);
+      const userMsg = isNoSpaceError(caught)
+        ? `Falha em ${logFile.fileName}: espaço em disco insuficiente ou volume temporário cheio. ` +
+            "Em alojamento (p.ex. Render), o disco do contentor é limitado: defina CONTRADEF_WORK_TMP, suba o plano, ou reduza/fragmente o 7z. " +
+            `Detalhe: ${base}`
+        : `Falha em ${logFile.fileName}: ${base}`;
+      await addAnalysisEvent({
+        jobId,
+        eventType: "file-failed",
+        stage: "falha no arquivo",
+        message: userMsg,
+        progress: startProgress,
+        payloadJson: {
+          fileName: logFile.fileName,
+          logType: inferredLogType,
+          status: "failed",
+          fileProgress: 45,
+          currentStage: "Falha",
+          currentStep: isNoSpaceError(caught) ? "Espaço de disco" : "Erro de processamento",
+          lastMessage: userMsg,
+          originalBytes: logFile.sizeBytes ?? 0,
+        },
+      });
+      fileMetrics.push({
+        fileName: logFile.fileName,
+        logType: inferredLogType,
+        status: "failed",
+        progress: 0,
+        currentStage: "Falha",
+        currentStep: isNoSpaceError(caught) ? "Espaço de disco" : "Erro de processamento",
+        lastMessage: userMsg,
+        originalLineCount: 0,
+        reducedLineCount: 0,
+        originalBytes: logFile.sizeBytes ?? 0,
+        reducedBytes: 0,
+        suspiciousEventCount: 0,
+        triggerCount: 0,
+        uploadDurationMs: logFile.uploadDurationMs ?? 0,
+        uploadReused: logFile.uploadReused ?? false,
+      });
+      continue;
+    }
+  }
+
+  if (fileMetrics.length > 0 && fileMetrics.every((m) => m.status === "failed")) {
+    throw new Error(
+      fileMetrics.map((m) => m.lastMessage ?? m.fileName).join(" | ") || "Falha em todos os arquivos do lote.",
+    );
   }
 
   const sortedEvents = normalizedEvents.slice(0, MAX_EVENTS);
@@ -1697,11 +1766,15 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, s
       summaryJson: result.summaryJson,
     });
 
+    const failedNames = result.fileMetrics.filter((m) => m.status === "failed").map((m) => m.fileName);
+    const summaryLine = `Classificação sugerida: ${result.classification}. Risco ${result.riskLevel}.`;
     await updateAnalysisJob(jobId, {
       status: "completed",
       progress: 100,
       stage: "análise concluída",
-      message: `Classificação sugerida: ${result.classification}. Risco ${result.riskLevel}.`,
+      message: failedNames.length
+        ? `${summaryLine} Arquivos não processados: ${failedNames.join(", ")}.`
+        : summaryLine,
       llmSummaryStatus: "completed",
       completedAt: new Date(),
     });

@@ -2,6 +2,7 @@ import express, { type Express, type Request, type Response } from "express";
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import Busboy from "busboy";
@@ -13,7 +14,18 @@ import { storageGetBuffer, storagePutExact } from "../storage";
 import { createContext } from "./context";
 import { ENV } from "./env";
 
-const TEMP_UPLOAD_DIR = join("E:\\", "contradef-tmp", "reduce-logs");
+function resolveReduceLogsTempDir(): string {
+  const fromEnv = process.env.CONTRADEF_REDUCE_LOGS_TMP?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  if (process.platform === "win32") {
+    return join("E:\\", "contradef-tmp", "reduce-logs");
+  }
+  return join(tmpdir(), "contradef-tmp", "reduce-logs");
+}
+
+const TEMP_UPLOAD_DIR = resolveReduceLogsTempDir();
 const MAX_MULTIPART_FILES = 20;
 const MAX_MULTIPART_FILE_BYTES = 6 * 1024 * 1024 * 1024;
 const MAX_CHUNK_BYTES = 16 * 1024 * 1024;
@@ -542,6 +554,15 @@ async function handleLegacyMultipartUpload(req: Request, res: Response, userId: 
         writeStream.on("error", (error) => {
           if (limited) {
             resolve();
+            return;
+          }
+          const err = error as NodeJS.ErrnoException;
+          if (err?.code === "ENOSPC") {
+            reject(
+              new Error(
+                `Disco / volume temporário cheio ao gravar ${originalName}. Aumenta o plano, liberta espaço no servidor, ou define CONTRADEF_REDUCE_LOGS_TMP / CONTRADEF_WORK_TMP para outro volume.`,
+              ),
+            );
             return;
           }
           reject(error);

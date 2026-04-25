@@ -666,7 +666,9 @@ export default function ReduceLogs() {
           uploadReused: false,
         })));
         const legacyJobId = legacyPayload?.job?.jobId ?? null;
-        toast.success("Storage externo indisponível no ambiente local. Lote enviado pelo modo legado.");
+        toast.success("Armazenamento partilhado (Forge) não configurado — lote enviado em modo directo (multipart).", {
+          description: "Em produção, configure BUILT_IN_FORGE_API_URL + BUILT_IN_FORGE_API_KEY para uploads em blocos para o object storage.",
+        });
         setSelectedFiles([]);
 
         if (legacyJobId) {
@@ -702,7 +704,9 @@ export default function ReduceLogs() {
           uploadReused: false,
         })));
         const legacyJobId = legacyPayload?.job?.jobId ?? null;
-        toast.success("Storage externo indisponível no ambiente local. Lote enviado pelo modo legado.");
+        toast.success("Armazenamento partilhado (Forge) não configurado — lote enviado em modo directo (multipart).", {
+          description: "Em produção, configure BUILT_IN_FORGE_API_URL + BUILT_IN_FORGE_API_KEY para uploads em blocos para o object storage.",
+        });
         setSelectedFiles([]);
 
         if (legacyJobId) {
