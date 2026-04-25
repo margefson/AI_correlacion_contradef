@@ -49,10 +49,30 @@ export function validateProductionEnv(): void {
       isNonEmpty(process.env.MICROSOFT_CLIENT_ID) &&
       isNonEmpty(process.env.MICROSOFT_CLIENT_SECRET);
     if (!g && !m) {
+      const base = process.env.PUBLIC_APP_URL?.trim() || "https://your-service.onrender.com";
+      const partial: string[] = [];
+      if (isNonEmpty(process.env.GOOGLE_CLIENT_ID) && !isNonEmpty(process.env.GOOGLE_CLIENT_SECRET)) {
+        partial.push("GOOGLE_CLIENT_SECRET is missing (set both ID and secret).");
+      }
+      if (!isNonEmpty(process.env.GOOGLE_CLIENT_ID) && isNonEmpty(process.env.GOOGLE_CLIENT_SECRET)) {
+        partial.push("GOOGLE_CLIENT_ID is missing (set both ID and secret).");
+      }
+      if (isNonEmpty(process.env.MICROSOFT_CLIENT_ID) && !isNonEmpty(process.env.MICROSOFT_CLIENT_SECRET)) {
+        partial.push("MICROSOFT_CLIENT_SECRET is missing (set both ID and secret).");
+      }
+      if (!isNonEmpty(process.env.MICROSOFT_CLIENT_ID) && isNonEmpty(process.env.MICROSOFT_CLIENT_SECRET)) {
+        partial.push("MICROSOFT_CLIENT_ID is missing (set both ID and secret).");
+      }
+      const ph = partial.length ? " Partial config: " + partial.join(" ") : "";
       throw new Error(
-        "[Production] AUTH_MODE=oidc requires at least one provider: " +
-          "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET and/or " +
-          "MICROSOFT_CLIENT_ID + MICROSOFT_CLIENT_SECRET."
+        "[Production] AUTH_MODE=oidc needs at least one full provider (Google and/or Microsoft). " +
+          "In Render, open the Web Service → Environment and add the variables to the **running** app " +
+          "(not only a post-install script). Google: create an OAuth 2.0 client (Web) in Google Cloud Console, " +
+          "then set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Register redirect: " +
+          base.replace(/\/$/, "") + "/api/oauth/callback/google (and the Microsoft path if you use it). " +
+          "To use the legacy WebDev login instead, set AUTH_MODE=webdev, configure OAUTH_SERVER_URL + VITE_APP_ID, " +
+          "rebuild, and do not set VITE_AUTH_MODE=oidc in the Vite build." +
+          ph
       );
     }
   } else {
