@@ -61,6 +61,21 @@ import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState 
 import { toast } from "sonner";
 import { Link } from "wouter";
 
+/** Ficheiros muito grandes podem demorar minutos entre eventos de ficheiro; evita falso “travado” na UI. */
+const STALE_NO_EVENT_MS = 120_000;
+const STALE_NO_EVENT_MS_LARGE = 10 * 60_000;
+const STALE_SIZE_THRESHOLD_BYTES = 100 * 1024 * 1024;
+
+function fileNameBase(fileName: string) {
+  const parts = fileName.split(/[/\\]/);
+  return parts.at(-1) ?? fileName;
+}
+
+function staleThresholdMsForFile(file: FileMonitor) {
+  const big = Math.max(file.originalBytes ?? 0, file.sizeBytes ?? 0);
+  return big >= STALE_SIZE_THRESHOLD_BYTES ? STALE_NO_EVENT_MS_LARGE : STALE_NO_EVENT_MS;
+}
+
 function getStatusLabel(status?: string | null) {
   switch (status) {
     case "queued":
@@ -525,7 +540,8 @@ export default function ReduceLogs() {
         const hay = `${job.message ?? ""}\n${job.stdoutTail ?? ""}`;
         (uploadedDetail?.fileMetrics ?? []).forEach((file) => {
           if (file.status !== "running" && file.status !== "queued") return;
-          if (!hay.includes(file.fileName)) return;
+          const base = fileNameBase(file.fileName);
+          if (!hay.includes(file.fileName) && !hay.includes(base)) return;
           const prev = map.get(file.fileName);
           if (!prev || pulse > prev) {
             map.set(file.fileName, pulse);
@@ -567,7 +583,7 @@ export default function ReduceLogs() {
     if (file.processingStatus !== "running") return false;
     const lastEventAt = fileLastEventAtMap.get(file.fileName);
     if (!lastEventAt) return true;
-    return uiNowMs - lastEventAt.getTime() > 120000;
+    return uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file);
   }), [fileLastEventAtMap, monitoredFiles, uiNowMs]);
   const stalledFileNameSet = useMemo(() => {
     const set = new Set<string>();
@@ -576,7 +592,7 @@ export default function ReduceLogs() {
       const lastEventAt = fileLastEventAtMap.get(file.fileName);
       const stageSince = fileCurrentStageSinceMap.get(file.fileName);
       const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
-      const noRecentActivity = !lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000);
+      const noRecentActivity = !lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file));
       if (noRecentActivity || stageElapsedMs > STAGE_WARNING_THRESHOLD_MS) {
         set.add(file.fileName);
       }
@@ -1243,6 +1259,29 @@ export default function ReduceLogs() {
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
+              {isUploading && submittedFiles.length > 0 ? (
+                <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/5 dark:text-amber-50">
+                  <p className="font-medium text-amber-900 dark:text-amber-100">Envio do lote em curso</p>
+                  <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-100/90">
+                    Os ficheiros abaixo só entram nas métricas do painel depois do servidor criar o job; multi-GB pode demorar vários minutos por ficheiro no envio em partes.
+                  </p>
+                  <ul className="mt-2 max-h-40 list-inside list-disc space-y-1 overflow-y-auto text-xs">
+                    {submittedFiles.map((f) => (
+                      <li key={f.fileName}>
+                        <span className="font-mono">{f.fileName}</span>
+                        {" · "}
+                        {f.uploadStatus === "uploading"
+                          ? `${f.uploadProgress}% enviado`
+                          : f.uploadStatus === "completed"
+                            ? "enviado"
+                            : f.uploadStatus === "failed"
+                              ? "falhou no envio"
+                              : f.uploadStatus}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {trackedJobIds.length > 0 ? (
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">Lotes a acompanhar (clique para expandir o painel)</p>

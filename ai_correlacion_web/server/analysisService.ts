@@ -127,6 +127,7 @@ type ParseProgressState = {
   byteWeight: number;
   logLines: string[];
   lastFlushMs: number;
+  lastFlushedBytes: number;
 };
 
 function formatBytesPt(n: number): string {
@@ -144,6 +145,8 @@ function formatBytesPt(n: number): string {
 
 const PARSE_PROGRESS_MIN_MS = 2500;
 const PARSE_PROGRESS_LINE_STRIDE = 100_000;
+/** Em ficheiros muito grandes, emitir leitura mesmo entre marcos de linha, para a UI não marcar falso “sem actualização” durante fases longas. */
+const PARSE_PROGRESS_BYTE_STRIDE = 32 * 1024 * 1024;
 const PARSE_LOG_MAX_LINES = 40;
 
 function shouldReportParseProgress(state: ParseProgressState, options: { force: boolean }): boolean {
@@ -155,8 +158,9 @@ function shouldReportParseProgress(state: ParseProgressState, options: { force: 
   }
   const now = Date.now();
   const sinceLast = state.lastFlushMs === 0 ? Number.POSITIVE_INFINITY : now - state.lastFlushMs;
-  const hitStride = state.lineCount > 0 && state.lineCount % PARSE_PROGRESS_LINE_STRIDE === 0;
-  return sinceLast >= PARSE_PROGRESS_MIN_MS || hitStride;
+  const hitLineStride = state.lineCount > 0 && state.lineCount % PARSE_PROGRESS_LINE_STRIDE === 0;
+  const hitByteStride = state.byteWeight - state.lastFlushedBytes >= PARSE_PROGRESS_BYTE_STRIDE;
+  return sinceLast >= PARSE_PROGRESS_MIN_MS || hitLineStride || hitByteStride;
 }
 
 async function maybeFlushParseProgress(
@@ -178,6 +182,7 @@ async function maybeFlushParseProgress(
     state.logLines.shift();
   }
   state.lastFlushMs = Date.now();
+  state.lastFlushedBytes = state.byteWeight;
   await updateAnalysisJob(progress.jobId, {
     message: `A processar ${progress.fileLabel}: ${lineCount.toLocaleString("pt-PT")} linhas…`,
     stdoutTail: [`Leitura em curso: ${progress.fileLabel}`, ...state.logLines].join("\n"),
@@ -1168,7 +1173,7 @@ async function analyzeSingleLogFile(
 ): Promise<ParsedLogResult> {
   const logType = inferLogType(logFile.fileName, logFile.logType);
   const collector = createLogCollector(logFile.fileName, logType, perFileEventLimit);
-  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0 };
+  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0, lastFlushedBytes: 0 };
 
   const bump = async (rawLine: string) => {
     collector.consume(rawLine);
