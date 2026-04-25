@@ -17,7 +17,15 @@ import { jobStatusBadgeClass } from "@/lib/analysisUi";
 import { formatBytes, formatDateTimeLocale, formatDurationMs, formatPercentFine } from "@/lib/format";
 import { isReduceLogsDebugEnabled } from "@/lib/reduceLogsDebug";
 import { downloadReduceLogsExcelWorkbook } from "@/lib/reduceLogsExcelExport";
-import { clearPersistedReduceLogsJobId, readPersistedReduceLogsJobId, writePersistedReduceLogsJobId } from "@/lib/reduceLogsSession";
+import {
+  clearPersistedReduceLogsJobId,
+  MAX_TRACKED_LOTS,
+  nextTrackedAfterPrepend,
+  readSelectedJobId,
+  readTrackedJobIds,
+  writeSelectedJobId,
+  writeTrackedJobIds,
+} from "@/lib/reduceLogsSession";
 import { trpc } from "@/lib/trpc";
 import {
   completeReduceLogsUpload,
@@ -51,6 +59,7 @@ import {
 } from "lucide-react";
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 function getStatusLabel(status?: string | null) {
   switch (status) {
@@ -250,9 +259,21 @@ export default function ReduceLogs() {
   const [focusTerms, setFocusTerms] = useState("VirtualProtect, NtQueryInformationProcess, IsDebuggerPresent, Sleep");
   const [focusRegexes, setFocusRegexes] = useState("VirtualProtect.*RW.*RX, Nt.*QueryInformationProcess");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [submittedJobId, setSubmittedJobId] = useState<string | null>(() => (
-    typeof window !== "undefined" ? readPersistedReduceLogsJobId() : null
+  const [trackedJobIds, setTrackedJobIds] = useState<string[]>(() => (
+    typeof window !== "undefined" ? readTrackedJobIds() : []
   ));
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const ids = readTrackedJobIds();
+    const sel = readSelectedJobId();
+    if (sel && ids.includes(sel)) {
+      return sel;
+    }
+    return ids[0] ?? null;
+  });
+  const [uploadSessionJobId, setUploadSessionJobId] = useState<string | null>(null);
   const [showRestoreHint, setShowRestoreHint] = useState(false);
   const [logDropHover, setLogDropHover] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -274,7 +295,24 @@ export default function ReduceLogs() {
   });
   const activityLogRef = useRef<HTMLPreElement | null>(null);
 
-  const resumeActiveSync = trpc.analysis.resumeActiveSync.useMutation();
+  const resumeActiveSync = trpc.analysis.resumeActiveSync.useMutation({
+    onSuccess: (data) => {
+      const resumed = data?.resumedJobs ?? [];
+      if (!resumed.length) {
+        return;
+      }
+      setTrackedJobIds((prev) => {
+        const seen = new Set<string>();
+        const merged: string[] = [];
+        for (const id of [...resumed, ...prev]) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          merged.push(id);
+        }
+        return merged.slice(0, MAX_TRACKED_LOTS);
+      });
+    },
+  });
 
   useEffect(() => {
     resumeActiveSync.mutate();
@@ -283,7 +321,7 @@ export default function ReduceLogs() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!readPersistedReduceLogsJobId()) return;
+    if (!readTrackedJobIds().length) return;
     try {
       if (sessionStorage.getItem(RESTORE_BANNER_SESSION_KEY) === "1") return;
     } catch {
@@ -293,20 +331,52 @@ export default function ReduceLogs() {
   }, []);
 
   useEffect(() => {
-    if (submittedJobId) {
-      writePersistedReduceLogsJobId(submittedJobId);
+    writeTrackedJobIds(trackedJobIds);
+  }, [trackedJobIds]);
+
+  useEffect(() => {
+    writeSelectedJobId(selectedJobId);
+  }, [selectedJobId]);
+
+  useEffect(() => {
+    if (!trackedJobIds.length) {
+      if (selectedJobId !== null) {
+        setSelectedJobId(null);
+      }
+      return;
     }
-  }, [submittedJobId]);
+    if (selectedJobId && trackedJobIds.includes(selectedJobId)) {
+      return;
+    }
+    setSelectedJobId(trackedJobIds[0] ?? null);
+  }, [trackedJobIds, selectedJobId]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setUiNowMs(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, []);
 
+  const jobListQuery = trpc.analysis.list.useQuery(
+    { limit: 100 },
+    { refetchInterval: 10_000, enabled: trackedJobIds.length > 0 },
+  );
+
+  const jobRowById = useMemo(() => {
+    const map = new Map<string, { sampleName: string; status: string; progress: number }>();
+    for (const row of jobListQuery.data ?? []) {
+      map.set(row.jobId, {
+        sampleName: String(row.sampleName ?? "").trim() || row.jobId,
+        status: String(row.status ?? ""),
+        progress: Number(row.progress ?? 0) || 0,
+      });
+    }
+    return map;
+  }, [jobListQuery.data]);
+
   const submittedDetailQuery = trpc.analysis.detail.useQuery(
-    { jobId: submittedJobId ?? "" },
+    { jobId: selectedJobId ?? "" },
     {
-      enabled: Boolean(submittedJobId),
+      enabled: Boolean(selectedJobId),
       refetchInterval: (query) => {
         const status = query.state.data?.job.status;
         return status === "running" || status === "queued" ? pollIntervalMs : false;
@@ -333,10 +403,10 @@ export default function ReduceLogs() {
 
   useEffect(() => {
     if (!isReduceLogsDebugEnabled()) return;
-    if (!submittedJobId) return;
+    if (!selectedJobId) return;
     if (submittedDetailQuery.isError) {
       console.warn("[ReduceLogs:detail]", "erro ao obter detalhe do job", {
-        jobId: submittedJobId,
+        jobId: selectedJobId,
         error: submittedDetailQuery.error,
       });
       return;
@@ -344,7 +414,7 @@ export default function ReduceLogs() {
     if (!uploadedDetail) return;
     const newest = uploadedDetail.events[0];
     console.info("[ReduceLogs:detail:poll]", {
-      jobId: submittedJobId,
+      jobId: selectedJobId,
       responseReceivedAt: submittedDetailQuery.dataUpdatedAt
         ? new Date(submittedDetailQuery.dataUpdatedAt).toISOString()
         : null,
@@ -372,7 +442,7 @@ export default function ReduceLogs() {
       })),
     });
   }, [
-    submittedJobId,
+    selectedJobId,
     uploadedDetail,
     submittedDetailQuery.dataUpdatedAt,
     submittedDetailQuery.fetchStatus,
@@ -381,13 +451,20 @@ export default function ReduceLogs() {
     submittedDetailQuery.error,
   ]);
 
+  const includeSubmittedFilesInMerge = Boolean(
+    uploadSessionJobId && selectedJobId && uploadSessionJobId === selectedJobId,
+  );
+
   const monitoredFiles = useMemo(
-    () => buildMonitoredFiles(submittedFiles, uploadedDetail?.fileMetrics ?? []),
-    [submittedFiles, uploadedDetail],
+    () => buildMonitoredFiles(
+      includeSubmittedFilesInMerge ? submittedFiles : [],
+      uploadedDetail?.fileMetrics ?? [],
+    ),
+    [includeSubmittedFilesInMerge, submittedFiles, uploadedDetail],
   );
 
   const monitorDetailLoading = Boolean(
-    submittedJobId &&
+    selectedJobId &&
     !monitoredFiles.length &&
     submittedDetailQuery.isLoading &&
     !submittedDetailQuery.isError,
@@ -590,7 +667,7 @@ export default function ReduceLogs() {
     const jobDisplayName = uploadedDetail?.job.sampleName?.trim() || analysisName.trim() || "—";
     try {
       downloadReduceLogsExcelWorkbook({
-        jobId: submittedJobId,
+        jobId: selectedJobId,
         jobDisplayName,
         files: monitoredFiles,
         fileExtra,
@@ -601,19 +678,52 @@ export default function ReduceLogs() {
     }
   }
 
-  function dismissTrackedJob() {
-    clearPersistedReduceLogsJobId();
-    setSubmittedJobId(null);
+  function registerNewJobInPanel(jobId: string) {
+    setTrackedJobIds((prev) => nextTrackedAfterPrepend(jobId, prev));
+    setSelectedJobId(jobId);
+    setUploadSessionJobId(jobId);
+    void utils.analysis.list.invalidate();
+  }
+
+  function removeLotFromPanel(jobId: string) {
+    setTrackedJobIds((prev) => prev.filter((x) => x !== jobId));
+    if (uploadSessionJobId === jobId) {
+      setUploadSessionJobId(null);
+    }
+    if (showRestoreHint) {
+      setShowRestoreHint(false);
+    }
+    try {
+      sessionStorage.setItem(RESTORE_BANNER_SESSION_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    toast.message("Lote removido do painel local", {
+      description: "O processamento no servidor continua. Use o Centro Analítico para ver o histórico de todos os jobs.",
+    });
+  }
+
+  function dismissAllTrackedLots() {
+    setTrackedJobIds([]);
+    setSelectedJobId(null);
+    setUploadSessionJobId(null);
     setSubmittedFiles([]);
     setActiveFileTab("");
     setShowRestoreHint(false);
     try {
-      sessionStorage.removeItem(RESTORE_BANNER_SESSION_KEY);
+      sessionStorage.setItem(RESTORE_BANNER_SESSION_KEY, "1");
     } catch {
       /* ignore */
     }
-    toast.message("Acompanhamento deste lote encerrado neste navegador", {
-      description: "O job pode continuar no servidor. Para voltar a ver o painel, use o histórico de análises ou submeta o lote novamente.",
+    clearPersistedReduceLogsJobId();
+    try {
+      localStorage.removeItem("contradef_reduce_logs_tracked_job_ids_v2");
+      localStorage.removeItem("contradef_reduce_logs_selected_job_id_v2");
+    } catch {
+      /* */
+    }
+    toast.message("Todos os acompanhamentos locais foram limpos", {
+      description: "Os jobs continuam no Centro Analítico.",
     });
   }
 
@@ -673,8 +783,7 @@ export default function ReduceLogs() {
     }
 
     setIsUploading(true);
-    clearPersistedReduceLogsJobId();
-    setSubmittedJobId(null);
+    setUploadSessionJobId(null);
 
     const initialBatch = buildInitialSubmittedFiles(selectedFiles);
     setSubmittedFiles(initialBatch);
@@ -708,7 +817,7 @@ export default function ReduceLogs() {
         setSelectedFiles([]);
 
         if (legacyJobId) {
-          setSubmittedJobId(legacyJobId);
+          registerNewJobInPanel(legacyJobId);
           await utils.analysis.detail.invalidate({ jobId: legacyJobId });
         }
 
@@ -746,7 +855,7 @@ export default function ReduceLogs() {
         setSelectedFiles([]);
 
         if (legacyJobId) {
-          setSubmittedJobId(legacyJobId);
+          registerNewJobInPanel(legacyJobId);
           await utils.analysis.detail.invalidate({ jobId: legacyJobId });
         }
 
@@ -856,7 +965,7 @@ export default function ReduceLogs() {
       setSelectedFiles([]);
 
       if (jobId) {
-        setSubmittedJobId(jobId);
+        registerNewJobInPanel(jobId);
         await utils.analysis.detail.invalidate({ jobId });
       }
     } catch (error) {
@@ -908,7 +1017,9 @@ export default function ReduceLogs() {
                   </div>
                 </div>
                 <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">
-                  {submittedJobId ? `Job atual: ${submittedJobId}` : "Nenhum lote ativo nesta sessão"}
+                  {trackedJobIds.length
+                    ? `${trackedJobIds.length} lote(s) a acompanhar nesta sessão`
+                    : "Nenhum lote na lista local"}
                 </Badge>
               </div>
             </CardHeader>
@@ -1055,11 +1166,15 @@ export default function ReduceLogs() {
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Monitoramento do lote atual</CardTitle>
+                  <CardTitle>Monitoramento dos lotes (esta sessão)</CardTitle>
                   <CardDescription>
-                    Visão única do lote atual: status geral, leitura consolidada e acompanhamento por arquivo.
+                    Pode manter <strong>vários jobs</strong> abertos: cada novo envio acrescenta à lista; escolha o lote a seguir. O{" "}
+                    <Link className="font-medium text-cyan-600 underline-offset-2 hover:underline dark:text-cyan-300" href="/">
+                      Centro Analítico
+                    </Link>{" "}
+                    mostra todo o histórico no servidor.
                   </CardDescription>
-                  {submittedJobId ? (
+                  {selectedJobId ? (
                     <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">
                       <span className="text-muted-foreground">
                         {!submittedDetailQuery.dataUpdatedAt && submittedDetailQuery.isFetching
@@ -1092,30 +1207,95 @@ export default function ReduceLogs() {
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {submittedJobId ? (
+                  {selectedJobId ? (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="border-border bg-transparent text-foreground hover:bg-muted dark:border-white/15 dark:hover:bg-white/10"
-                      onClick={dismissTrackedJob}
+                      onClick={() => {
+                        if (selectedJobId) {
+                          removeLotFromPanel(selectedJobId);
+                        }
+                      }}
                     >
-                      Encerrar acompanhamento
+                      Remover lote selecionado
+                    </Button>
+                  ) : null}
+                  {trackedJobIds.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={dismissAllTrackedLots}
+                    >
+                      Limpar lista local
                     </Button>
                   ) : null}
                   <Badge className="border-emerald-500/35 bg-emerald-500/15 text-emerald-900 dark:border-emerald-400/25 dark:text-emerald-300">
-                    {submittedJobId ? `job ${submittedJobId}` : "aguardando lote"}
+                    {selectedJobId ? `A ver: ${selectedJobId}` : "escolher lote abaixo"}
                   </Badge>
-                  <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">autoatualização 2s</Badge>
+                  <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">
+                    detalhe {pollIntervalMs / 1000}s · lista 10s
+                  </Badge>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              {showRestoreHint && submittedJobId ? (
+              {trackedJobIds.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">Lotes a acompanhar (clique para expandir o painel)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {trackedJobIds.map((lotId) => {
+                      const row = jobRowById.get(lotId);
+                      const isSel = lotId === selectedJobId;
+                      return (
+                        <div
+                          key={lotId}
+                          className={`flex max-w-full flex-wrap items-center gap-1 rounded-xl border px-2.5 py-1.5 text-left text-xs transition-colors ${
+                            isSel
+                              ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-50 dark:border-cyan-400/50"
+                              : "border-border bg-muted/50 text-foreground dark:border-white/10 dark:bg-slate-950/80"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            className="min-w-0 text-left font-medium"
+                            onClick={() => {
+                              setSelectedJobId(lotId);
+                            }}
+                          >
+                            <span className="block truncate font-mono text-[10px] opacity-80">{lotId}</span>
+                            <span className="block truncate">{row?.sampleName ?? "…"}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {row ? `${getStatusLabel(row.status)} · ${row.progress}%` : "a carregar…"}
+                            </span>
+                          </button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-1.5 text-[10px] text-muted-foreground"
+                            onClick={() => {
+                              removeLotFromPanel(lotId);
+                            }}
+                            aria-label={`Remover ${lotId} da lista`}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              {showRestoreHint && trackedJobIds.length > 0 ? (
                 <div className="flex flex-col gap-3 rounded-2xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-950 dark:border-cyan-400/25 dark:text-cyan-50 sm:flex-row sm:items-center sm:justify-between">
                   <p className="leading-relaxed">
-                    <span className="font-medium text-cyan-900 dark:text-cyan-100">Último job retomado neste navegador.</span>{" "}
-                    O identificador <span className="font-mono text-xs text-cyan-800 dark:text-cyan-200/90">{submittedJobId}</span> fica guardado até encerrar o acompanhamento ou iniciar um novo envio.
+                    <span className="font-medium text-cyan-900 dark:text-cyan-100">Há {trackedJobIds.length} lote(s) guardado(s) neste navegador.</span>{" "}
+                    A lista fica no painel acima; não perde o anterior quando submete outro.{" "}
+                    <Link className="font-medium text-cyan-800 underline underline-offset-2 dark:text-cyan-200" href="/">Ver tudo no Centro Analítico</Link>
                   </p>
                   <Button
                     type="button"
@@ -1141,7 +1321,7 @@ export default function ReduceLogs() {
                   <button
                     type="button"
                     className="font-medium text-rose-800 underline underline-offset-2 hover:text-rose-950 dark:text-rose-50 dark:hover:text-white"
-                    onClick={dismissTrackedJob}
+                    onClick={dismissAllTrackedLots}
                   >
                     Limpar e preparar novo lote
                   </button>
@@ -1415,7 +1595,7 @@ export default function ReduceLogs() {
                             const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
 
                             return (
-                              <TableRow key={`${submittedJobId ?? "lote"}-${file.fileName}`} className={processingVisual.row}>
+                              <TableRow key={`${selectedJobId ?? "lote"}-${file.fileName}`} className={processingVisual.row}>
                                 <TableCell className="sticky left-0 z-10 bg-muted font-medium text-foreground dark:bg-slate-950">{file.fileName}</TableCell>
                                 <TableCell className="min-w-44">
                                   <div className="space-y-2">
@@ -1478,7 +1658,7 @@ export default function ReduceLogs() {
                         const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
                         const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
                         return (
-                          <div key={`mobile-${submittedJobId ?? "lote"}-${file.fileName}`} className={`rounded-xl border border-border bg-muted/70 dark:border-white/10 dark:bg-slate-950/60 p-3 ${processingVisual.row}`}>
+                          <div key={`mobile-${selectedJobId ?? "lote"}-${file.fileName}`} className={`rounded-xl border border-border bg-muted/70 dark:border-white/10 dark:bg-slate-950/60 p-3 ${processingVisual.row}`}>
                             <p className="text-sm font-medium text-foreground">{file.fileName}</p>
                             <p className="mt-1 text-xs text-muted-foreground">{file.currentStage} · {file.currentStep}</p>
                             <div className="mt-3 space-y-2 text-xs text-muted-foreground">

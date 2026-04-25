@@ -71,7 +71,15 @@ export const analysisRouter = router({
   }),
 
   resumeActiveSync: protectedProcedure.mutation(async () => {
-    const resumedJobs = await syncActiveAnalysisJobs();
-    return { resumedJobs };
+    try {
+      const resumedJobs = await syncActiveAnalysisJobs();
+      return { resumedJobs };
+    } catch (error) {
+      // Best-effort: a falha em listar jobs ativos não deve derrubar a página Reduzir logs
+      // (a sessão local continua a rastrear lotes; ver reduceLogsSession v2 no cliente).
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[analysis.resumeActiveSync] listagem de jobs ativos falhou:", message);
+      return { resumedJobs: [] as string[] };
+    }
   }),
 });
