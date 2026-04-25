@@ -48,7 +48,7 @@ export default function FlowJourneyDiagram({
   }
 
   return (
-    <div className="overflow-x-auto pb-2">
+    <div className="w-full min-w-0 max-w-full overflow-x-auto pb-2">
       <div className="flex min-w-max items-stretch gap-3">
         {phases.map((entry, index) => (
           <div key={entry.phase.id} className="flex items-stretch gap-3">

@@ -24,21 +24,6 @@ export function MitreDefenseEvasionPanel({ mitre, heuristicTags }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-foreground">MITRE ATT&CK — evasão de defesas</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            A <span className="text-foreground">categoria da amostra</span> (Trojan, Backdoor, etc.) descreve o{" "}
-            <em>tipo</em> de ameaça. A tabela abaixo lista apenas comportamentos dos logs que mapeiam para a tática{" "}
-            <a
-              href={mitre.tacticUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-cyan-700 underline decoration-cyan-500/40 underline-offset-2 hover:text-cyan-900 dark:text-cyan-300 dark:hover:text-cyan-200"
-            >
-              {mitre.tacticId} — {mitre.tacticName}
-            </a>{" "}
-            (Defense Evasion, matriz Enterprise —{" "}
-            <span className="text-foreground">{mitre.tacticTechniqueCount} técnicas</span> nesta tática), listando{" "}
-            <span className="text-foreground">técnicas e sub-técnicas</span> quando os logs permitem refinamento (IDs oficiais ATT&CK).
-          </p>
         </div>
         <a
           href={mitre.tacticUrl}

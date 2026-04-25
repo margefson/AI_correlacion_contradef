@@ -17,6 +17,7 @@ const mockState = vi.hoisted(() => ({
 
 vi.mock("@/components/DashboardLayout", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="dashboard-layout">{children}</div>,
+  useDashboardShell: () => ({ sidebarCollapsed: false }),
 }));
 
 vi.mock("@/components/ui/tabs", () => ({

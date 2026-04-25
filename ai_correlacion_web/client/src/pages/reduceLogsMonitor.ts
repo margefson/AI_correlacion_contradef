@@ -52,7 +52,7 @@ export type FileMonitor = {
   uploadReused: boolean;
 };
 
-function isArchiveContainerFile(fileName: string) {
+export function isArchiveContainerFile(fileName: string) {
   const lowered = fileName.toLowerCase();
   return lowered.endsWith(".7z") || lowered.endsWith(".zip") || lowered.endsWith(".rar");
 }
@@ -137,16 +137,15 @@ export function getFileRecommendation(file: FileMonitor) {
 }
 
 export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], detailFiles: DetailFileMonitor[]) {
-  const detailNames = new Set(detailFiles.map((file) => file.fileName));
-  const normalizedSubmitted = detailFiles.length
-    ? submittedFiles.filter((file) => !isArchiveContainerFile(file.fileName) || detailNames.has(file.fileName))
-    : submittedFiles;
+  /** A grelha de acompanhamento é só para logs; nunca listar o .7z/.zip/.rar (após extração, as linhas vêm do detalhe do servidor). */
+  const detailRows = detailFiles.filter((file) => !isArchiveContainerFile(file.fileName));
+  const normalizedSubmitted = submittedFiles.filter((file) => !isArchiveContainerFile(file.fileName));
 
-  const detailMap = new Map(detailFiles.map((file) => [file.fileName, file]));
+  const detailMap = new Map(detailRows.map((file) => [file.fileName, file]));
   const localMap = new Map(normalizedSubmitted.map((file) => [file.fileName, file]));
   const allNames = Array.from(new Set([
     ...normalizedSubmitted.map((file) => file.fileName),
-    ...detailFiles.map((file) => file.fileName),
+    ...detailRows.map((file) => file.fileName),
   ]));
 
   return allNames.map((fileName) => {

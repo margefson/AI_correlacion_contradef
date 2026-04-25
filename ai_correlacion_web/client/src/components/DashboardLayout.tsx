@@ -24,14 +24,16 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { APP_NAME, appDocumentTitle } from "@/lib/brand";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { FileArchive, LayoutDashboard, LogOut } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { BrainCircuit, FileArchive, LayoutDashboard, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { createContext, CSSProperties, useContext, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Centro Analítico", path: "/" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: BrainCircuit, label: "Interpretação Consolidada", path: "/interpretacao-consolidada" },
   { icon: FileArchive, label: "Reduzir Logs", path: "/reduce-logs" },
 ];
 
@@ -39,6 +41,18 @@ const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
+
+type DashboardShellValue = {
+  /** Menu lateral em modo recolhido (offcanvas): mais largura útil para gráficos e tabelas. */
+  sidebarCollapsed: boolean;
+};
+
+const DashboardShellContext = createContext<DashboardShellValue>({ sidebarCollapsed: false });
+
+/** Só fiável em componentes renderizados *como filhos* de `<DashboardLayout>` (não no mesmo ficheiro que o envolve por fora). */
+export function useDashboardShell() {
+  return useContext(DashboardShellContext);
+}
 
 export default function DashboardLayout({
   children,
@@ -160,6 +174,7 @@ function DashboardLayoutContent({
   }, [isResizing, setSidebarWidth]);
 
   return (
+    <DashboardShellContext.Provider value={{ sidebarCollapsed: isCollapsed }}>
     <>
       <div className="relative" ref={sidebarRef}>
         <Sidebar
@@ -255,8 +270,13 @@ function DashboardLayoutContent({
         />
       </div>
 
-      <SidebarInset className="min-h-svh">
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background/90 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur md:px-4">
+      <SidebarInset className="min-h-svh min-w-0 overflow-x-hidden">
+        <header
+          className={cn(
+            "sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur",
+            isCollapsed ? "px-2 sm:px-3" : "px-3 md:px-4",
+          )}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <SidebarTrigger
               className="h-9 w-9 shrink-0"
@@ -267,14 +287,32 @@ function DashboardLayoutContent({
                 {activeMenuItem?.label ?? APP_NAME}
               </p>
               {!isMobile ? (
-                <p className="truncate text-xs text-muted-foreground">Área principal · mais espaço com o menu recolhido</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {isCollapsed ? "Menu recolhido — área principal alargada" : "Área principal · recolha o menu para mais espaço (ex.: grafo)"}
+                </p>
               ) : null}
             </div>
           </div>
           <ThemeToggle />
         </header>
-        <div className="flex-1 overflow-auto p-4">{children}</div>
+        <div
+          className={cn(
+            "min-h-0 min-w-0 flex-1 overflow-auto transition-[padding] duration-200",
+            /* Menu recolhido: sem padding horizontal — aproveita toda a largura (gráficos, tabelas). */
+            isCollapsed ? "px-0 py-2 md:py-3" : "p-4",
+          )}
+        >
+          <div
+            className={cn(
+              "w-full min-w-0",
+              isCollapsed ? "max-w-none" : "mx-auto max-w-[1680px]",
+            )}
+          >
+            {children}
+          </div>
+        </div>
       </SidebarInset>
     </>
+    </DashboardShellContext.Provider>
   );
 }

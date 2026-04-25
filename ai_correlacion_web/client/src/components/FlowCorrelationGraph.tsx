@@ -120,10 +120,13 @@ export default function FlowCorrelationGraph({
   graph,
   selectedNodeId,
   onSelectNode,
+  expandedHeight = false,
 }: {
   graph: FlowGraph;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
+  /** Área mais alta quando o menu está recolhido (melhor uso do ecrã). */
+  expandedHeight?: boolean;
 }) {
   const { rfNodes, rfEdges } = useMemo(() => layoutWithDagre(graph.nodes, graph.edges), [graph.nodes, graph.edges]);
 
@@ -143,10 +146,16 @@ export default function FlowCorrelationGraph({
     return <p className="text-sm text-muted-foreground">Fluxo ainda vazio; aguarde a conclusão da correlação.</p>;
   }
 
+  const boxHeight = expandedHeight
+    ? "h-[min(680px,78vh)] min-h-[420px] lg:min-h-[480px]"
+    : "h-[min(520px,65vh)] min-h-[360px]";
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-full min-w-0 max-w-full flex-col gap-2">
       <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Visão em grafo (arraste para mover; use os controlos para zoom)</p>
-      <div className="h-[min(520px,65vh)] min-h-[360px] w-full overflow-hidden rounded-2xl border border-border bg-muted dark:border-white/10 dark:bg-slate-950">
+      <div
+        className={`${boxHeight} w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-muted dark:border-white/10 dark:bg-slate-950`}
+      >
         <ReactFlow
           nodes={nodesForView}
           edges={rfEdges}
@@ -160,7 +169,7 @@ export default function FlowCorrelationGraph({
           nodesDraggable
           nodesConnectable={false}
           elementsSelectable
-          className="bg-muted dark:bg-slate-950"
+          className="max-w-full bg-muted dark:bg-slate-950"
         >
           <Background gap={16} size={1} className="dark:[&>*]:!stroke-slate-600" color="rgba(100,116,139,0.2)" />
           <Controls className="!border-border !bg-background/95 !shadow-sm dark:!border-white/15 dark:!bg-slate-900/95 [&_button]:!border-border [&_button]:!bg-muted [&_button]:hover:!bg-accent dark:[&_button]:!border-white/10 dark:[&_button]:!bg-slate-800 dark:[&_button]:hover:!bg-slate-700" />

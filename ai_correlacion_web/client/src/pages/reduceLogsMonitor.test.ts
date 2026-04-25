@@ -125,6 +125,19 @@ describe("reduceLogsMonitor", () => {
     expect(pathRow.uploadStatus).toBe("uploading");
   });
 
+  it("não lista o ficheiro .7z na grelha enquanto o servidor ainda não devolveu os logs extraídos", () => {
+    const submittedFiles: SubmittedFileMonitor[] = [
+      {
+        fileName: "Full-Execution-Sample-1.7z",
+        logType: "Unknown",
+        sizeBytes: 38 * 1024 * 1024,
+        uploadProgress: 50,
+        uploadStatus: "uploading",
+      },
+    ];
+    expect(buildMonitoredFiles(submittedFiles, [])).toHaveLength(0);
+  });
+
   it("oculta o contêiner .7z quando o backend já retornou logs extraídos", () => {
     const submittedFiles: SubmittedFileMonitor[] = [
       {

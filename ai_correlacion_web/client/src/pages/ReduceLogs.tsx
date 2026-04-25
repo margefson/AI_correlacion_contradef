@@ -12,7 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { jobStatusBadgeClass } from "@/lib/analysisUi";
 import { formatBytes, formatDateTimeLocale, formatPercentFine, formatPercentRounded } from "@/lib/format";
 import { isReduceLogsDebugEnabled } from "@/lib/reduceLogsDebug";
@@ -41,6 +40,7 @@ import {
   getFileInterpretation,
   getFileRecommendation,
   inferLogType,
+  isArchiveContainerFile,
   type FileMonitor,
   type ProcessingStatus,
   type SubmittedFileMonitor,
@@ -65,6 +65,14 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 
 /** Lote “virtual” antes do servidor devolver o `jobId` (ctr-…), para acompanhar o envio ficheiro a ficheiro. */
+/** 10 colunas: `table-fixed` + colgroup desalinhava; grid com `minmax(0,1fr)` alinha cabeçalho e células. */
+const FILE_TRACKING_GRID_10 =
+  "grid w-full min-w-0 [grid-template-columns:repeat(10,minmax(0,1fr))] gap-0 text-xs [word-break:break-word]";
+const fileTrackTh =
+  "text-left min-w-0 border-r border-border/70 bg-muted/50 px-1.5 py-1.5 align-top text-[11px] font-medium leading-tight [overflow-wrap:anywhere] first:bg-muted first:dark:bg-slate-950 last:border-r-0 dark:border-white/10";
+const fileTrackTd =
+  "text-left min-w-0 border-r border-border/70 px-1.5 py-1.5 align-top [overflow-wrap:anywhere] first:bg-muted first:font-medium first:text-foreground first:dark:bg-slate-950 last:border-r-0 dark:border-white/10";
+
 const LOCAL_UPLOAD_LOT_ID = "__local-uploading__" as const;
 
 /** Ficheiros muito grandes podem demorar minutos entre eventos de ficheiro; evita falso “travado” na UI. */
@@ -75,6 +83,10 @@ const STALE_SIZE_THRESHOLD_BYTES = 100 * 1024 * 1024;
 function fileNameBase(fileName: string) {
   const parts = fileName.split(/[/\\]/);
   return parts.at(-1) ?? fileName;
+}
+
+function buildReducedLogDownloadUrl(jobId: string, fileName: string) {
+  return `/api/analysis-artifacts/reduced-log-by-file?${new URLSearchParams({ jobId, fileName }).toString()}`;
 }
 
 function staleThresholdMsForFile(file: FileMonitor) {
@@ -135,6 +147,43 @@ function getProcessingStatusVisual(status?: string | null) {
   return {
     badge: "border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5",
     row: "",
+    label: "text-muted-foreground",
+    progressTone: "cyan" as const,
+  };
+}
+
+/** Mesma paleta/estrutura que `getProcessingStatusVisual`, para a coluna Upload alinhar com Processamento. */
+function getUploadStatusVisual(status?: string | null) {
+  if (status === "completed") {
+    return {
+      badge: "border-emerald-400/30 bg-emerald-500/15 text-emerald-200",
+      label: "text-emerald-200",
+      progressTone: "emerald" as const,
+    };
+  }
+  if (status === "running") {
+    return {
+      badge: "border-cyan-400/35 bg-cyan-500/15 text-cyan-200",
+      label: "text-cyan-200",
+      progressTone: "cyan" as const,
+    };
+  }
+  if (status === "queued" || status === "uploading") {
+    return {
+      badge: "border-amber-400/35 bg-amber-500/15 text-amber-200",
+      label: "text-amber-200",
+      progressTone: "amber" as const,
+    };
+  }
+  if (status === "failed") {
+    return {
+      badge: "border-rose-400/35 bg-rose-500/15 text-rose-200",
+      label: "text-rose-200",
+      progressTone: "rose" as const,
+    };
+  }
+  return {
+    badge: "border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5",
     label: "text-muted-foreground",
     progressTone: "cyan" as const,
   };
@@ -300,8 +349,6 @@ export default function ReduceLogs() {
   const utils = trpc.useUtils();
   const logFilesInputRef = useRef<HTMLInputElement>(null);
   const [analysisName, setAnalysisName] = useState(ANALYSIS_NAME_PREFIX);
-  const [focusTerms, setFocusTerms] = useState("VirtualProtect, NtQueryInformationProcess, IsDebuggerPresent, Sleep");
-  const [focusRegexes, setFocusRegexes] = useState("VirtualProtect.*RW.*RX, Nt.*QueryInformationProcess");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [trackedJobIds, setTrackedJobIds] = useState<string[]>(() => (
     typeof window !== "undefined" ? readTrackedJobIds() : []
@@ -425,6 +472,11 @@ export default function ReduceLogs() {
     return map;
   }, [jobListQuery.data]);
 
+  const selectedListRow = useMemo(
+    () => (selectedJobId && selectedJobId !== LOCAL_UPLOAD_LOT_ID ? jobRowById.get(selectedJobId) : undefined),
+    [selectedJobId, jobRowById],
+  );
+
   function canServerDeleteJob(lotId: string) {
     if (authLoading || !user) {
       return false;
@@ -533,12 +585,29 @@ export default function ReduceLogs() {
     return Math.round(submittedFiles.reduce((s, f) => s + f.uploadProgress, 0) / submittedFiles.length);
   }, [submittedFiles]);
 
+  const isOnlyArchiveSubmission = useMemo(
+    () => submittedFiles.length > 0 && submittedFiles.every((f) => isArchiveContainerFile(f.fileName)),
+    [submittedFiles],
+  );
+
   const monitoredFiles = useMemo(
     () => buildMonitoredFiles(
       includeSubmittedFilesInMerge ? submittedFiles : [],
       uploadedDetail?.fileMetrics ?? [],
     ),
     [includeSubmittedFilesInMerge, submittedFiles, uploadedDetail],
+  );
+
+  /**
+   * Mostra o painel (métricas, tabs) mesmo com 0 ficheiros quando a lista (poll) ainda conhece o job
+   * e o `detail` falhou — evita deixar só a faixa de erro a substituir todo o acompanhamento.
+   */
+  const showMainMonitoringPanel = useMemo(
+    () => Boolean(
+      monitoredFiles.length
+      || (submittedDetailQuery.isError && !isLocalUploadLotSelected && selectedJobId && selectedListRow),
+    ),
+    [monitoredFiles.length, submittedDetailQuery.isError, isLocalUploadLotSelected, selectedJobId, selectedListRow],
   );
 
   /** Primeira resposta do `detail` ainda não chegou (servidor a responder ou instância a acordar). */
@@ -808,7 +877,7 @@ export default function ReduceLogs() {
     }
     afterRemoveFromPanelState(jobId);
     toast.message("Lote retirado do painel", {
-      description: "Continua no Centro Analítico para quem o submeteu.",
+      description: "Continua no Dashboard para quem o submeteu.",
     });
   }
 
@@ -816,7 +885,7 @@ export default function ReduceLogs() {
     if (
       typeof window !== "undefined" &&
       !window.confirm(
-        "Apagar este lote no servidor? Só lhe é permitido porque o submeteu. Deixará de aparecer no Centro Analítico.",
+        "Apagar este lote no servidor? Só lhe é permitido porque o submeteu. Deixará de aparecer no Dashboard.",
       )
     ) {
       return;
@@ -830,7 +899,7 @@ export default function ReduceLogs() {
     afterRemoveFromPanelState(jobId);
     void utils.analysis.list.invalidate();
     void utils.analysis.detail.invalidate({ jobId });
-    toast.success("Lote apagado no servidor. Já não aparece no Centro Analítico.");
+    toast.success("Lote apagado no servidor. Já não aparece no Dashboard.");
   }
 
   function dismissAllTrackedLots() {
@@ -853,7 +922,7 @@ export default function ReduceLogs() {
       /* */
     }
     toast.message("Todos os acompanhamentos locais foram limpos", {
-      description: "Os jobs continuam no Centro Analítico.",
+      description: "Os jobs continuam no Dashboard.",
     });
   }
 
@@ -931,8 +1000,8 @@ export default function ReduceLogs() {
     try {
       const submissionInput = {
         analysisName: analysisName.trim(),
-        focusTerms,
-        focusRegexes,
+        focusTerms: "",
+        focusRegexes: "",
         origin: window.location.origin,
       };
       setUploadPipelineStatus("A obter definições de envio (armazenamento / partes) no servidor…");
@@ -1133,7 +1202,7 @@ export default function ReduceLogs() {
         await utils.analysis.detail.invalidate({ jobId });
         await utils.analysis.list.invalidate();
       } else {
-        setUploadPipelineStatus("Upload concluído, mas o servidor não devolveu o ID do job — veja o Centro Analítico.");
+        setUploadPipelineStatus("Upload concluído, mas o servidor não devolveu o ID do job — veja o Dashboard.");
       }
     } catch (error) {
       stripLocalUploadPlaceholder();
@@ -1150,7 +1219,7 @@ export default function ReduceLogs() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto w-full max-w-[1680px] space-y-6 text-foreground">
+      <div className="w-full min-w-0 space-y-6 text-foreground">
         <section>
           <Card className="border-border bg-card text-card-foreground shadow-md dark:border-white/10 dark:bg-slate-950/80 dark:shadow-2xl dark:shadow-cyan-950/20">
             <CardHeader className="space-y-3">
@@ -1260,25 +1329,6 @@ export default function ReduceLogs() {
                 </div>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Termos prioritários</label>
-                  <Textarea
-                    value={focusTerms}
-                    onChange={(event) => setFocusTerms(event.target.value)}
-                    className="min-h-28 border-border bg-background dark:bg-slate-950/80"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Regex heurístico complementar</label>
-                  <Textarea
-                    value={focusRegexes}
-                    onChange={(event) => setFocusRegexes(event.target.value)}
-                    className="min-h-28 border-border bg-background dark:bg-slate-950/80"
-                  />
-                </div>
-              </div>
-
               {selectedFiles.length > 0 ? (
                 <div className="rounded-2xl border border-border bg-muted/40 p-4 dark:border-white/10 dark:bg-white/5">
                   <p className="text-sm font-medium text-foreground">Arquivos selecionados para a próxima execução</p>
@@ -1319,7 +1369,7 @@ export default function ReduceLogs() {
         </section>
 
         <section>
-          <Card className="border-border bg-card text-card-foreground shadow-md dark:border-emerald-400/15 dark:bg-slate-950/80 dark:shadow-xl dark:shadow-slate-950/30">
+          <Card className="min-w-0 border-border bg-card text-card-foreground shadow-md dark:border-emerald-400/15 dark:bg-slate-950/80 dark:shadow-xl dark:shadow-slate-950/30">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1343,9 +1393,9 @@ export default function ReduceLogs() {
                   {selectedJobId && !authLoading && canServerDeleteJob(selectedJobId) ? (
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="destructive"
                       size="sm"
-                      className="border-border bg-transparent text-foreground hover:bg-muted dark:border-white/15 dark:hover:bg-white/10"
+                      className="shrink-0 border-rose-600/50 bg-rose-600/90 text-white shadow-sm hover:bg-rose-600 focus-visible:ring-rose-500 dark:border-rose-500/60 dark:bg-rose-700/90 dark:hover:bg-rose-600"
                       disabled={deleteJobMutation.isPending}
                       onClick={() => {
                         if (selectedJobId) {
@@ -1361,7 +1411,7 @@ export default function ReduceLogs() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="border-border bg-transparent text-foreground hover:bg-muted dark:border-white/15 dark:hover:bg-white/10"
+                      className="shrink-0 border-amber-500/50 text-amber-900 hover:bg-amber-500/12 dark:border-amber-400/45 dark:text-amber-100 dark:hover:bg-amber-950/50"
                       onClick={() => {
                         if (selectedJobId) {
                           removeFromPanelLocalOnly(selectedJobId);
@@ -1374,9 +1424,9 @@ export default function ReduceLogs() {
                   {trackedJobIds.length > 0 ? (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-muted-foreground hover:text-foreground"
+                      className="shrink-0 border-cyan-500/45 text-cyan-900 hover:bg-cyan-500/10 dark:border-cyan-400/40 dark:text-cyan-100 dark:hover:bg-cyan-950/40"
                       disabled={isUploading}
                       onClick={dismissAllTrackedLots}
                     >
@@ -1390,13 +1440,10 @@ export default function ReduceLogs() {
                         : `A ver: ${selectedJobId}`
                       : "escolher lote abaixo"}
                   </Badge>
-                  <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">
-                    detalhe {pollIntervalMs / 1000}s · lista 10s
-                  </Badge>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="min-w-0 space-y-5">
               {uploadPipelineStatus && (
                 <div className="rounded-2xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-950 dark:border-cyan-400/30 dark:bg-cyan-950/40 dark:text-cyan-50">
                   <p className="font-medium text-cyan-900 dark:text-cyan-100">Estado do envio (servidor)</p>
@@ -1519,7 +1566,7 @@ export default function ReduceLogs() {
                   <p className="leading-relaxed">
                     <span className="font-medium text-cyan-900 dark:text-cyan-100">Há {trackedJobIds.length} lote(s) guardado(s) neste navegador.</span>{" "}
                     A lista fica no painel acima; não perde o anterior quando submete outro.{" "}
-                    <Link className="font-medium text-cyan-800 underline underline-offset-2 dark:text-cyan-200" href="/">Ver tudo no Centro Analítico</Link>
+                    <Link className="font-medium text-cyan-800 underline underline-offset-2 dark:text-cyan-200" href="/">Ver tudo no Dashboard</Link>
                   </p>
                   <Button
                     type="button"
@@ -1539,26 +1586,61 @@ export default function ReduceLogs() {
                   </Button>
                 </div>
               ) : null}
-              {submittedDetailQuery.isError ? (
+              {submittedDetailQuery.isError && selectedJobId && !isLocalUploadLotSelected ? (
                 <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 p-5 text-sm leading-6 text-rose-950 dark:border-rose-400/25 dark:text-rose-100">
-                  Não foi possível carregar este job (pode ter expirado ou o identificador deixou de ser válido).{" "}
-                  <button
-                    type="button"
-                    className="font-medium text-rose-800 underline underline-offset-2 hover:text-rose-950 dark:text-rose-50 dark:hover:text-white"
-                    onClick={dismissAllTrackedLots}
-                  >
-                    Limpar e preparar novo lote
-                  </button>
-                  .
+                  <p className="font-medium text-foreground">
+                    Não foi possível carregar o detalhe completo deste job (pode ter expirado, rede ou o identificador deixou de ser válido).
+                  </p>
+                  <p className="mt-1 text-xs text-rose-900/90 dark:text-rose-200/90">
+                    {submittedDetailQuery.error?.message
+                      ? String(submittedDetailQuery.error.message)
+                      : "Erro ao contactar o servidor."}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-rose-400/50"
+                      onClick={() => {
+                        void submittedDetailQuery.refetch();
+                      }}
+                      disabled={submittedDetailQuery.isFetching}
+                    >
+                      {submittedDetailQuery.isFetching ? "A tentar…" : "Tentar novamente"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (selectedJobId) {
+                          removeFromPanelLocalOnly(selectedJobId);
+                        }
+                      }}
+                    >
+                      Retirar este lote do painel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-rose-900 dark:text-rose-100"
+                      onClick={dismissAllTrackedLots}
+                    >
+                      Limpar lista local
+                    </Button>
+                  </div>
                 </div>
-              ) : selectedJobId
+              ) : null}
+              {selectedJobId
                 && selectedJobId !== LOCAL_UPLOAD_LOT_ID
                 && submittedDetailQuery.isSuccess
                 && !uploadedDetail
                 && !submittedDetailQuery.isFetching ? (
                 <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-5 text-sm leading-6 text-amber-950 dark:border-amber-400/30 dark:text-amber-100">
                   O servidor devolveu resposta vazia para o job <span className="font-mono">{selectedJobId}</span>. Pode não existir para esta conta, ou ainda não estar indexado.{" "}
-                  <Link className="font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-200" href="/">Abrir o Centro Analítico</Link> para confirmar.
+                  <Link className="font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-200" href="/">Abrir o Dashboard</Link> para confirmar.
                 </div>
               ) : monitorDetailLoading ? (
                 <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-cyan-500/35 bg-cyan-500/10 p-10 text-center text-sm text-muted-foreground dark:border-cyan-400/20 dark:bg-cyan-500/5">
@@ -1599,30 +1681,53 @@ export default function ReduceLogs() {
                     </div>
                   ) : null}
                 </div>
-              ) : !monitoredFiles.length ? (
-                <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/40 p-5 text-sm leading-6 text-muted-foreground dark:border-white/10 dark:bg-black/20">
-                  <p>
-                    Ainda sem lote nesta vista: escolha ficheiros acima e use <span className="font-medium text-foreground">Executar redução com upload</span>, ou
-                    {" "}
-                    <Link className="font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300" href="/">abra o Centro Analítico</Link>{" "}
-                    se o job já tiver sido criado.
-                  </p>
-                  <p className="text-xs">
-                    Se submeteu e recarregou, a lista de lotes a acompanhar vem do navegador: sem chip acima, adicione o lote a partir do Centro ou volte a enviar. Em produção, um refresh longo pode ocorrer enquanto o serviço inicia.
-                  </p>
+              ) : isUploading && isOnlyArchiveSubmission && !monitoredFiles.length ? (
+                <div className="rounded-2xl border border-dashed border-cyan-500/35 bg-cyan-500/5 p-5 text-sm text-muted-foreground dark:border-cyan-400/25 dark:bg-cyan-950/20">
+                  A tabela de acompanhamento lista os logs <span className="text-foreground">após a extração</span> do arquivo compactado no servidor (não o .7z em si).
                 </div>
+              ) : !showMainMonitoringPanel ? (
+                submittedDetailQuery.isError && !isLocalUploadLotSelected && selectedJobId && !selectedListRow ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-rose-400/30 bg-rose-500/5 p-8 text-center text-sm text-muted-foreground dark:border-rose-400/20 dark:bg-rose-950/20">
+                    <p className="text-foreground">A aguardar a linha deste lote na lista (actualização ~10 s)…</p>
+                    <p className="max-w-md text-xs">
+                      O detalhe do job falhou; se o chip acima mostrar o ID, tente <span className="text-foreground">Tentar novamente</span> no aviso. Se a lista ainda não mostrar o lote, abra o Dashboard.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/40 p-5 text-sm leading-6 text-muted-foreground dark:border-white/10 dark:bg-black/20">
+                    <p>
+                      Ainda sem lote nesta vista: escolha ficheiros acima e use <span className="font-medium text-foreground">Executar redução com upload</span>, ou
+                      {" "}
+                      <Link className="font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300" href="/">abra o Dashboard</Link>{" "}
+                      se o job já tiver sido criado.
+                    </p>
+                    <p className="text-xs">
+                      Se submeteu e recarregou, a lista de lotes a acompanhar vem do navegador: sem chip acima, adicione o lote a partir do Centro ou volte a enviar. Em produção, um refresh longo pode ocorrer enquanto o serviço inicia.
+                    </p>
+                  </div>
+                )
               ) : (
                 <>
                   <div className="grid gap-4 md:grid-cols-4">
                     <MetricCard
                       icon={RefreshCw}
                       label="Status do lote"
-                      value={uploadedDetail ? getStatusLabel(uploadedDetail.job.status) : isUploading ? "A enviar" : "Em preparação"}
+                      value={uploadedDetail
+                        ? getStatusLabel(uploadedDetail.job.status)
+                        : isUploading
+                          ? "A enviar"
+                          : selectedListRow
+                            ? getStatusLabel(selectedListRow.status)
+                            : "Em preparação"}
                       helper={uploadedDetail
                         ? `${uploadedDetail.job.progress}% · ${uploadedDetail.job.stage}${staleRunningFiles.length ? ` · ${staleRunningFiles.length} arquivo(s) sem atualização recente` : ""}`
                         : isLocalUploadLotSelected
                           ? `Envio em curso · ~${localUploadAverageProgress}% (média) · ainda sem job no servidor`
-                          : `${monitoredFiles.length} arquivo(s) no lote atual`}
+                          : selectedListRow
+                            ? submittedDetailQuery.isError
+                              ? `${selectedListRow.progress}% (lista) — detalhe do job indisponível; use «Tentar novamente» se necessário.`
+                              : `${selectedListRow.progress}% (lista) · ${monitoredFiles.length} arquivo(s) no lote`
+                            : `${monitoredFiles.length} arquivo(s) no lote atual`}
                     />
                     <MetricCard
                       icon={Database}
@@ -1692,7 +1797,7 @@ export default function ReduceLogs() {
                     </div>
                   ) : null}
 
-                  <Tabs defaultValue="overview" className="space-y-5">
+                  <Tabs defaultValue="overview" className="min-w-0 space-y-5">
                     <div className="space-y-2">
                       <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Área do lote</p>
                       <TabsList className="flex h-auto w-full flex-wrap justify-stretch gap-1.5 rounded-2xl border border-cyan-500/35 bg-muted p-1.5 shadow-inner dark:border-cyan-500/25 dark:bg-slate-950/90 dark:shadow-black/40 md:inline-flex md:w-full md:min-w-0">
@@ -1720,7 +1825,7 @@ export default function ReduceLogs() {
                       </TabsList>
                     </div>
 
-                    <TabsContent value="overview" className="space-y-4">
+                    <TabsContent value="overview" className="min-w-0 space-y-4">
 
                   {showsLocalStorageModeBadge ? (
                     <div className="rounded-2xl border border-amber-400/35 bg-amber-500/10 p-4 text-sm leading-6 text-amber-950 dark:border-amber-400/25 dark:text-amber-100">
@@ -1730,12 +1835,15 @@ export default function ReduceLogs() {
 
                     </TabsContent>
 
-                    <TabsContent value="files" className="space-y-4">
+                    <TabsContent value="files" className="min-w-0 space-y-4">
 
-                  <div className="rounded-2xl border border-border bg-muted/50 dark:border-white/10 dark:bg-black/20 p-4">
+                  <div className="w-full min-w-0 max-w-full rounded-2xl border border-border bg-muted/50 p-4 dark:border-white/10 dark:bg-black/20">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-foreground">Acompanhamento por arquivo</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Concluído: descarregar o texto reduzido (linhas mantidas) para comparar com o original.
+                        </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -1822,82 +1930,108 @@ export default function ReduceLogs() {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 hidden overflow-hidden rounded-xl border border-border md:block dark:border-white/10">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="sticky left-0 z-10 bg-muted dark:bg-slate-950">Arquivo</TableHead>
-                            <TableHead>Upload</TableHead>
-                            <TableHead>Processamento</TableHead>
-                            <TableHead>Etapa atual</TableHead>
-                            <TableHead>Tamanho antes</TableHead>
-                            <TableHead>Tamanho depois</TableHead>
-                            <TableHead>Redução</TableHead>
-                            <TableHead>Sinais críticos</TableHead>
-                            <TableHead>Semáforo</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {visibleMonitoredFiles.map((file) => {
-                            const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
-                            const uploadTone = file.uploadStatus === "failed" ? "rose" : file.uploadStatus === "completed" || file.uploadStatus === "running" ? "emerald" : "cyan";
-                            const processingVisual = getProcessingStatusVisual(file.processingStatus);
-                            const lastEventAt = fileLastEventAtMap.get(file.fileName);
-                            const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
-                            const stageSince = fileCurrentStageSinceMap.get(file.fileName);
-                            const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
-                            const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
+                    <div className="mt-4 hidden w-full min-w-0 max-w-full overflow-x-hidden rounded-xl border border-border md:block dark:border-white/10">
+                      <div className={`${FILE_TRACKING_GRID_10} border-b-2 border-border`}>
+                        <div className={fileTrackTh}>Arquivo</div>
+                        <div className={fileTrackTh}>Upload</div>
+                        <div className={fileTrackTh}>Processamento</div>
+                        <div className={fileTrackTh}>Etapa atual</div>
+                        <div className={`${fileTrackTh} tabular-nums`}>Antes</div>
+                        <div className={`${fileTrackTh} tabular-nums`}>Depois</div>
+                        <div className={`${fileTrackTh} tabular-nums`}>Reduzido</div>
+                        <div className={fileTrackTh}>Sinais</div>
+                        <div className={fileTrackTh} title="Indicador heurístico (preservado / rotina / …)">Semáforo</div>
+                        <div className={fileTrackTh} title="Descarregar log reduzido (.txt)">Download</div>
+                      </div>
+                      {visibleMonitoredFiles.map((file) => {
+                        const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
+                        const uploadVisual = getUploadStatusVisual(file.uploadStatus);
+                        const processingVisual = getProcessingStatusVisual(file.processingStatus);
+                        const lastEventAt = fileLastEventAtMap.get(file.fileName);
+                        const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
+                        const stageSince = fileCurrentStageSinceMap.get(file.fileName);
+                        const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
+                        const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
 
-                            return (
-                              <TableRow key={`${selectedJobId ?? "lote"}-${file.fileName}`} className={processingVisual.row}>
-                                <TableCell className="sticky left-0 z-10 bg-muted font-medium text-foreground dark:bg-slate-950">{file.fileName}</TableCell>
-                                <TableCell className="min-w-44">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                                      <span>{getStatusLabel(file.uploadStatus)}</span>
-                                      <span>{file.uploadProgress}%</span>
-                                    </div>
-                                    <ProgressStrip value={file.uploadProgress} tone={uploadTone} />
-                                  </div>
-                                </TableCell>
-                                <TableCell className="min-w-44">
-                                  <div className="space-y-2">
-                                    <div className={`flex items-center justify-between gap-2 text-xs ${processingVisual.label}`}>
-                                      <span className="flex items-center gap-2">
-                                        <Badge className={processingVisual.badge}>{getStatusLabel(file.processingStatus)}</Badge>
-                                        {isPossiblyStalled ? <span className="text-amber-200">sem atualização recente</span> : null}
-                                      </span>
-                                      <span>{formatFileProcessingPercent(file.processingProgress)}</span>
-                                    </div>
-                                    <ProgressStrip
-                                      value={file.processingProgress ?? 0}
-                                      indeterminate={file.processingProgress == null && file.processingStatus === "running"}
-                                      tone={processingVisual.progressTone}
-                                    />
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div>
-                                    <p className="font-medium text-foreground">{file.currentStage}</p>
-                                    <p className="text-xs text-muted-foreground">{file.currentStep}</p>
-                                    <p className="text-xs text-muted-foreground">{formatLastActivityLabel(lastEventAt)}</p>
-                                    {stageSince ? (
-                                      <p className={`text-xs ${isStageLong ? "text-amber-200" : "text-muted-foreground"}`}>
-                                        Na etapa atual há {formatElapsedMs(stageElapsedMs)}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                                <TableCell>{formatBytes(file.originalBytes)}</TableCell>
-                                <TableCell>{formatBytes(file.reducedBytes)}</TableCell>
-                                <TableCell>{formatPercentFine(reduction)}</TableCell>
-                                <TableCell>{`${file.suspiciousEventCount} eventos / ${file.triggerCount} gatilhos`}</TableCell>
-                                <TableCell className={getSemaforoTone(file)}>{getSemaforo(file)}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
+                        const canDownloadReduced =
+                          Boolean(selectedJobId)
+                          && selectedJobId !== LOCAL_UPLOAD_LOT_ID
+                          && file.processingStatus === "completed"
+                          && file.reducedLineCount > 0;
+
+                        return (
+                          <div
+                            key={`${selectedJobId ?? "lote"}-${file.fileName}`}
+                            className={`${FILE_TRACKING_GRID_10} border-b border-border [align-items:start] ${processingVisual.row}`}
+                          >
+                            <div className={fileTrackTd} title={file.fileName}>
+                              {file.fileName}
+                            </div>
+                            <div className={fileTrackTd}>
+                              <div className="space-y-2">
+                                <div className={`flex min-w-0 flex-wrap items-center justify-between gap-x-1 gap-y-0.5 text-xs ${uploadVisual.label}`}>
+                                  <span className="flex min-w-0 flex-wrap items-center gap-1">
+                                    <Badge className={`max-w-full shrink ${uploadVisual.badge}`}>{getStatusLabel(file.uploadStatus)}</Badge>
+                                  </span>
+                                  <span className="shrink-0">{file.uploadProgress}%</span>
+                                </div>
+                                <ProgressStrip value={file.uploadProgress} tone={uploadVisual.progressTone} />
+                              </div>
+                            </div>
+                            <div className={fileTrackTd}>
+                              <div className="space-y-2">
+                                <div className={`flex min-w-0 flex-wrap items-center justify-between gap-x-1 gap-y-0.5 text-xs ${processingVisual.label}`}>
+                                  <span className="flex min-w-0 flex-wrap items-center gap-1">
+                                    <Badge className={`max-w-full shrink ${processingVisual.badge}`}>{getStatusLabel(file.processingStatus)}</Badge>
+                                    {isPossiblyStalled ? <span className="text-[10px] text-amber-200">sem act.</span> : null}
+                                  </span>
+                                  <span className="shrink-0">{formatFileProcessingPercent(file.processingProgress)}</span>
+                                </div>
+                                <ProgressStrip
+                                  value={file.processingProgress ?? 0}
+                                  indeterminate={file.processingProgress == null && file.processingStatus === "running"}
+                                  tone={processingVisual.progressTone}
+                                />
+                              </div>
+                            </div>
+                            <div className={fileTrackTd}>
+                              <div className="w-full min-w-0 pr-0.5">
+                                <p className="font-medium leading-snug text-foreground">{file.currentStage}</p>
+                                <p className="text-[11px] text-muted-foreground leading-snug">{file.currentStep}</p>
+                                <p className="text-[11px] text-muted-foreground leading-snug">{formatLastActivityLabel(lastEventAt)}</p>
+                                {stageSince ? (
+                                  <p className={`text-[11px] leading-snug ${isStageLong ? "text-amber-200" : "text-muted-foreground"}`}>
+                                    Na etapa há {formatElapsedMs(stageElapsedMs)}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatBytes(file.originalBytes)}</div>
+                            <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatBytes(file.reducedBytes)}</div>
+                            <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatPercentFine(reduction)}</div>
+                            <div className={`${fileTrackTd} text-[10px] leading-tight text-muted-foreground`}>
+                              <span className="text-foreground">{file.suspiciousEventCount}</span> evt
+                              <span className="mx-0.5 text-muted-foreground/70">·</span>
+                              <span className="text-foreground">{file.triggerCount}</span> gat.
+                            </div>
+                            <div className={`${fileTrackTd} break-words text-xs [overflow-wrap:anywhere] ${getSemaforoTone(file)}`}>{getSemaforo(file)}</div>
+                            <div className={`${fileTrackTd} p-0.5`}>
+                              {canDownloadReduced && selectedJobId ? (
+                                <a
+                                  href={buildReducedLogDownloadUrl(selectedJobId, file.fileName)}
+                                  className="inline-flex justify-start rounded-md p-1.5 text-cyan-700 hover:bg-cyan-500/15 hover:underline dark:text-cyan-300"
+                                  title="Descarregar linhas reduzidas (.txt) para comparar com o ficheiro original"
+                                  aria-label={`Descarregar log reduzido: ${file.fileName}`}
+                                >
+                                  <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+                                </a>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="mt-4 space-y-3 md:hidden">
@@ -1923,6 +2057,19 @@ export default function ReduceLogs() {
                               {stageSince ? <p className={isStageLong ? "text-amber-200" : "text-muted-foreground"}>Na etapa atual há {formatElapsedMs(stageElapsedMs)}</p> : null}
                               <p>Redução: {formatPercentFine(reduction)} · {file.suspiciousEventCount} eventos / {file.triggerCount} gatilhos</p>
                               <p>Semáforo: <span className={getSemaforoTone(file)}>{getSemaforo(file)}</span></p>
+                              {selectedJobId
+                              && selectedJobId !== LOCAL_UPLOAD_LOT_ID
+                              && file.processingStatus === "completed"
+                              && file.reducedLineCount > 0 ? (
+                                <p className="pt-1">
+                                  <a
+                                    href={buildReducedLogDownloadUrl(selectedJobId, file.fileName)}
+                                    className="font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300"
+                                  >
+                                    Descarregar log reduzido (.txt)
+                                  </a>
+                                </p>
+                                ) : null}
                             </div>
                           </div>
                         );
@@ -1930,7 +2077,7 @@ export default function ReduceLogs() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-border bg-muted/50 dark:border-white/10 dark:bg-black/20 p-4">
+                  <div className="w-full min-w-0 max-w-full rounded-2xl border border-border bg-muted/50 p-4 dark:border-white/10 dark:bg-black/20">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-foreground">Sugestões de acompanhamento do lote atual</p>
@@ -1953,11 +2100,21 @@ export default function ReduceLogs() {
                       </div>
                     </div>
 
-                    <div className="mt-4 hidden overflow-hidden rounded-xl border border-border md:block dark:border-white/10">
-                      <Table>
+                    <div className="mt-4 hidden w-full min-w-0 max-w-full rounded-xl border border-border md:block dark:border-white/10">
+                      <Table
+                        tableContainerClassName="!overflow-x-hidden"
+                        className="w-full min-w-0 table-fixed border-collapse text-xs [word-break:break-word] [&_th]:!h-auto [&_th]:!min-h-0 [&_th]:!whitespace-normal [&_th]:!px-1.5 [&_th]:!py-1.5 [&_th]:!align-top [&_td]:!whitespace-normal [&_td]:!p-1.5 [&_td]:!align-top [tbody_td]:min-w-0 [thead_th]:text-[11px] [thead_th]:leading-tight"
+                      >
+                        <colgroup>
+                          {(
+                            [16, 14, 34, 36] as const
+                          ).map((pct, i) => (
+                            <col key={i} style={{ width: `${pct}%` }} />
+                          ))}
+                        </colgroup>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="sticky left-0 z-10 bg-muted dark:bg-slate-950">Arquivo</TableHead>
+                            <TableHead className="bg-muted dark:bg-slate-950">Arquivo</TableHead>
                             <TableHead>Leitura atual</TableHead>
                             <TableHead>Interpretação</TableHead>
                             <TableHead>Ação sugerida</TableHead>
@@ -1968,15 +2125,15 @@ export default function ReduceLogs() {
                             const processingVisual = getProcessingStatusVisual(file.processingStatus);
                             return (
                             <TableRow key={`guidance-${file.fileName}`} className={processingVisual.row}>
-                              <TableCell className="sticky left-0 z-10 bg-muted font-medium text-foreground dark:bg-slate-950">{file.fileName}</TableCell>
-                              <TableCell>
+                              <TableCell className="min-w-0 break-all font-medium text-foreground">{file.fileName}</TableCell>
+                              <TableCell className="min-w-0">
                                 <div className="space-y-1">
                                   <Badge className={processingVisual.badge}>{getStatusLabel(file.processingStatus)}</Badge>
-                                  <p className="text-xs text-muted-foreground">{file.currentStep}</p>
+                                  <p className="text-[11px] text-muted-foreground leading-snug">{file.currentStep}</p>
                                 </div>
                               </TableCell>
-                              <TableCell>{getFileInterpretation(file)}</TableCell>
-                              <TableCell>{getFileRecommendation(file)}</TableCell>
+                              <TableCell className="min-w-0 break-words text-[11px] leading-snug text-muted-foreground">{getFileInterpretation(file)}</TableCell>
+                              <TableCell className="min-w-0 break-words text-[11px] leading-snug text-cyan-800 dark:text-cyan-100/95">{getFileRecommendation(file)}</TableCell>
                             </TableRow>
                             );
                           })}
@@ -2004,7 +2161,7 @@ export default function ReduceLogs() {
 
                     </TabsContent>
 
-                    <TabsContent value="operational" className="space-y-4">
+                    <TabsContent value="operational" className="min-w-0 space-y-4">
 
                   <div className="rounded-2xl border border-border bg-muted/60 p-4 dark:border-cyan-400/15 dark:bg-slate-950/60">
                     <div className="flex flex-wrap items-center justify-between gap-3">
