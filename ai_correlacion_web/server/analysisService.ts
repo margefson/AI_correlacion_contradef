@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import { execFile } from "node:child_process";
-import { createReadStream } from "node:fs";
-import { createWriteStream } from "node:fs";
+import { chmodSync, createReadStream, createWriteStream, existsSync } from "node:fs";
 import { access, mkdir, mkdtemp, readdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join, relative, resolve } from "node:path";
@@ -51,7 +50,27 @@ const DEFAULT_FOCUS = "Contradef log intelligence";
 const ARCHIVE_EXTENSIONS = new Set([".7z", ".zip", ".rar"]);
 const TEXT_LOG_EXTENSIONS = new Set([".cdf", ".csv", ".txt", ".log", ".json"]);
 const execFileAsync = promisify(execFile);
-const WORK_TMP_ROOT = join("E:\\", "contradef-tmp", "analysis");
+
+const WORK_TMP_ROOT = process.env.CONTRADEF_WORK_TMP?.trim()
+  ? process.env.CONTRADEF_WORK_TMP.trim()
+  : process.platform === "win32"
+    ? join("E:\\", "contradef-tmp", "analysis")
+    : join(tmpdir(), "contradef-tmp", "analysis");
+
+let sevenZipExecutablePrepared = false;
+/** Linux (e.g. Render): 7zip-bin often lacks +x; spawn fails with EACCES until chmod. */
+function ensure7zaExecutable(): void {
+  if (sevenZipExecutablePrepared) return;
+  sevenZipExecutablePrepared = true;
+  if (process.platform === "win32") return;
+  try {
+    if (path7za && existsSync(path7za)) {
+      chmodSync(path7za, 0o755);
+    }
+  } catch {
+    /* already executable or read-only */
+  }
+}
 
 const suspiciousApis = [
   "IsDebuggerPresent",
@@ -290,6 +309,7 @@ async function expandArchiveContainer(logFile: StartAnalysisLogInput): Promise<S
   const extractRoot = await createWorkTempDir("contradef-archive-extract-");
 
   try {
+    ensure7zaExecutable();
     await execFileAsync(path7za, ["x", "-y", `-o${extractRoot}`, archivePath], { windowsHide: true });
     const allFiles = await listFilesRecursively(extractRoot);
     const extractedLogs = await Promise.all(
