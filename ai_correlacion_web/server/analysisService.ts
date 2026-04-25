@@ -117,6 +117,73 @@ const stageOrder = [
   "Exfiltração",
 ];
 
+type LogParseProgress = {
+  jobId: string;
+  fileLabel: string;
+};
+
+type ParseProgressState = {
+  lineCount: number;
+  byteWeight: number;
+  logLines: string[];
+  lastFlushMs: number;
+};
+
+function formatBytesPt(n: number): string {
+  if (n < 1024) {
+    return `${n} B`;
+  }
+  if (n < 1024 * 1024) {
+    return `${(n / 1024).toFixed(1)} KB`;
+  }
+  if (n < 1024 * 1024 * 1024) {
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}
+
+const PARSE_PROGRESS_MIN_MS = 2500;
+const PARSE_PROGRESS_LINE_STRIDE = 100_000;
+const PARSE_LOG_MAX_LINES = 40;
+
+function shouldReportParseProgress(state: ParseProgressState, options: { force: boolean }): boolean {
+  if (state.lineCount < 1) {
+    return false;
+  }
+  if (options.force) {
+    return true;
+  }
+  const now = Date.now();
+  const sinceLast = state.lastFlushMs === 0 ? Number.POSITIVE_INFINITY : now - state.lastFlushMs;
+  const hitStride = state.lineCount > 0 && state.lineCount % PARSE_PROGRESS_LINE_STRIDE === 0;
+  return sinceLast >= PARSE_PROGRESS_MIN_MS || hitStride;
+}
+
+async function maybeFlushParseProgress(
+  state: ParseProgressState,
+  progress: LogParseProgress,
+  options: { force: boolean },
+): Promise<void> {
+  const { lineCount, byteWeight } = state;
+  if (lineCount < 1) {
+    return;
+  }
+  if (!shouldReportParseProgress(state, options)) {
+    return;
+  }
+  const ts = new Date().toISOString().slice(11, 19);
+  const line = `[${ts}] ${lineCount.toLocaleString("pt-PT")} linhas · ${formatBytesPt(byteWeight)} lidos (UTF-8 aprox.)`;
+  state.logLines.push(line);
+  if (state.logLines.length > PARSE_LOG_MAX_LINES) {
+    state.logLines.shift();
+  }
+  state.lastFlushMs = Date.now();
+  await updateAnalysisJob(progress.jobId, {
+    message: `A processar ${progress.fileLabel}: ${lineCount.toLocaleString("pt-PT")} linhas…`,
+    stdoutTail: [`Leitura em curso: ${progress.fileLabel}`, ...state.logLines].join("\n"),
+  });
+}
+
 type StartAnalysisLogInput = {
   fileName: string;
   logType?: SupportedLogType;
@@ -1094,9 +1161,23 @@ function createLogCollector(fileName: string, logType: SupportedLogType, perFile
   };
 }
 
-async function analyzeSingleLogFile(logFile: StartAnalysisLogInput, perFileEventLimit: number): Promise<ParsedLogResult> {
+async function analyzeSingleLogFile(
+  logFile: StartAnalysisLogInput,
+  perFileEventLimit: number,
+  progress?: LogParseProgress,
+): Promise<ParsedLogResult> {
   const logType = inferLogType(logFile.fileName, logFile.logType);
   const collector = createLogCollector(logFile.fileName, logType, perFileEventLimit);
+  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0 };
+
+  const bump = async (rawLine: string) => {
+    collector.consume(rawLine);
+    st.lineCount += 1;
+    st.byteWeight += Buffer.byteLength(rawLine, "utf-8");
+    if (progress && shouldReportParseProgress(st, { force: false })) {
+      await maybeFlushParseProgress(st, progress, { force: false });
+    }
+  };
 
   if (logFile.tempFilePath) {
     const reader = createInterface({
@@ -1105,9 +1186,12 @@ async function analyzeSingleLogFile(logFile: StartAnalysisLogInput, perFileEvent
     });
 
     for await (const rawLine of reader) {
-      collector.consume(rawLine);
+      await bump(rawLine);
     }
 
+    if (progress && st.lineCount > 0) {
+      await maybeFlushParseProgress(st, progress, { force: true });
+    }
     return collector.finalize(logFile.sizeBytes);
   }
 
@@ -1130,14 +1214,19 @@ async function analyzeSingleLogFile(logFile: StartAnalysisLogInput, perFileEvent
       pendingLine += decoder.write(chunkDownload.buffer);
       const lines = pendingLine.split(/\r?\n/);
       pendingLine = lines.pop() ?? "";
-      lines.forEach((rawLine) => collector.consume(rawLine));
+      for (const line of lines) {
+        await bump(line);
+      }
     }
 
     pendingLine += decoder.end();
     if (pendingLine.length > 0) {
-      collector.consume(pendingLine);
+      await bump(pendingLine);
     }
 
+    if (progress && st.lineCount > 0) {
+      await maybeFlushParseProgress(st, progress, { force: true });
+    }
     return collector.finalize(logFile.sizeBytes);
   }
 
@@ -1155,9 +1244,12 @@ async function analyzeSingleLogFile(logFile: StartAnalysisLogInput, perFileEvent
 
   const text = buffer.toString("utf-8");
   for (const rawLine of text.split(/\r?\n/)) {
-    collector.consume(rawLine);
+    await bump(rawLine);
   }
 
+  if (progress && st.lineCount > 0) {
+    await maybeFlushParseProgress(st, progress, { force: true });
+  }
   return collector.finalize(buffer.byteLength);
 }
 
@@ -1432,6 +1524,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
         stage: `reduzindo arquivo ${fileOrdinal}/${input.logFiles.length}`,
         message: `Processando ${logFile.fileName}.`,
         llmSummaryStatus: "running",
+        stdoutTail: null,
       });
 
       await addAnalysisEvent({
@@ -1470,7 +1563,10 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
         },
       });
 
-      const parsed = await analyzeSingleLogFile(logFile, perFileEventLimit);
+      const parsed = await analyzeSingleLogFile(logFile, perFileEventLimit, {
+        jobId,
+        fileLabel: logFile.fileName,
+      });
 
       parsed.suspiciousApis.forEach((api) => suspiciousApiSet.add(api));
       parsed.techniqueTags.forEach((tag) => techniqueSet.add(tag));
@@ -1777,6 +1873,7 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, s
         : summaryLine,
       llmSummaryStatus: "completed",
       completedAt: new Date(),
+      stdoutTail: null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha inesperada durante a análise.";
@@ -1788,6 +1885,7 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, s
       errorMessage: message,
       llmSummaryStatus: "failed",
       completedAt: new Date(),
+      stdoutTail: null,
     });
     await addAnalysisEvent({
       jobId,

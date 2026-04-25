@@ -153,6 +153,9 @@ function getSemaforoTone(file: FileMonitor) {
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
 const STORAGE_CREDENTIALS_MISSING_FRAGMENT = "Storage proxy credentials missing";
 const STAGE_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
+const REDUCE_LOGS_POLL_MS_KEY = "contradef.reduceLogsPollMs";
+const DEFAULT_REDUCE_LOGS_POLL_MS = 5000;
+const POLL_MS_OPTIONS = [2000, 5000, 10000, 30000, 60000] as const;
 
 const LOG_FILE_ACCEPT = ".cdf,.csv,.json,.log,.txt,.7z,.zip,.rar";
 const LOG_FILE_EXT = new Set(["cdf", "csv", "json", "log", "txt", "7z", "zip", "rar"]);
@@ -259,6 +262,17 @@ export default function ReduceLogs() {
   const [fileQuickFilter, setFileQuickFilter] = useState<"all" | "stalled" | "running" | "completed">("all");
   const [sortByPriority, setSortByPriority] = useState(true);
   const [focusCriticalMode, setFocusCriticalMode] = useState(true);
+  const [pollIntervalMs, setPollIntervalMs] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_REDUCE_LOGS_POLL_MS;
+    try {
+      const raw = window.localStorage.getItem(REDUCE_LOGS_POLL_MS_KEY);
+      const n = raw ? parseInt(raw, 10) : NaN;
+      return POLL_MS_OPTIONS.includes(n as (typeof POLL_MS_OPTIONS)[number]) ? n : DEFAULT_REDUCE_LOGS_POLL_MS;
+    } catch {
+      return DEFAULT_REDUCE_LOGS_POLL_MS;
+    }
+  });
+  const activityLogRef = useRef<HTMLPreElement | null>(null);
 
   const resumeActiveSync = trpc.analysis.resumeActiveSync.useMutation();
 
@@ -295,12 +309,19 @@ export default function ReduceLogs() {
       enabled: Boolean(submittedJobId),
       refetchInterval: (query) => {
         const status = query.state.data?.job.status;
-        return status === "running" || status === "queued" ? 2000 : false;
+        return status === "running" || status === "queued" ? pollIntervalMs : false;
       },
     },
   );
 
   const uploadedDetail = submittedDetailQuery.data;
+
+  useEffect(() => {
+    const el = activityLogRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [uploadedDetail?.job?.stdoutTail, uploadedDetail?.job?.message]);
+
   const hasRemoteArtifacts = Boolean(
     uploadedDetail?.artifacts?.some((artifact) => Boolean(artifact.storageUrl)),
   );
@@ -420,8 +441,23 @@ export default function ReduceLogs() {
         map.set(fileName, createdAt);
       }
     });
+    const job = uploadedDetail?.job;
+    if (job?.status === "running" && job.updatedAt) {
+      const pulse = new Date(job.updatedAt);
+      if (Number.isFinite(pulse.getTime())) {
+        const hay = `${job.message ?? ""}\n${job.stdoutTail ?? ""}`;
+        (uploadedDetail?.fileMetrics ?? []).forEach((file) => {
+          if (file.status !== "running" && file.status !== "queued") return;
+          if (!hay.includes(file.fileName)) return;
+          const prev = map.get(file.fileName);
+          if (!prev || pulse > prev) {
+            map.set(file.fileName, pulse);
+          }
+        });
+      }
+    }
     return map;
-  }, [uploadedDetail?.events]);
+  }, [uploadedDetail?.events, uploadedDetail?.job, uploadedDetail?.fileMetrics]);
   const fileCurrentStageSinceMap = useMemo(() => {
     const map = new Map<string, Date>();
     const stageMap = new Map<string, string>();
@@ -1150,6 +1186,60 @@ export default function ReduceLogs() {
                       helper={`${batchSummary?.discardedLines ?? 0} linhas descartadas no lote atual`}
                     />
                   </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      O estado do lote é consultado de X em X segundos (abaixo). O registo de leitura vem do servidor; não precisa de intervalo tão curto se estiver a seguir o texto.
+                    </p>
+                    <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>Intervalo de actualização do estado</span>
+                      <select
+                        className="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground dark:bg-slate-950"
+                        value={String(pollIntervalMs)}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!POLL_MS_OPTIONS.includes(v as (typeof POLL_MS_OPTIONS)[number])) return;
+                          setPollIntervalMs(v);
+                          try {
+                            localStorage.setItem(REDUCE_LOGS_POLL_MS_KEY, String(v));
+                          } catch {
+                            /* private mode */
+                          }
+                        }}
+                      >
+                        {POLL_MS_OPTIONS.map((ms) => (
+                          <option key={ms} value={String(ms)}>
+                            {ms / 1000} s{ms === DEFAULT_REDUCE_LOGS_POLL_MS ? " (predefinido)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {uploadedDetail?.job
+                  && (uploadedDetail.job.status === "running" || uploadedDetail.job.status === "queued")
+                  && (uploadedDetail.job.stdoutTail
+                    || /A processar|Processando/.test(uploadedDetail.job.message ?? "")) ? (
+                    <div className="rounded-2xl border border-cyan-500/30 bg-slate-950/35 p-4 dark:border-cyan-400/20">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Registo de leitura no servidor</p>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            A barra 45% na grelha é um marco fixo da fase de redução; aqui o backend reporta o avanço em linhas e bytes. Actualizado cerca de 2,5s durante ficheiros muito grandes.
+                          </p>
+                        </div>
+                        <code className="max-w-full shrink-0 break-all rounded border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-900 dark:text-cyan-100/90">
+                          {uploadedDetail.job.message}
+                        </code>
+                      </div>
+                      <pre
+                        ref={activityLogRef}
+                        className="mt-3 max-h-60 overflow-y-auto rounded-lg border border-border/60 bg-black/35 p-3 font-mono text-[11px] leading-relaxed text-cyan-100/95 dark:border-white/10"
+                      >
+                        {uploadedDetail.job.stdoutTail || "A iniciar leitura e agregar linhas (aguarde o primeiro ponto de controlo)…"}
+                      </pre>
+                    </div>
+                  ) : null}
 
                   <Tabs defaultValue="overview" className="space-y-5">
                     <div className="space-y-2">
