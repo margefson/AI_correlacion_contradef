@@ -5,14 +5,16 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { ENV } from "./env";
+import { normalizePostgresUrlForSslIfNeeded } from "./pgConnectionUrl";
 
 const execFileAsync = promisify(execFile);
 
-function sslForPool(): boolean | { rejectUnauthorized: boolean } {
-  const url = process.env.DATABASE_URL ?? "";
+function sslForPool(connectionString: string): boolean | { rejectUnauthorized: boolean } {
   const fromEnv = process.env.DATABASE_SSL?.trim().toLowerCase();
   const useSslFromEnv = fromEnv === "true" || fromEnv === "1" || fromEnv === "require";
-  const useSslFromUrl = /sslmode=require|sslmode=no-verify|ssl=true/i.test(url);
+  const useSslFromUrl = /sslmode=require|sslmode=no-verify|ssl=true/i.test(
+    connectionString,
+  );
   if (useSslFromEnv || useSslFromUrl) {
     return { rejectUnauthorized: false };
   }
@@ -20,14 +22,16 @@ function sslForPool(): boolean | { rejectUnauthorized: boolean } {
 }
 
 async function coreTablesPresent(): Promise<boolean> {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = normalizePostgresUrlForSslIfNeeded(
+    process.env.DATABASE_URL,
+  );
   if (!connectionString) {
     return true;
   }
   const pool = new pg.Pool({
     connectionString,
     max: 1,
-    ssl: sslForPool(),
+    ssl: sslForPool(connectionString),
   });
   try {
     // Nomes com aspas como no schema Drizzle; information_schema nem sempre bate em PG.
@@ -49,13 +53,14 @@ function resolveDrizzleKitEntry(): { command: string; args: string[] } {
   ];
   for (const bin of candidates) {
     if (existsSync(bin)) {
-      return { command: process.execPath, args: [bin, "push"] };
+      // --force: sem TTY, evita confirmações (deploy Render / CI) que dão exit 1.
+      return { command: process.execPath, args: [bin, "push", "--force"] };
     }
   }
   if (process.platform === "win32") {
-    return { command: "npx.cmd", args: ["drizzle-kit", "push"] };
+    return { command: "npx.cmd", args: ["drizzle-kit", "push", "--force"] };
   }
-  return { command: "npx", args: ["drizzle-kit", "push"] };
+  return { command: "npx", args: ["drizzle-kit", "push", "--force"] };
 }
 
 /**
@@ -100,9 +105,26 @@ export async function applyPostgresSchemaIfNeeded(): Promise<void> {
     });
     console.log("[Database] drizzle-kit push concluído");
   } catch (err) {
+    const e = err as {
+      message?: string;
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+    };
+    if (e.stdout) {
+      console.error(
+        "[Database] drizzle-kit stdout (última parte):",
+        String(e.stdout).slice(-8_000),
+      );
+    }
+    if (e.stderr) {
+      console.error(
+        "[Database] drizzle-kit stderr:",
+        String(e.stderr).slice(-4_000),
+      );
+    }
     console.error(
-      "[Database] drizzle-kit push falhou. No teu PC: cd ai_correlacion_web && pnpm db:push (com DATABASE_URL de produção).",
-      err,
+      "[Database] drizzle-kit push falhou. Tenta: DATABASE_SSL=true, ou pnpm db:push --force (com DATABASE_URL de produção).",
+      e.message ?? err,
     );
     if (ENV.isProduction) {
       process.exit(1);
