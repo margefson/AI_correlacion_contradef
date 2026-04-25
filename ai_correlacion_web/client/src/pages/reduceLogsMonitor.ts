@@ -57,6 +57,29 @@ function isArchiveContainerFile(fileName: string) {
   return lowered.endsWith(".7z") || lowered.endsWith(".zip") || lowered.endsWith(".rar");
 }
 
+/** Último segmento (Windows/macOS/Unix) — alinha p.ex. `Pasta/x.cdf` com `x.cdf` do input do browser. */
+function logFileBasename(fileName: string): string {
+  const parts = fileName.split(/[/\\]/);
+  return parts.at(-1) ?? fileName;
+}
+
+/**
+ * Faz corresponder a linha da grelha (nome vindo do servidor) ao estado de upload local pelo nome
+ * completo; se não houver, tenta o basename quando for inequívoco.
+ */
+function resolveLocalForRow(
+  fileName: string,
+  localByFullName: Map<string, SubmittedFileMonitor>,
+  submittedList: SubmittedFileMonitor[],
+): SubmittedFileMonitor | undefined {
+  const direct = localByFullName.get(fileName);
+  if (direct) return direct;
+  const base = logFileBasename(fileName);
+  const byBase = submittedList.filter((f) => logFileBasename(f.fileName) === base);
+  if (byBase.length === 1) return byBase[0]!;
+  return undefined;
+}
+
 export function inferLogType(fileName: string): LogType {
   const lowered = fileName.toLowerCase();
   if (lowered.includes("functioninterceptor") || lowered.includes("function_interceptor")) return "FunctionInterceptor";
@@ -127,7 +150,7 @@ export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], deta
   ]));
 
   return allNames.map((fileName) => {
-    const local = localMap.get(fileName);
+    const local = resolveLocalForRow(fileName, localMap, normalizedSubmitted);
     const detail = detailMap.get(fileName);
     const processingStatus = (detail?.status as ProcessingStatus | undefined)
       ?? (local?.uploadStatus === "failed" ? "failed" : "queued");

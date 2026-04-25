@@ -48,6 +48,7 @@ import {
 import {
   AlertTriangle,
   Database,
+  Filter,
   FileArchive,
   FileDown,
   FileSpreadsheet,
@@ -59,6 +60,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -1025,13 +1027,15 @@ export default function ReduceLogs() {
         const expectedChunkCount = remoteFile.chunkCount ?? Math.ceil(file.size / chunkSizeBytes);
 
         if (isReused) {
-          setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
-            uploadFileId: remoteFile.fileId,
-            uploadStatus: "completed",
-            uploadProgress: 100,
-            uploadDurationMs: 0,
-            uploadReused: true,
-          }));
+          flushSync(() => {
+            setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
+              uploadFileId: remoteFile.fileId,
+              uploadStatus: "completed",
+              uploadProgress: 100,
+              uploadDurationMs: 0,
+              uploadReused: true,
+            }));
+          });
 
           completionFilesPayload.push({
             fileId: remoteFile.fileId,
@@ -1048,13 +1052,15 @@ export default function ReduceLogs() {
           continue;
         }
 
-        setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
-          uploadFileId: remoteFile.fileId,
-          uploadStatus: "uploading",
-          uploadProgress: 0,
-          uploadReused: false,
-          uploadDurationMs: 0,
-        }));
+        flushSync(() => {
+          setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
+            uploadFileId: remoteFile.fileId,
+            uploadStatus: "uploading",
+            uploadProgress: 0,
+            uploadReused: false,
+            uploadDurationMs: 0,
+          }));
+        });
         setUploadPipelineStatus(
           `A enviar ${file.name} (ficheiro ${index + 1}/${selectedFiles.length}) — 0%…`,
         );
@@ -1078,14 +1084,16 @@ export default function ReduceLogs() {
             );
           }
 
-          setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
-            uploadStatus: sentBytes >= file.size ? "completed" : "uploading",
-            uploadProgress: typeof chunkPayload.uploadProgress === "number"
-              ? chunkPayload.uploadProgress
-              : Math.round((sentBytes / file.size) * 100),
-            uploadDurationMs,
-            uploadReused: false,
-          }));
+          flushSync(() => {
+            setSubmittedFiles((current) => updateSubmittedFile(current, file.name, {
+              uploadStatus: sentBytes >= file.size ? "completed" : "uploading",
+              uploadProgress: typeof chunkPayload.uploadProgress === "number"
+                ? chunkPayload.uploadProgress
+                : Math.round((sentBytes / file.size) * 100),
+              uploadDurationMs,
+              uploadReused: false,
+            }));
+          });
         }
 
         completionFilesPayload.push({
@@ -1746,9 +1754,15 @@ export default function ReduceLogs() {
                         </Badge>
                       </div>
                     </div>
-                    <div className="mt-6 rounded-xl border border-border bg-muted/70 p-4 dark:border-white/10 dark:bg-slate-950/55">
-                      <div className="mb-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filtros e ordenação</p>
+                    <div className="mt-6 rounded-xl border-2 border-cyan-500/40 bg-cyan-500/[0.06] p-4 shadow-sm dark:border-cyan-400/35 dark:bg-cyan-950/25">
+                      <div className="mb-3 flex items-start gap-2.5">
+                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-500/40 bg-cyan-500/15 text-cyan-700 dark:border-cyan-400/30 dark:bg-cyan-500/10 dark:text-cyan-200">
+                          <Filter className="h-4 w-4" aria-hidden />
+                        </span>
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="text-sm font-semibold leading-tight text-foreground">Filtro da tabela de ficheiros</p>
+                          <p className="text-xs text-muted-foreground">Aplica-se à grelha logo abaixo (não ao Excel).</p>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                       <Button
@@ -1807,19 +1821,6 @@ export default function ReduceLogs() {
                         Nenhum arquivo corresponde ao filtro selecionado no momento.
                       </div>
                     ) : null}
-
-                    <div className="mt-8 rounded-xl border border-emerald-500/35 bg-gradient-to-b from-emerald-500/10 to-muted/80 p-4 text-sm text-muted-foreground shadow-[inset_0_1px_0_0_rgba(52,211,153,0.15)] dark:border-emerald-500/25 dark:from-emerald-500/[0.06] dark:to-slate-950/60 dark:shadow-[inset_0_1px_0_0_rgba(52,211,153,0.12)]">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-400/90">Prioridade de investigação</p>
-                      <p className="mt-2 font-medium text-foreground">Ordem sugerida para triagem</p>
-                      <p className="mt-1 text-muted-foreground">
-                        {visibleMonitoredFiles.length
-                          ? `${visibleMonitoredFiles.slice(0, 3).map((file) => file.fileName).join(" · ")}`
-                          : "Sem arquivos priorizados para o filtro atual."}
-                      </p>
-                      {focusCriticalMode && criticalFocusCandidate ? (
-                        <p className="mt-2 text-rose-800 dark:text-rose-200">Foco automático atual: {criticalFocusCandidate.fileName}</p>
-                      ) : null}
-                    </div>
 
                     <div className="mt-4 hidden overflow-hidden rounded-xl border border-border md:block dark:border-white/10">
                       <Table>
