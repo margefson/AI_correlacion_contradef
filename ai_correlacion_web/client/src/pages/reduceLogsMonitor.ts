@@ -142,9 +142,12 @@ export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], deta
             : 0;
     const uploadStatus = local?.uploadStatus ?? (detail ? "completed" : "queued");
     const uploadReused = detail?.uploadReused ?? local?.uploadReused ?? false;
-    const fallbackStage = uploadStatus === "uploading"
-      ? "Enviando arquivo em partes"
-      : uploadStatus === "failed"
+    const isPreUpload = local?.uploadStatus === "uploading" && (local?.uploadProgress ?? 0) === 0;
+    const fallbackStage = isPreUpload
+      ? "A preparar envio (servidor)"
+      : uploadStatus === "uploading"
+        ? "Enviando arquivo em partes"
+        : uploadStatus === "failed"
         ? "Falha no envio"
         : processingStatus === "failed"
           ? "Falha no processamento"
@@ -157,9 +160,11 @@ export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], deta
                 : uploadStatus === "completed"
                   ? "Arquivo recebido"
                   : "Aguardando processamento";
-    const fallbackStep = uploadStatus === "uploading"
-      ? "Upload robusto em andamento"
-      : uploadStatus === "failed"
+    const fallbackStep = isPreUpload
+      ? "Aguardar definição da sessão (init)"
+      : uploadStatus === "uploading"
+        ? "Upload robusto em andamento"
+        : uploadStatus === "failed"
         ? "Reenvio necessário"
         : processingStatus === "failed"
           ? "Falha na consolidação do arquivo"
@@ -172,9 +177,11 @@ export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], deta
                 : uploadStatus === "completed"
                   ? "Aguardando início do lote"
                   : "Na fila";
-    const fallbackMessage = uploadStatus === "uploading"
-      ? `Transmitindo ${fileName} em partes.`
-      : uploadStatus === "failed"
+    const fallbackMessage = isPreUpload
+      ? `A preparar a sessão de envio (contactar o servidor) — ainda sem bytes de ${fileName} transmitidos.`
+      : uploadStatus === "uploading"
+        ? `Transmitindo ${fileName} em partes.`
+        : uploadStatus === "failed"
         ? `O envio de ${fileName} falhou antes do processamento.`
         : processingStatus === "failed"
           ? `O processamento de ${fileName} falhou antes da consolidação final.`

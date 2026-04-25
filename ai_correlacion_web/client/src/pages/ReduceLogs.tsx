@@ -62,6 +62,9 @@ import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState 
 import { toast } from "sonner";
 import { Link } from "wouter";
 
+/** Lote “virtual” antes do servidor devolver o `jobId` (ctr-…), para acompanhar o envio ficheiro a ficheiro. */
+const LOCAL_UPLOAD_LOT_ID = "__local-uploading__" as const;
+
 /** Ficheiros muito grandes podem demorar minutos entre eventos de ficheiro; evita falso “travado” na UI. */
 const STALE_NO_EVENT_MS = 120_000;
 const STALE_NO_EVENT_MS_LARGE = 10 * 60_000;
@@ -213,7 +216,8 @@ function buildInitialSubmittedFiles(files: File[]) {
     logType: inferLogType(file.name),
     sizeBytes: file.size,
     uploadProgress: 0,
-    uploadStatus: "queued" as ProcessingStatus,
+    /** `uploading` logo ao submeter: evita "Na fila" na coluna de upload (confundia com fila de outro lote no servidor). Ainda 0% até `init` e primeiro bloco. */
+    uploadStatus: "uploading" as ProcessingStatus,
   }));
 }
 
@@ -423,6 +427,9 @@ export default function ReduceLogs() {
     if (authLoading || !user) {
       return false;
     }
+    if (lotId === LOCAL_UPLOAD_LOT_ID) {
+      return false;
+    }
     if (lotId === uploadSessionJobId) {
       return true;
     }
@@ -433,10 +440,12 @@ export default function ReduceLogs() {
     return row.createdByUserId != null && row.createdByUserId === user.id;
   }
 
+  const isLocalUploadLotSelected = selectedJobId === LOCAL_UPLOAD_LOT_ID;
+
   const submittedDetailQuery = trpc.analysis.detail.useQuery(
-    { jobId: selectedJobId ?? "" },
+    { jobId: isLocalUploadLotSelected ? "skip-local" : (selectedJobId ?? "") },
     {
-      enabled: Boolean(selectedJobId),
+      enabled: Boolean(selectedJobId) && !isLocalUploadLotSelected,
       refetchInterval: (query) => {
         const status = query.state.data?.job.status;
         return status === "running" || status === "queued" ? pollIntervalMs : false;
@@ -444,7 +453,7 @@ export default function ReduceLogs() {
     },
   );
 
-  const uploadedDetail = submittedDetailQuery.data;
+  const uploadedDetail = isLocalUploadLotSelected ? null : (submittedDetailQuery.data ?? null);
 
   useEffect(() => {
     const el = activityLogRef.current;
@@ -515,6 +524,13 @@ export default function ReduceLogs() {
     uploadSessionJobId && selectedJobId && uploadSessionJobId === selectedJobId,
   );
 
+  const localUploadAverageProgress = useMemo(() => {
+    if (!submittedFiles.length) {
+      return 0;
+    }
+    return Math.round(submittedFiles.reduce((s, f) => s + f.uploadProgress, 0) / submittedFiles.length);
+  }, [submittedFiles]);
+
   const monitoredFiles = useMemo(
     () => buildMonitoredFiles(
       includeSubmittedFilesInMerge ? submittedFiles : [],
@@ -526,6 +542,7 @@ export default function ReduceLogs() {
   /** Primeira resposta do `detail` ainda não chegou (servidor a responder ou instância a acordar). */
   const monitorDetailLoading = Boolean(
     selectedJobId &&
+    !isLocalUploadLotSelected &&
     !monitoredFiles.length &&
     !uploadedDetail &&
     (submittedDetailQuery.isLoading || submittedDetailQuery.isPending) &&
@@ -717,6 +734,10 @@ export default function ReduceLogs() {
   }, [activeFile, uploadedDetail?.events]);
 
   function handleExportReduceLogsExcel() {
+    if (selectedJobId === LOCAL_UPLOAD_LOT_ID) {
+      toast.error("Aguarde o servidor criar o job (ID ctr-…) antes de exportar.");
+      return;
+    }
     if (!monitoredFiles.length) {
       toast.error("Não há ficheiros no lote para exportar.");
       return;
@@ -745,10 +766,18 @@ export default function ReduceLogs() {
   }
 
   function registerNewJobInPanel(jobId: string) {
-    setTrackedJobIds((prev) => nextTrackedAfterPrepend(jobId, prev));
+    setTrackedJobIds((prev) => {
+      const withoutPending = prev.filter((x) => x !== LOCAL_UPLOAD_LOT_ID);
+      return nextTrackedAfterPrepend(jobId, withoutPending);
+    });
     setSelectedJobId(jobId);
     setUploadSessionJobId(jobId);
     void utils.analysis.list.invalidate();
+  }
+
+  function stripLocalUploadPlaceholder() {
+    setTrackedJobIds((prev) => prev.filter((id) => id !== LOCAL_UPLOAD_LOT_ID));
+    setUploadSessionJobId((u) => (u === LOCAL_UPLOAD_LOT_ID ? null : u));
   }
 
   function afterRemoveFromPanelState(jobId: string) {
@@ -882,8 +911,16 @@ export default function ReduceLogs() {
     }
 
     setIsUploading(true);
-    setUploadSessionJobId(null);
     setUploadPipelineStatus("A preparar a lista de ficheiros e a contactar o servidor…");
+
+    setUploadSessionJobId(LOCAL_UPLOAD_LOT_ID);
+    setSelectedJobId(LOCAL_UPLOAD_LOT_ID);
+    setTrackedJobIds((prev) => {
+      if (prev.includes(LOCAL_UPLOAD_LOT_ID)) {
+        return prev;
+      }
+      return [LOCAL_UPLOAD_LOT_ID, ...prev].slice(0, MAX_TRACKED_LOTS);
+    });
 
     const initialBatch = buildInitialSubmittedFiles(selectedFiles);
     setSubmittedFiles(initialBatch);
@@ -968,6 +1005,7 @@ export default function ReduceLogs() {
         return null;
       });
       if (!initPayload) {
+        stripLocalUploadPlaceholder();
         return;
       }
 
@@ -1090,6 +1128,7 @@ export default function ReduceLogs() {
         setUploadPipelineStatus("Upload concluído, mas o servidor não devolveu o ID do job — veja o Centro Analítico.");
       }
     } catch (error) {
+      stripLocalUploadPlaceholder();
       setSubmittedFiles((current) => current.map((file) => ({
         ...file,
         uploadStatus: file.uploadProgress > 0 && file.uploadProgress >= 100 ? file.uploadStatus : "failed",
@@ -1366,13 +1405,18 @@ export default function ReduceLogs() {
                       variant="ghost"
                       size="sm"
                       className="text-muted-foreground hover:text-foreground"
+                      disabled={isUploading}
                       onClick={dismissAllTrackedLots}
                     >
                       Limpar lista local
                     </Button>
                   ) : null}
                   <Badge className="border-emerald-500/35 bg-emerald-500/15 text-emerald-900 dark:border-emerald-400/25 dark:text-emerald-300">
-                    {selectedJobId ? `A ver: ${selectedJobId}` : "escolher lote abaixo"}
+                    {selectedJobId
+                      ? selectedJobId === LOCAL_UPLOAD_LOT_ID
+                        ? "A ver: lote a enviar (aguarda job no servidor)"
+                        : `A ver: ${selectedJobId}`
+                      : "escolher lote abaixo"}
                   </Badge>
                   <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">
                     detalhe {pollIntervalMs / 1000}s · lista 10s
@@ -1436,16 +1480,31 @@ export default function ReduceLogs() {
                               setSelectedJobId(lotId);
                             }}
                           >
-                            <span className="block truncate font-mono text-[10px] opacity-80">{lotId}</span>
-                            <span className="block truncate">{row?.sampleName ?? "…"}</span>
+                            <span className="block truncate font-mono text-[10px] opacity-80">
+                              {lotId === LOCAL_UPLOAD_LOT_ID ? "envio (sem job ainda no servidor)" : lotId}
+                            </span>
+                            <span className="block truncate">
+                              {lotId === LOCAL_UPLOAD_LOT_ID ? (analysisName.trim() || "Novo lote") : (row?.sampleName ?? "…")}
+                            </span>
                             <span className="text-[10px] text-muted-foreground">
-                              {row ? `${getStatusLabel(row.status)} · ${row.progress}%` : "a carregar…"}
+                              {lotId === LOCAL_UPLOAD_LOT_ID
+                                ? `A enviar ficheiros · ~${localUploadAverageProgress}% (média)`
+                                : row
+                                  ? `${getStatusLabel(row.status)} · ${row.progress}%`
+                                  : "a carregar…"}
                             </span>
                           </button>
                           {authLoading ? (
                             <span
                               className="inline-flex h-7 min-w-7 items-center justify-center text-[10px] text-muted-foreground/50"
                               title="A carregar sessão…"
+                            >
+                              …
+                            </span>
+                          ) : lotId === LOCAL_UPLOAD_LOT_ID && isUploading ? (
+                            <span
+                              className="inline-flex h-7 min-w-7 items-center justify-center text-[10px] text-muted-foreground/50"
+                              title="Aguarde o fim do envio para retirar"
                             >
                               …
                             </span>
@@ -1520,7 +1579,11 @@ export default function ReduceLogs() {
                   </button>
                   .
                 </div>
-              ) : selectedJobId && submittedDetailQuery.isSuccess && !uploadedDetail && !submittedDetailQuery.isFetching ? (
+              ) : selectedJobId
+                && selectedJobId !== LOCAL_UPLOAD_LOT_ID
+                && submittedDetailQuery.isSuccess
+                && !uploadedDetail
+                && !submittedDetailQuery.isFetching ? (
                 <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-5 text-sm leading-6 text-amber-950 dark:border-amber-400/30 dark:text-amber-100">
                   O servidor devolveu resposta vazia para o job <span className="font-mono">{selectedJobId}</span>. Pode não existir para esta conta, ou ainda não estar indexado.{" "}
                   <Link className="font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-200" href="/">Abrir o Centro Analítico</Link> para confirmar.
@@ -1582,10 +1645,12 @@ export default function ReduceLogs() {
                     <MetricCard
                       icon={RefreshCw}
                       label="Status do lote"
-                      value={uploadedDetail ? getStatusLabel(uploadedDetail.job.status) : isUploading ? "Enviando" : "Em preparação"}
+                      value={uploadedDetail ? getStatusLabel(uploadedDetail.job.status) : isUploading ? "A enviar" : "Em preparação"}
                       helper={uploadedDetail
                         ? `${uploadedDetail.job.progress}% · ${uploadedDetail.job.stage}${staleRunningFiles.length ? ` · ${staleRunningFiles.length} arquivo(s) sem atualização recente` : ""}`
-                        : `${monitoredFiles.length} arquivo(s) no lote atual`}
+                        : isLocalUploadLotSelected
+                          ? `Envio em curso · ~${localUploadAverageProgress}% (média) · ainda sem job no servidor`
+                          : `${monitoredFiles.length} arquivo(s) no lote atual`}
                     />
                     <MetricCard
                       icon={Database}
@@ -1609,7 +1674,9 @@ export default function ReduceLogs() {
 
                   <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <p className="text-xs text-muted-foreground">
-                      O estado do lote é consultado de X em X segundos (abaixo). O registo de leitura vem do servidor; não precisa de intervalo tão curto se estiver a seguir o texto.
+                      {isLocalUploadLotSelected
+                        ? "Enquanto o job ainda não existir no servidor, só a grelha abaixo (estado de envio) se actualiza em tempo real. Quando o ID ctr-… for criado, o painel completo passa a ser consultado de X em X segundos no servidor."
+                        : "O estado do lote é consultado de X em X segundos (abaixo). O registo de leitura vem do servidor; não precisa de intervalo tão curto se estiver a seguir o texto."}
                     </p>
                     <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span>Intervalo de actualização do estado</span>
@@ -1715,7 +1782,7 @@ export default function ReduceLogs() {
                           variant="outline"
                           size="sm"
                           className="border-emerald-600/35 text-emerald-900 hover:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100"
-                          disabled={!monitoredFiles.length}
+                          disabled={!monitoredFiles.length || selectedJobId === LOCAL_UPLOAD_LOT_ID}
                           onClick={handleExportReduceLogsExcel}
                         >
                           <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -1929,7 +1996,7 @@ export default function ReduceLogs() {
                           variant="outline"
                           size="sm"
                           className="border-emerald-600/35 text-emerald-900 hover:bg-emerald-500/10 dark:border-emerald-400/30 dark:text-emerald-100"
-                          disabled={!monitoredFiles.length}
+                          disabled={!monitoredFiles.length || selectedJobId === LOCAL_UPLOAD_LOT_ID}
                           onClick={handleExportReduceLogsExcel}
                         >
                           <FileSpreadsheet className="mr-2 h-4 w-4" />

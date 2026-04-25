@@ -130,8 +130,6 @@ type ParseProgressState = {
   logLines: string[];
   lastFlushMs: number;
   lastFlushedBytes: number;
-  /** Último `fileProgress` enviado em evento (evita regravar o mesmo). */
-  lastEmittedFileProgress: number;
 };
 
 function formatBytesPt(n: number): string {
@@ -152,6 +150,13 @@ const PARSE_PROGRESS_LINE_STRIDE = 100_000;
 /** Em ficheiros muito grandes, emitir leitura mesmo entre marcos de linha, para a UI não marcar falso “sem actualização” durante fases longas. */
 const PARSE_PROGRESS_BYTE_STRIDE = 32 * 1024 * 1024;
 const PARSE_LOG_MAX_LINES = 40;
+/** Cede o event loop do Node; reduz risco de timeout do alojamento e de “congelamento” noutros pedidos durante ficheiros multi‑GB. */
+const PARSE_YIELD_EVERY_LINES = (() => {
+  const n = Number.parseInt(process.env.CONTRADEF_PARSE_YIELD_EVERY ?? "4096", 10);
+  return Number.isFinite(n) && n >= 200 ? n : 4096;
+})();
+/** Uma linha de vários MB pode rebentar memória ou atrasar muito o regex; truncar para processamento. */
+const MAX_LOG_LINE_CODE_UNITS = 512_000;
 
 /** Marca 45% = início da heurística no fluxo; ~88% = fim da leitura; consolidação 82–100% vem dos eventos finais. */
 function computeProgressPercentWhileParsing(
@@ -220,11 +225,11 @@ async function maybeFlushParseProgress(
     progress: jobEventProgress,
   });
 
-  if (!options.force && fileProgress === state.lastEmittedFileProgress) {
-    return;
-  }
-  state.lastEmittedFileProgress = fileProgress;
-
+  /**
+   * Em ficheiros de vários GB, `fileProgress` fica muitos minutos no mesmo valor inteiro (ex. 46%)
+   * enquanto as linhas/lidos sobem. Omitir o evento nesses flush criava a sensação (e na UI) de
+   * “processo parado / sem actualização” — ainda com `updateAnalysisJob` a correr.
+   */
   await addAnalysisEvent({
     jobId: progress.jobId,
     eventType: "file-stage",
@@ -242,6 +247,21 @@ async function maybeFlushParseProgress(
       originalBytes: typeof progress.sizeBytes === "number" && progress.sizeBytes > 0 ? progress.sizeBytes : 0,
     },
   });
+}
+
+let logLineTruncationWarned = false;
+
+function truncateOversizeLogLine(rawLine: string): string {
+  if (rawLine.length <= MAX_LOG_LINE_CODE_UNITS) {
+    return rawLine;
+  }
+  if (!logLineTruncationWarned) {
+    logLineTruncationWarned = true;
+    console.warn(
+      "[Analysis] Linha de log excede o tamanho máximo para processamento; a truncar (evita gargalos e OOM).",
+    );
+  }
+  return `${rawLine.slice(0, MAX_LOG_LINE_CODE_UNITS)}[… linha truncada: >${MAX_LOG_LINE_CODE_UNITS} carateres]`;
 }
 
 type StartAnalysisLogInput = {
@@ -1228,12 +1248,16 @@ async function analyzeSingleLogFile(
 ): Promise<ParsedLogResult> {
   const logType = inferLogType(logFile.fileName, logFile.logType);
   const collector = createLogCollector(logFile.fileName, logType, perFileEventLimit);
-  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0, lastFlushedBytes: 0, lastEmittedFileProgress: -1 };
+  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0, lastFlushedBytes: 0 };
 
   const bump = async (rawLine: string) => {
-    collector.consume(rawLine);
+    const line = truncateOversizeLogLine(rawLine);
+    collector.consume(line);
     st.lineCount += 1;
-    st.byteWeight += Buffer.byteLength(rawLine, "utf-8");
+    st.byteWeight += Buffer.byteLength(line, "utf-8");
+    if (st.lineCount % PARSE_YIELD_EVERY_LINES === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
     if (progress && shouldReportParseProgress(st, { force: false })) {
       await maybeFlushParseProgress(st, progress, { force: false });
     }
