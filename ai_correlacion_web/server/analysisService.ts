@@ -150,6 +150,29 @@ const PARSE_PROGRESS_MIN_MS = 2500;
 const PARSE_PROGRESS_LINE_STRIDE = 100_000;
 /** Em ficheiros muito grandes, emitir leitura mesmo entre marcos de linha, para a UI não marcar falso “sem actualização” durante fases longas. */
 const PARSE_PROGRESS_BYTE_STRIDE = 32 * 1024 * 1024;
+
+type ParseProgressStrideConfig = {
+  minMs: number;
+  lineStride: number;
+  byteStride: number;
+};
+
+/** Ficheiros multi‑GB: flush mais frequente (menos tempo entre % e eventos file-stage). */
+function getAdaptiveParseConfig(sizeBytes: number | undefined): ParseProgressStrideConfig {
+  const bs = typeof sizeBytes === "number" && sizeBytes > 0 ? sizeBytes : 0;
+  const gb = bs / 1024 ** 3;
+  if (gb >= 2) {
+    return { minMs: 1000, lineStride: 12_000, byteStride: 4 * 1024 * 1024 };
+  }
+  if (gb >= 0.5) {
+    return { minMs: 1200, lineStride: 25_000, byteStride: 8 * 1024 * 1024 };
+  }
+  return {
+    minMs: PARSE_PROGRESS_MIN_MS,
+    lineStride: PARSE_PROGRESS_LINE_STRIDE,
+    byteStride: PARSE_PROGRESS_BYTE_STRIDE,
+  };
+}
 const PARSE_LOG_MAX_LINES = 40;
 /** Cede o event loop do Node; reduz risco de timeout do alojamento e de “congelamento” noutros pedidos durante ficheiros multi‑GB. */
 const PARSE_YIELD_EVERY_LINES = (() => {
@@ -159,7 +182,7 @@ const PARSE_YIELD_EVERY_LINES = (() => {
 /** Uma linha de vários MB pode rebentar memória ou atrasar muito o regex; truncar para processamento. */
 const MAX_LOG_LINE_CODE_UNITS = 512_000;
 
-/** Marca 45% = início da heurística no fluxo; ~88% = fim da leitura; consolidação 82–100% vem dos eventos finais. */
+/** Marca 45% = início da heurística no fluxo; ~88% = fim da leitura; consolidação 82–100% vem dos eventos finais. Uma casa decimal evita “preso” no mesmo inteiro durante GB lidos. */
 function computeProgressPercentWhileParsing(
   byteWeight: number,
   lineCount: number,
@@ -167,7 +190,7 @@ function computeProgressPercentWhileParsing(
 ): number {
   if (sizeBytes && sizeBytes > 0) {
     const t = Math.min(1, byteWeight / sizeBytes);
-    return Math.min(88, 45 + Math.round(t * 43));
+    return Math.min(88, Math.round((45 + t * 43) * 10) / 10);
   }
   if (lineCount > 0) {
     return Math.min(88, 45 + Math.min(30, Math.floor(lineCount / 1_000_000)));
@@ -175,7 +198,11 @@ function computeProgressPercentWhileParsing(
   return 45;
 }
 
-function shouldReportParseProgress(state: ParseProgressState, options: { force: boolean }): boolean {
+function shouldReportParseProgress(
+  state: ParseProgressState,
+  options: { force: boolean },
+  config: ParseProgressStrideConfig,
+): boolean {
   if (state.lineCount < 1) {
     return false;
   }
@@ -184,9 +211,10 @@ function shouldReportParseProgress(state: ParseProgressState, options: { force: 
   }
   const now = Date.now();
   const sinceLast = state.lastFlushMs === 0 ? Number.POSITIVE_INFINITY : now - state.lastFlushMs;
-  const hitLineStride = state.lineCount > 0 && state.lineCount % PARSE_PROGRESS_LINE_STRIDE === 0;
-  const hitByteStride = state.byteWeight - state.lastFlushedBytes >= PARSE_PROGRESS_BYTE_STRIDE;
-  return sinceLast >= PARSE_PROGRESS_MIN_MS || hitLineStride || hitByteStride;
+  const lineStride = Math.max(1, config.lineStride);
+  const hitLineStride = state.lineCount > 0 && state.lineCount % lineStride === 0;
+  const hitByteStride = state.byteWeight - state.lastFlushedBytes >= config.byteStride;
+  return sinceLast >= config.minMs || hitLineStride || hitByteStride;
 }
 
 async function maybeFlushParseProgress(
@@ -198,7 +226,8 @@ async function maybeFlushParseProgress(
   if (lineCount < 1) {
     return;
   }
-  if (!shouldReportParseProgress(state, options)) {
+  const stride = getAdaptiveParseConfig(progress.sizeBytes);
+  if (!shouldReportParseProgress(state, options, stride)) {
     return;
   }
   const ts = new Date().toISOString().slice(11, 19);
@@ -214,7 +243,7 @@ async function maybeFlushParseProgress(
   const msg = `A processar ${progress.fileLabel}: ${lineCount.toLocaleString("pt-PT")} linhas…`;
   const liveStep = `Leitura: ${lineCount.toLocaleString("pt-PT")} linhas · ${formatBytesPt(byteWeight)} (≈${fileProgress}%)`;
   const stdoutTail = [`Leitura em curso: ${progress.fileLabel}`, ...state.logLines].join("\n");
-  const jobEventProgress = Math.min(90, 38 + Math.round(fileProgress * 0.55));
+  const jobEventProgress = Math.min(90, Math.round(38 + fileProgress * 0.55));
 
   /**
    * A linha `analysisJobs.progress` alimenta a fila (Centro / listagens). Só tínhamos `startProgress`
@@ -1259,7 +1288,7 @@ async function analyzeSingleLogFile(
     if (st.lineCount % PARSE_YIELD_EVERY_LINES === 0) {
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
-    if (progress && shouldReportParseProgress(st, { force: false })) {
+    if (progress) {
       await maybeFlushParseProgress(st, progress, { force: false });
     }
   };

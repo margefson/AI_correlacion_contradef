@@ -287,7 +287,9 @@ function isStorageCredentialsMissingError(error: unknown) {
 }
 
 function formatFileProcessingPercent(p: number | null) {
-  return p == null ? "—" : `${p}%`;
+  if (p == null) return "—";
+  const x = Math.round(p * 10) / 10;
+  return `${x % 1 === 0 ? x.toFixed(0) : x.toFixed(1)}%`;
 }
 
 function ProgressStrip({
@@ -2057,15 +2059,28 @@ export default function ReduceLogs() {
                               </div>
                             </div>
                             <div className={fileTrackTd}>
-                              <div className="w-full min-w-0 pr-0.5">
-                                <p className="font-medium leading-snug text-foreground">{file.currentStage}</p>
-                                <p className="text-[11px] text-muted-foreground leading-snug">{file.currentStep}</p>
-                                <p className="text-[11px] text-muted-foreground leading-snug">{formatLastActivityLabel(lastEventAt)}</p>
-                                {stageSince ? (
-                                  <p className={`text-[11px] leading-snug ${isStageLong ? "text-amber-200" : "text-muted-foreground"}`}>
-                                    Na etapa há {formatElapsedMs(stageElapsedMs)}
-                                  </p>
-                                ) : null}
+                              <div className="flex w-full min-w-0 flex-col gap-0.5 pr-0.5">
+                                <p
+                                  className="line-clamp-1 text-[11px] font-medium leading-tight text-foreground"
+                                  title={file.currentStage}
+                                >
+                                  {file.currentStage}
+                                </p>
+                                <p
+                                  className="line-clamp-2 max-h-[2.5rem] text-[10px] leading-snug text-muted-foreground [overflow-wrap:anywhere]"
+                                  title={file.currentStep}
+                                >
+                                  {file.currentStep}
+                                </p>
+                                <p className="text-[9px] leading-tight text-muted-foreground/90 [overflow-wrap:anywhere]">
+                                  <span>{formatLastActivityLabel(lastEventAt)}</span>
+                                  {stageSince ? (
+                                    <span className={isStageLong ? " text-amber-200" : ""}>
+                                      {" "}
+                                      · {formatElapsedMs(stageElapsedMs)} nesta etapa
+                                    </span>
+                                  ) : null}
+                                </p>
                               </div>
                             </div>
                             <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatBytes(file.originalBytes)}</div>
@@ -2108,15 +2123,30 @@ export default function ReduceLogs() {
                         return (
                           <div key={`mobile-${selectedJobId ?? "lote"}-${file.fileName}`} className={`rounded-xl border border-border bg-muted/70 dark:border-white/10 dark:bg-slate-950/60 p-3 ${processingVisual.row}`}>
                             <p className="text-sm font-medium text-foreground">{file.fileName}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">{file.currentStage} · {file.currentStep}</p>
+                            <p className="mt-0.5 line-clamp-1 text-xs font-medium text-foreground" title={file.currentStage}>
+                              {file.currentStage}
+                            </p>
+                            <p
+                              className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground [overflow-wrap:anywhere]"
+                              title={file.currentStep}
+                            >
+                              {file.currentStep}
+                            </p>
                             <div className="mt-3 space-y-2 text-xs text-muted-foreground">
                               <p>Upload: {getStatusLabel(file.uploadStatus)} ({file.uploadProgress}%)</p>
                               <p className={processingVisual.label}>
                                 Processamento: {getStatusLabel(file.processingStatus)} ({formatFileProcessingPercent(file.processingProgress)})
                                 {isPossiblyStalled ? " · sem atualização recente" : ""}
                               </p>
-                              <p>{formatLastActivityLabel(lastEventAt)}</p>
-                              {stageSince ? <p className={isStageLong ? "text-amber-200" : "text-muted-foreground"}>Na etapa atual há {formatElapsedMs(stageElapsedMs)}</p> : null}
+                              <p>
+                                {formatLastActivityLabel(lastEventAt)}
+                                {stageSince ? (
+                                  <span className={isStageLong ? " text-amber-200" : ""}>
+                                    {" "}
+                                    · {formatElapsedMs(stageElapsedMs)} nesta etapa
+                                  </span>
+                                ) : null}
+                              </p>
                               <p>Redução: {formatPercentFine(reduction)} · {file.suspiciousEventCount} eventos / {file.triggerCount} gatilhos</p>
                               <p>Semáforo: <span className={getSemaforoTone(file)}>{getSemaforo(file)}</span></p>
                               {selectedJobId
