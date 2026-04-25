@@ -11,6 +11,7 @@ import { registerReduceLogsUploadRoute } from "./reduceLogsUpload";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { validateProductionEnv } from "./env";
+import { applyPostgresSchemaIfNeeded } from "./postgresSchemaSync";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -34,6 +35,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   validateProductionEnv();
+  await applyPostgresSchemaIfNeeded();
 
   const app = express();
   // PaaS (Render, etc.) terminam TLS no proxy; necessário para cookies Secure e req.secure.
