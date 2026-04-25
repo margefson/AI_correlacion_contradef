@@ -120,7 +120,7 @@ export function getFileRecommendation(file: FileMonitor) {
   if (file.uploadStatus === "uploading") {
     return file.sizeBytes >= 1024 * 1024 * 1024
       ? "Mantenha a guia aberta até o envio em partes alcançar 100%; o processamento só começa após o recebimento integral do lote."
-      : "Acompanhe a barra de envio até 100% antes de esperar métricas de redução ou eventos preservados.";
+      : "Acompanhe o progresso do envio (barra ou % por ficheiro) até 100% antes de esperar métricas de redução ou eventos preservados.";
   }
   if (file.processingStatus === "queued") {
     return file.uploadReused

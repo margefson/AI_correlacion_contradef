@@ -25,6 +25,7 @@ import {
 } from "./db";
 import { copyTempFileToLocalArtifact, localArtifactExists, persistJobArtifactBuffer } from "./artifactLocalStore";
 import { invokeLLM } from "./_core/llm";
+import { getServerProcessDebugSnapshot } from "./_core/serverProcessDebug";
 import { storageGetBuffer, storagePut } from "./storage";
 import { normalizeOptionalSampleSha256 } from "../shared/virusTotal";
 import {
@@ -2093,7 +2094,10 @@ async function enrichArtifactsWithDownloadUrl(
   }));
 }
 
-export async function getAnalysisJobDetail(jobId: string): Promise<AnalysisJobDetail | null> {
+export async function getAnalysisJobDetail(
+  jobId: string,
+  options?: { includeServerProcess?: boolean },
+): Promise<AnalysisJobDetail | null> {
   const job = await getAnalysisJobByJobId(jobId);
   if (!job) return null;
 
@@ -2117,7 +2121,7 @@ export async function getAnalysisJobDetail(jobId: string): Promise<AnalysisJobDe
   };
   const flowGraph = (summaryJson.flowGraph as FlowGraph | undefined) ?? { nodes: [], edges: [] };
 
-  return {
+  const base: AnalysisJobDetail = {
     job,
     events: events.slice().reverse().map((event) => ({
       eventType: event.eventType,
@@ -2153,6 +2157,13 @@ export async function getAnalysisJobDetail(jobId: string): Promise<AnalysisJobDe
     riskLevel: (summaryJson.riskLevel as RiskLevel | undefined) ?? "low",
     currentPhase: (summaryJson.currentPhase as string | undefined) ?? "Inicialização",
   };
+  if (options?.includeServerProcess) {
+    return {
+      ...base,
+      serverProcessDebug: await getServerProcessDebugSnapshot(),
+    };
+  }
+  return base;
 }
 
 export async function syncAnalysisJob(jobId: string) {

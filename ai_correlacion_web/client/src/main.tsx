@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
+import { getTrpcClientDebugHeaders } from "./lib/reduceLogsDebug";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,9 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      headers() {
+        return getTrpcClientDebugHeaders();
+      },
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),

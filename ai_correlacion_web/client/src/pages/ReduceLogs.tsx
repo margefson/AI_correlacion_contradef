@@ -32,8 +32,8 @@ import {
   getReduceLogsUploadCapabilities,
   initReduceLogsUpload,
   type UploadCompletionFilePayload,
-  uploadReduceLogsLegacy,
   uploadReduceLogsChunk,
+  uploadReduceLogsLegacyWithProgress,
 } from "@/services/analysisService";
 import {
   buildMonitoredFiles,
@@ -59,6 +59,7 @@ import {
   SlidersHorizontal,
   UploadCloud,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -293,10 +294,12 @@ function ProgressStrip({
   value,
   indeterminate,
   tone = "cyan",
+  className,
 }: {
   value: number;
   indeterminate?: boolean;
   tone?: "cyan" | "emerald" | "rose" | "amber";
+  className?: string;
 }) {
   const toneClass = tone === "emerald"
     ? "bg-emerald-400"
@@ -308,14 +311,14 @@ function ProgressStrip({
 
   if (indeterminate) {
     return (
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted dark:bg-white/10">
+      <div className={cn("h-2 w-full overflow-hidden rounded-full bg-muted dark:bg-white/10", className)}>
         <div className={`${toneClass} h-full w-[38%] animate-pulse rounded-full`} />
       </div>
     );
   }
 
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-muted dark:bg-white/10">
+    <div className={cn("h-2 w-full overflow-hidden rounded-full bg-muted dark:bg-white/10", className)}>
       <div className={`${toneClass} h-full rounded-full transition-all duration-300`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
     </div>
   );
@@ -370,6 +373,8 @@ export default function ReduceLogs() {
   const [isUploading, setIsUploading] = useState(false);
   /** Mensagem de alto nível durante init/envio/completação (o utilizador vê o que o servidor está a fazer). */
   const [uploadPipelineStatus, setUploadPipelineStatus] = useState<string | null>(null);
+  /** Só no envio multipart directo: bytes enviados para a barra / % real (fetch não reporta; usamos XHR). */
+  const [directMultipartBytes, setDirectMultipartBytes] = useState<{ loaded: number; total: number } | null>(null);
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFileMonitor[]>([]);
   const [activeFileTab, setActiveFileTab] = useState<string>("");
   const [uiNowMs, setUiNowMs] = useState(() => Date.now());
@@ -563,6 +568,7 @@ export default function ReduceLogs() {
         progress: f.progress,
         stage: f.currentStage,
       })),
+      serverProcessDebug: uploadedDetail.serverProcessDebug ?? null,
     });
   }, [
     selectedJobId,
@@ -998,28 +1004,45 @@ export default function ReduceLogs() {
     setActiveFileTab(initialBatch[0]?.fileName ?? "");
 
     try {
+      setDirectMultipartBytes(null);
       const submissionInput = {
         analysisName: analysisName.trim(),
         focusTerms: "",
         focusRegexes: "",
         origin: window.location.origin,
       };
-      setUploadPipelineStatus("A obter definições de envio (armazenamento / partes) no servidor…");
-      const capabilities = await getReduceLogsUploadCapabilities().catch(() => null);
-      const shouldUseLegacy = capabilities?.storageConfigured === false;
 
-      if (shouldUseLegacy) {
-        setUploadPipelineStatus("A enviar o lote (modo directo) — ficheiros grandes demoram; não recarregue a página…");
-        const legacyPayload = await uploadReduceLogsLegacy({
-          ...submissionInput,
-          files: selectedFiles,
-        });
+      const runLegacyMultipart = async () => {
+        const lotBytes = selectedFiles.reduce((s, f) => s + f.size, 0);
+        setDirectMultipartBytes({ loaded: 0, total: lotBytes });
+        const legacyPayload = await uploadReduceLogsLegacyWithProgress(
+          { ...submissionInput, files: selectedFiles },
+          ({ loaded, total, percent }) => {
+            setDirectMultipartBytes({ loaded, total: total > 0 ? total : lotBytes });
+            setSubmittedFiles((current) => current.map((file) => ({
+              ...file,
+              uploadProgress: percent,
+              uploadStatus: "uploading" as ProcessingStatus,
+            })));
+          },
+        );
         setSubmittedFiles((current) => current.map((file) => ({
           ...file,
           uploadProgress: 100,
           uploadStatus: "completed",
           uploadReused: false,
         })));
+        setDirectMultipartBytes({ loaded: lotBytes, total: lotBytes });
+        return legacyPayload;
+      };
+
+      setUploadPipelineStatus("A obter definições de envio (armazenamento / partes) no servidor…");
+      const capabilities = await getReduceLogsUploadCapabilities().catch(() => null);
+      const shouldUseLegacy = capabilities?.storageConfigured === false;
+
+      if (shouldUseLegacy) {
+        setUploadPipelineStatus("A enviar o lote (modo directo) — acompanhe a barra de progresso abaixo; não recarregue a página…");
+        const legacyPayload = await runLegacyMultipart();
         const legacyJobId = legacyPayload?.job?.jobId ?? null;
         toast.success("Armazenamento partilhado (Forge) não configurado — lote enviado em modo directo (multipart).", {
           description: "Em produção, configure BUILT_IN_FORGE_API_URL + BUILT_IN_FORGE_API_KEY para uploads em blocos para o object storage.",
@@ -1050,17 +1073,8 @@ export default function ReduceLogs() {
         }
 
         // Local/dev fallback: use the legacy multipart route when shared storage is not configured.
-        setUploadPipelineStatus("A enviar o lote (modo directo) — caindo de volta para multipart…");
-        const legacyPayload = await uploadReduceLogsLegacy({
-          ...submissionInput,
-          files: selectedFiles,
-        });
-        setSubmittedFiles((current) => current.map((file) => ({
-          ...file,
-          uploadProgress: 100,
-          uploadStatus: "completed",
-          uploadReused: false,
-        })));
+        setUploadPipelineStatus("A enviar o lote (modo directo) — acompanhe a barra de progresso abaixo…");
+        const legacyPayload = await runLegacyMultipart();
         const legacyJobId = legacyPayload?.job?.jobId ?? null;
         toast.success("Armazenamento partilhado (Forge) não configurado — lote enviado em modo directo (multipart).", {
           description: "Em produção, configure BUILT_IN_FORGE_API_URL + BUILT_IN_FORGE_API_KEY para uploads em blocos para o object storage.",
@@ -1214,6 +1228,7 @@ export default function ReduceLogs() {
     } finally {
       setIsUploading(false);
       setUploadPipelineStatus(null);
+      setDirectMultipartBytes(null);
     }
   }
 
@@ -1375,18 +1390,33 @@ export default function ReduceLogs() {
                 <div>
                   <CardTitle>Monitoramento dos lotes (esta sessão)</CardTitle>
                   {selectedJobId ? (
-                    <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
-                      {!submittedDetailQuery.dataUpdatedAt && submittedDetailQuery.isFetching
-                        ? "A pedir estado ao servidor…"
-                        : submittedDetailQuery.dataUpdatedAt
-                          ? `Última resposta do servidor: ${formatDateTimeLocale(new Date(submittedDetailQuery.dataUpdatedAt))}${
-                            submittedDetailQuery.isFetching ? " · a atualizar…" : ""
-                          }.`
-                          : "A aguardar a primeira resposta do servidor…"}
-                      {isReduceLogsDebugEnabled() ? (
-                        <span className="ml-2 font-mono text-[10px] text-emerald-400/90">(debug consola)</span>
+                    <div className="mt-1 max-w-3xl text-xs text-muted-foreground">
+                      <p>
+                        {!submittedDetailQuery.dataUpdatedAt && submittedDetailQuery.isFetching
+                          ? "A pedir estado ao servidor…"
+                          : submittedDetailQuery.dataUpdatedAt
+                            ? `Última resposta do servidor: ${formatDateTimeLocale(new Date(submittedDetailQuery.dataUpdatedAt))}${
+                              submittedDetailQuery.isFetching ? " · a atualizar…" : ""
+                            }.`
+                            : "A aguardar a primeira resposta do servidor…"}
+                        {isReduceLogsDebugEnabled() ? (
+                          <span className="ml-2 font-mono text-[10px] text-emerald-400/90">(debug consola)</span>
+                        ) : null}
+                      </p>
+                      {isReduceLogsDebugEnabled() && uploadedDetail?.serverProcessDebug ? (
+                        <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-emerald-500/35 bg-black/60 p-2 font-mono text-[10px] leading-relaxed text-emerald-100/95">
+                          {JSON.stringify(uploadedDetail.serverProcessDebug, null, 2)}
+                        </pre>
                       ) : null}
-                    </p>
+                      {isReduceLogsDebugEnabled() && !isLocalUploadLotSelected && uploadedDetail && !uploadedDetail.serverProcessDebug
+                        && !submittedDetailQuery.isLoading ? (
+                          <p className="mt-1.5 text-[10px] text-amber-200/90">
+                            Sem snapshot do servidor: defina a variável <span className="font-mono">CONTRADEF_SERVER_DEBUG=1</span> no
+                            alojamento (e redeploy) para ver memória, CPU, disco e espaço no diretório de trabalho a cada
+                            resposta.
+                          </p>
+                        ) : null}
+                    </div>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1448,8 +1478,40 @@ export default function ReduceLogs() {
                 <div className="rounded-2xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-950 dark:border-cyan-400/30 dark:bg-cyan-950/40 dark:text-cyan-50">
                   <p className="font-medium text-cyan-900 dark:text-cyan-100">Estado do envio (servidor)</p>
                   <p className="mt-1.5 text-xs leading-relaxed text-cyan-900/95 dark:text-cyan-100/95">{uploadPipelineStatus}</p>
+                  {directMultipartBytes && directMultipartBytes.total > 0 ? (
+                    <div className="mt-3 space-y-1.5" role="status" aria-live="polite">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-medium text-cyan-900 dark:text-cyan-100">
+                        <span>Progresso do envio (dados a sair do seu browser)</span>
+                        <span className="tabular-nums text-cyan-800 dark:text-cyan-200">
+                          {Math.min(
+                            100,
+                            Math.round((directMultipartBytes.loaded / directMultipartBytes.total) * 100),
+                          )}
+                          % · {formatBytes(directMultipartBytes.loaded)} / {formatBytes(directMultipartBytes.total)}
+                        </span>
+                      </div>
+                      <ProgressStrip
+                        className="h-2.5 sm:h-3"
+                        tone="amber"
+                        value={Math.min(
+                          100,
+                          Math.round((directMultipartBytes.loaded / directMultipartBytes.total) * 100),
+                        )}
+                      />
+                    </div>
+                  ) : null}
                   <p className="mt-2 text-[11px] text-cyan-800/80 dark:text-cyan-200/80">
-                    Se o ecrã demorar, o alojamento pode estar a iniciar a instância. Não recarregue até terminar a barra de envio ou a mensagem de conclusão.
+                    {directMultipartBytes && directMultipartBytes.total > 0 ? (
+                      <>
+                        O alojamento pode demorar a responder (ex.: instância a acordar). Não recarregue a página até a barra
+                        acima chegar a 100% ou aparecer a mensagem de conclusão.
+                      </>
+                    ) : (
+                      <>
+                        O alojamento pode demorar a responder (ex.: instância a acordar). Acompanhe o progresso por ficheiro na
+                        secção laranja abaixo e não recarregue até o envio terminar ou surgir mensagem de erro/conclusão.
+                      </>
+                    )}
                   </p>
                 </div>
               )}

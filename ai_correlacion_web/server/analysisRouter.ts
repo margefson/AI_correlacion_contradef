@@ -76,7 +76,10 @@ export const analysisRouter = router({
         message: "Só pode ver o detalhe dos lotes que submeteu.",
       });
     }
-    return getAnalysisJobDetail(input.jobId);
+    const allowServerProcess = process.env.CONTRADEF_SERVER_DEBUG === "1";
+    const raw = ctx.req.get?.("x-contradef-client-debug")?.trim().toLowerCase() ?? "";
+    const includeServerProcess = allowServerProcess && (raw === "1" || raw === "true" || raw === "yes");
+    return getAnalysisJobDetail(input.jobId, { includeServerProcess });
   }),
 
   /**

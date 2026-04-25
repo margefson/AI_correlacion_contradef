@@ -58,11 +58,15 @@ function createAuthContext(userOverrides: Partial<AuthenticatedUser> = {}): Trpc
     ...userOverrides,
   };
 
+  const headerRecord: Record<string, string | undefined> = {};
   return {
     user,
     req: {
       protocol: "https",
-      headers: {},
+      headers: headerRecord,
+      get(name: string) {
+        return headerRecord[name.toLowerCase() as keyof typeof headerRecord] ?? headerRecord[name];
+      },
     } as TrpcContext["req"],
     res: {
       clearCookie: vi.fn(),
@@ -214,7 +218,7 @@ describe("analysis router", () => {
     const result = await caller.analysis.detail({ jobId: "job-123" });
 
     expect(getJobSpy).toHaveBeenCalledWith("job-123");
-    expect(mockGetAnalysisJobDetail).toHaveBeenCalledWith("job-123");
+    expect(mockGetAnalysisJobDetail).toHaveBeenCalledWith("job-123", { includeServerProcess: false });
     expect(result).toEqual(detail);
     getJobSpy.mockRestore();
   });

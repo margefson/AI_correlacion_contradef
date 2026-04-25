@@ -161,6 +161,33 @@ export const createAnalysisJobInputSchema = z.object({
 });
 export type CreateAnalysisJobInput = z.infer<typeof createAnalysisJobInputSchema>;
 
+/** Só preenchido quando o servidor expõe debug (`CONTRADEF_SERVER_DEBUG=1`) e o pedido traz o cabeçalho de cliente. */
+export const serverProcessDebugSnapshotSchema = z.object({
+  capturedAt: z.string(),
+  process: z.object({
+    pid: z.number(),
+    uptimeSec: z.number(),
+    memoryMb: z.object({
+      rss: z.number(),
+      heapUsed: z.number(),
+      heapTotal: z.number(),
+      external: z.number(),
+    }),
+  }),
+  os: z.object({
+    freememMb: z.number(),
+    totalmemMb: z.number(),
+    loadavg: z.tuple([z.number(), z.number(), z.number()]),
+    cpuCount: z.number().optional(),
+  }),
+  workDir: z.object({
+    path: z.string(),
+    freeSpaceGb: z.number().optional(),
+    error: z.string().optional(),
+  }),
+});
+export type ServerProcessDebugSnapshot = z.infer<typeof serverProcessDebugSnapshotSchema>;
+
 export const analysisJobDetailSchema = z.object({
   job: analysisJobSummarySchema.extend({
     stdoutTail: z.string().nullable().optional(),
@@ -190,5 +217,6 @@ export const analysisJobDetailSchema = z.object({
   classification: malwareCategorySchema.default("Unknown"),
   riskLevel: riskLevelSchema.default("low"),
   currentPhase: z.string().default("Inicialização"),
+  serverProcessDebug: serverProcessDebugSnapshotSchema.optional(),
 });
 export type AnalysisJobDetail = z.infer<typeof analysisJobDetailSchema>;

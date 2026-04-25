@@ -133,7 +133,7 @@ export async function completeReduceLogsUpload(payload: UploadCompleteRequest) {
   return data;
 }
 
-export async function uploadReduceLogsLegacy(payload: LegacyUploadRequest) {
+function buildReduceLogsLegacyFormData(payload: LegacyUploadRequest) {
   const formData = new FormData();
   formData.append("analysisName", payload.analysisName);
   formData.append("focusTerms", payload.focusTerms);
@@ -143,6 +143,66 @@ export async function uploadReduceLogsLegacy(payload: LegacyUploadRequest) {
     formData.append("sampleSha256", payload.sampleSha256.trim());
   }
   payload.files.forEach((file) => formData.append("logs", file, file.name));
+  return formData;
+}
+
+/**
+ * `fetch` com multipart não expõe progresso de upload. Com XHR, o evento
+ * `upload` permite mostrar barra/percentagem (modo directo / legacy).
+ */
+export function uploadReduceLogsLegacyWithProgress(
+  payload: LegacyUploadRequest,
+  onProgress?: (info: { loaded: number; total: number; percent: number }) => void,
+): Promise<{ message?: string; job?: { jobId?: string | null } }> {
+  const formData = buildReduceLogsLegacyFormData(payload);
+  const totalBytesHint = payload.files.reduce((s, f) => s + f.size, 0);
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/reduce-logs/upload");
+    xhr.withCredentials = true;
+    xhr.responseType = "text";
+    xhr.upload.addEventListener("progress", (e) => {
+      if (!onProgress) return;
+      const total = e.lengthComputable && e.total > 0 ? e.total : totalBytesHint;
+      const loaded = e.loaded;
+      const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+      onProgress({ loaded, total, percent });
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = (xhr.responseText ? JSON.parse(xhr.responseText) : {}) as {
+            message?: string;
+            job?: { jobId?: string | null };
+          };
+          resolve(data);
+        } catch {
+          reject(new Error("Resposta inválida do servidor após o envio do lote."));
+        }
+        return;
+      }
+      let msg = "Não foi possível iniciar o upload legado.";
+      try {
+        const data = JSON.parse(xhr.responseText || "{}") as { message?: string };
+        if (data?.message) msg = data.message;
+      } catch {
+        /* ignore */
+      }
+      reject(new Error(msg));
+    });
+    xhr.addEventListener("error", () => {
+      reject(new Error("Falha de rede ao enviar o lote (verifique a ligação e tente de novo)."));
+    });
+    xhr.addEventListener("abort", () => {
+      reject(new Error("Envio interrompido."));
+    });
+    xhr.send(formData);
+  });
+}
+
+export async function uploadReduceLogsLegacy(payload: LegacyUploadRequest) {
+  const formData = buildReduceLogsLegacyFormData(payload);
 
   const response = await fetch("/api/reduce-logs/upload", {
     method: "POST",
