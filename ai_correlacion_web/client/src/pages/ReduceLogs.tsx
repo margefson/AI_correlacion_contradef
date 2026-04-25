@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -1157,9 +1157,6 @@ export default function ReduceLogs() {
               <CardTitle className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                 Redução com acompanhamento individual de cada log submetido
               </CardTitle>
-              <CardDescription className="text-base leading-7 text-muted-foreground">
-                Esta tela passa a tratar a submissão atual como um <strong>lote monitorado</strong>. Cada arquivo enviado ganha seu próprio acompanhamento de upload, etapa de redução e resultado final antes/depois.
-              </CardDescription>
             </CardHeader>
           </Card>
         </section>
@@ -1172,9 +1169,6 @@ export default function ReduceLogs() {
                   <UploadCloud className="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
                   <div>
                     <CardTitle>Enviar lote de logs para reduzir</CardTitle>
-                    <CardDescription>
-                      Envie um ou mais logs da Contradef. Se o mesmo arquivo já tiver sido persistido no backend, a tela reaproveita o conteúdo existente e evita novo upload do artefato grande. Depois do envio, o job fica associado a esta página neste navegador — pode sair e voltar a &quot;Reduzir Logs&quot; para rever o progresso.
-                    </CardDescription>
                   </div>
                 </div>
                 <Badge variant="outline" className="border-border text-muted-foreground dark:border-white/10">
@@ -1256,9 +1250,6 @@ export default function ReduceLogs() {
                     {LOG_FILE_ACCEPT.replace(/,/g, " · ")}
                   </p>
                 </div>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Um clique abre o explorador e substitui a seleção atual. Arrastar para esta zona adiciona ficheiros ao lote (evita duplicados pelo nome, tamanho e data de modificação).
-                </p>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -1306,7 +1297,7 @@ export default function ReduceLogs() {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground dark:border-white/10 dark:bg-white/5">
-                  Nenhum arquivo foi selecionado ainda. Escolha um ou mais logs para disparar a redução e criar um lote acompanhado nesta tela.
+                  Nenhum ficheiro selecionado.
                 </div>
               )}
 
@@ -1314,9 +1305,6 @@ export default function ReduceLogs() {
                 <Button onClick={handleReductionSubmit} disabled={isUploading} className="transition duration-200 hover:-translate-y-0.5">
                   {isUploading ? "Enviando lote e iniciando redução..." : "Executar redução com upload"}
                 </Button>
-                <p className="text-sm text-muted-foreground">
-                  Após o envio ou reaproveitamento, o monitoramento abaixo passa a refletir o lote atual, atualizando os arquivos individualmente conforme o processamento avança.
-                </p>
               </div>
             </CardContent>
           </Card>
@@ -1328,42 +1316,18 @@ export default function ReduceLogs() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <CardTitle>Monitoramento dos lotes (esta sessão)</CardTitle>
-                  <CardDescription>
-                    Pode manter <strong>vários jobs</strong> abertos: cada novo envio acrescenta à lista; escolha o lote a seguir. O{" "}
-                    <Link className="font-medium text-cyan-600 underline-offset-2 hover:underline dark:text-cyan-300" href="/">
-                      Centro Analítico
-                    </Link>{" "}
-                    mostra todo o histórico no servidor.
-                  </CardDescription>
                   {selectedJobId ? (
-                    <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-                      <span className="text-muted-foreground">
-                        {!submittedDetailQuery.dataUpdatedAt && submittedDetailQuery.isFetching
-                          ? "A pedir estado ao servidor…"
-                          : submittedDetailQuery.dataUpdatedAt
-                            ? `Última resposta do servidor: ${formatDateTimeLocale(new Date(submittedDetailQuery.dataUpdatedAt))}${
-                              submittedDetailQuery.isFetching ? " · a atualizar…" : ""
-                            }.`
-                            : "A aguardar a primeira resposta do servidor…"}
-                      </span>{" "}
-                      Se o relógio acima se renova cerca de 2 em 2 segundos enquanto o job está em execução, o browser está a receber dados; se percentagens e mensagens não mudam durante muito tempo, o motor pode estar numa fase longa sem gravar eventos (comum em ficheiros de vários GB) ou bloqueado — confirme no servidor (processo, CPU, logs).
-                      {!isReduceLogsDebugEnabled() ? (
-                        <span className="mt-1 block text-muted-foreground">
-                          Consola (opcional):{" "}
-                          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground dark:bg-black/30">
-                            localStorage.setItem(&quot;contradef_reduce_logs_debug&quot;,&quot;1&quot;)
-                          </code>{" "}
-                          e recarregar a página; desligar com{" "}
-                          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground dark:bg-black/30">
-                            localStorage.removeItem(&quot;contradef_reduce_logs_debug&quot;)
-                          </code>
-                          .
-                        </span>
-                      ) : (
-                        <span className="mt-1 block font-mono text-[10px] text-emerald-400/90">
-                          Debug da consola ligado — filtre mensagens por «ReduceLogs:detail».
-                        </span>
-                      )}
+                    <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
+                      {!submittedDetailQuery.dataUpdatedAt && submittedDetailQuery.isFetching
+                        ? "A pedir estado ao servidor…"
+                        : submittedDetailQuery.dataUpdatedAt
+                          ? `Última resposta do servidor: ${formatDateTimeLocale(new Date(submittedDetailQuery.dataUpdatedAt))}${
+                            submittedDetailQuery.isFetching ? " · a atualizar…" : ""
+                          }.`
+                          : "A aguardar a primeira resposta do servidor…"}
+                      {isReduceLogsDebugEnabled() ? (
+                        <span className="ml-2 font-mono text-[10px] text-emerald-400/90">(debug consola)</span>
+                      ) : null}
                     </p>
                   ) : null}
                 </div>
@@ -1672,12 +1636,7 @@ export default function ReduceLogs() {
                     />
                   </div>
 
-                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                    <p className="text-xs text-muted-foreground">
-                      {isLocalUploadLotSelected
-                        ? "Enquanto o job ainda não existir no servidor, só a grelha abaixo (estado de envio) se actualiza em tempo real. Quando o ID ctr-… for criado, o painel completo passa a ser consultado de X em X segundos no servidor."
-                        : "O estado do lote é consultado de X em X segundos (abaixo). O registo de leitura vem do servidor; não precisa de intervalo tão curto se estiver a seguir o texto."}
-                    </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                     <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span>Intervalo de actualização do estado</span>
                       <select
@@ -1711,9 +1670,6 @@ export default function ReduceLogs() {
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="text-sm font-medium text-foreground">Registo de leitura no servidor</p>
-                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                            O avanço por ficheiro na grelha segue a leitura (bytes/linhas) no servidor. Actualização tipicamente a cada poucos segundos ou a cada dezenas de megabytes lidos.
-                          </p>
                         </div>
                         <code className="max-w-full shrink-0 break-all rounded border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-900 dark:text-cyan-100/90">
                           {uploadedDetail.job.message}
@@ -1772,9 +1728,6 @@ export default function ReduceLogs() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-foreground">Acompanhamento por arquivo</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          Progresso de upload, processamento e resultado de redução para cada log do lote atual.
-                        </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -1793,15 +1746,9 @@ export default function ReduceLogs() {
                         </Badge>
                       </div>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      O Excel inclui o lote completo (todas as linhas), com as folhas «Resumo», «Acompanhamento» e «Sugestões» — independentemente dos filtros da tabela.
-                    </p>
                     <div className="mt-6 rounded-xl border border-border bg-muted/70 p-4 dark:border-white/10 dark:bg-slate-950/55">
-                      <div className="mb-3 space-y-1">
+                      <div className="mb-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filtros e ordenação</p>
-                        <p className="text-xs leading-relaxed text-muted-foreground">
-                          Aplicam-se às tabelas deste separador. A prioridade de investigação e os dados exportados para Excel não são limitados por estes botões.
-                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                       <Button
@@ -1986,9 +1933,6 @@ export default function ReduceLogs() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-foreground">Sugestões de acompanhamento do lote atual</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          Recomendações automáticas por arquivo para orientar a próxima ação do analista.
-                        </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -2065,9 +2009,6 @@ export default function ReduceLogs() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-foreground">Painel operacional por arquivo</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          Detalhamento técnico do arquivo selecionado (etapas, leitura operacional e eventos).
-                        </p>
                       </div>
                       {activeFile ? (
                         <Badge className={getProcessingStatusVisual(activeFile.processingStatus).badge}>
