@@ -228,7 +228,19 @@ function isStorageCredentialsMissingError(error: unknown) {
   return error.message.includes(STORAGE_CREDENTIALS_MISSING_FRAGMENT);
 }
 
-function ProgressStrip({ value, tone = "cyan" }: { value: number; tone?: "cyan" | "emerald" | "rose" | "amber" }) {
+function formatFileProcessingPercent(p: number | null) {
+  return p == null ? "—" : `${p}%`;
+}
+
+function ProgressStrip({
+  value,
+  indeterminate,
+  tone = "cyan",
+}: {
+  value: number;
+  indeterminate?: boolean;
+  tone?: "cyan" | "emerald" | "rose" | "amber";
+}) {
   const toneClass = tone === "emerald"
     ? "bg-emerald-400"
     : tone === "rose"
@@ -236,6 +248,14 @@ function ProgressStrip({ value, tone = "cyan" }: { value: number; tone?: "cyan" 
       : tone === "amber"
         ? "bg-amber-400"
         : "bg-cyan-400";
+
+  if (indeterminate) {
+    return (
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted dark:bg-white/10">
+        <div className={`${toneClass} h-full w-[38%] animate-pulse rounded-full`} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-muted dark:bg-white/10">
@@ -1444,7 +1464,7 @@ export default function ReduceLogs() {
                         <div>
                           <p className="text-sm font-medium text-foreground">Registo de leitura no servidor</p>
                           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                            A barra 45% na grelha é um marco fixo da fase de redução; aqui o backend reporta o avanço em linhas e bytes. Actualizado cerca de 2,5s durante ficheiros muito grandes.
+                            O avanço por ficheiro na grelha segue a leitura (bytes/linhas) no servidor. Actualização tipicamente a cada poucos segundos ou a cada dezenas de megabytes lidos.
                           </p>
                         </div>
                         <code className="max-w-full shrink-0 break-all rounded border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-900 dark:text-cyan-100/90">
@@ -1628,7 +1648,7 @@ export default function ReduceLogs() {
                             const uploadTone = file.uploadStatus === "failed" ? "rose" : file.uploadStatus === "completed" || file.uploadStatus === "running" ? "emerald" : "cyan";
                             const processingVisual = getProcessingStatusVisual(file.processingStatus);
                             const lastEventAt = fileLastEventAtMap.get(file.fileName);
-                            const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000));
+                            const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
                             const stageSince = fileCurrentStageSinceMap.get(file.fileName);
                             const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
                             const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
@@ -1652,9 +1672,13 @@ export default function ReduceLogs() {
                                         <Badge className={processingVisual.badge}>{getStatusLabel(file.processingStatus)}</Badge>
                                         {isPossiblyStalled ? <span className="text-amber-200">sem atualização recente</span> : null}
                                       </span>
-                                      <span>{file.processingProgress}%</span>
+                                      <span>{formatFileProcessingPercent(file.processingProgress)}</span>
                                     </div>
-                                    <ProgressStrip value={file.processingProgress} tone={processingVisual.progressTone} />
+                                    <ProgressStrip
+                                      value={file.processingProgress ?? 0}
+                                      indeterminate={file.processingProgress == null && file.processingStatus === "running"}
+                                      tone={processingVisual.progressTone}
+                                    />
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -1692,7 +1716,7 @@ export default function ReduceLogs() {
                         const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
                         const processingVisual = getProcessingStatusVisual(file.processingStatus);
                         const lastEventAt = fileLastEventAtMap.get(file.fileName);
-                        const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000));
+                        const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
                         const stageSince = fileCurrentStageSinceMap.get(file.fileName);
                         const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
                         const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
@@ -1703,7 +1727,7 @@ export default function ReduceLogs() {
                             <div className="mt-3 space-y-2 text-xs text-muted-foreground">
                               <p>Upload: {getStatusLabel(file.uploadStatus)} ({file.uploadProgress}%)</p>
                               <p className={processingVisual.label}>
-                                Processamento: {getStatusLabel(file.processingStatus)} ({file.processingProgress}%)
+                                Processamento: {getStatusLabel(file.processingStatus)} ({formatFileProcessingPercent(file.processingProgress)})
                                 {isPossiblyStalled ? " · sem atualização recente" : ""}
                               </p>
                               <p>{formatLastActivityLabel(lastEventAt)}</p>
@@ -1827,7 +1851,7 @@ export default function ReduceLogs() {
                               >
                                 <div className="text-left">
                                   <p className="text-xs font-medium">{file.fileName}</p>
-                                  <p className={`text-[11px] ${processingVisual.label}`}>{getStatusLabel(file.processingStatus)} · {file.processingProgress}%</p>
+                                  <p className={`text-[11px] ${processingVisual.label}`}>{getStatusLabel(file.processingStatus)} · {formatFileProcessingPercent(file.processingProgress)}</p>
                                 </div>
                               </TabsTrigger>
                             );
@@ -1838,7 +1862,7 @@ export default function ReduceLogs() {
                         {visibleMonitoredFiles.map((file) => {
                           const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
                           const lastEventAt = fileLastEventAtMap.get(file.fileName);
-                          const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > 120000));
+                          const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
                           const stageSince = fileCurrentStageSinceMap.get(file.fileName);
                           const stageElapsedMs = stageSince ? uiNowMs - stageSince.getTime() : 0;
                           const isStageLong = stageElapsedMs > STAGE_WARNING_THRESHOLD_MS && (file.processingStatus === "running" || file.processingStatus === "queued");
@@ -1846,7 +1870,7 @@ export default function ReduceLogs() {
                             <TabsContent key={`content-${file.fileName}`} value={file.fileName} className="space-y-4">
                               <div className="grid gap-4 md:grid-cols-4">
                                 <MetricCard icon={RefreshCw} label="Upload" value={`${file.uploadProgress}%`} helper={file.uploadReused ? "Reaproveitado do servidor" : `${getStatusLabel(file.uploadStatus)} · ${formatDurationMs(file.uploadDurationMs)}`} />
-                                <MetricCard icon={Database} label="Processamento" value={`${file.processingProgress}%`} helper={`${getStatusLabel(file.processingStatus)} · ${file.currentStage}`} />
+                                <MetricCard icon={Database} label="Processamento" value={formatFileProcessingPercent(file.processingProgress)} helper={`${getStatusLabel(file.processingStatus)} · ${file.currentStage}`} />
                                 <MetricCard icon={FileArchive} label="Tamanho antes" value={formatBytes(file.originalBytes)} helper={`${file.originalLineCount} linhas`} />
                                 <MetricCard icon={ShieldCheck} label="Tamanho depois" value={formatBytes(file.reducedBytes)} helper={`${file.reducedLineCount} linhas · ${formatPercentFine(reduction)}`} />
                               </div>

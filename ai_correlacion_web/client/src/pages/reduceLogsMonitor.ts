@@ -37,7 +37,8 @@ export type FileMonitor = {
   uploadProgress: number;
   uploadStatus: ProcessingStatus;
   processingStatus: ProcessingStatus;
-  processingProgress: number;
+  /** `null` = percentagem ainda desconhecida (evita marcos enganadores como 20 %/45 %). */
+  processingProgress: number | null;
   currentStage: string;
   currentStep: string;
   lastMessage: string;
@@ -130,13 +131,15 @@ export function buildMonitoredFiles(submittedFiles: SubmittedFileMonitor[], deta
     const detail = detailMap.get(fileName);
     const processingStatus = (detail?.status as ProcessingStatus | undefined)
       ?? (local?.uploadStatus === "failed" ? "failed" : "queued");
-    const processingProgress = typeof detail?.progress === "number"
+    const processingProgress: number | null = typeof detail?.progress === "number" && Number.isFinite(detail.progress)
       ? detail.progress
       : processingStatus === "completed"
         ? 100
-        : processingStatus === "running"
-          ? 20
-          : 0;
+        : processingStatus === "failed"
+          ? 0
+          : processingStatus === "running"
+            ? null
+            : 0;
     const uploadStatus = local?.uploadStatus ?? (detail ? "completed" : "queued");
     const uploadReused = detail?.uploadReused ?? local?.uploadReused ?? false;
     const fallbackStage = uploadStatus === "uploading"

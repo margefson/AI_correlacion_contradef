@@ -120,6 +120,8 @@ const stageOrder = [
 type LogParseProgress = {
   jobId: string;
   fileLabel: string;
+  sizeBytes?: number;
+  logType: SupportedLogType;
 };
 
 type ParseProgressState = {
@@ -128,6 +130,8 @@ type ParseProgressState = {
   logLines: string[];
   lastFlushMs: number;
   lastFlushedBytes: number;
+  /** Último `fileProgress` enviado em evento (evita regravar o mesmo). */
+  lastEmittedFileProgress: number;
 };
 
 function formatBytesPt(n: number): string {
@@ -148,6 +152,22 @@ const PARSE_PROGRESS_LINE_STRIDE = 100_000;
 /** Em ficheiros muito grandes, emitir leitura mesmo entre marcos de linha, para a UI não marcar falso “sem actualização” durante fases longas. */
 const PARSE_PROGRESS_BYTE_STRIDE = 32 * 1024 * 1024;
 const PARSE_LOG_MAX_LINES = 40;
+
+/** Marca 45% = início da heurística no fluxo; ~88% = fim da leitura; consolidação 82–100% vem dos eventos finais. */
+function computeProgressPercentWhileParsing(
+  byteWeight: number,
+  lineCount: number,
+  sizeBytes: number | undefined,
+): number {
+  if (sizeBytes && sizeBytes > 0) {
+    const t = Math.min(1, byteWeight / sizeBytes);
+    return Math.min(88, 45 + Math.round(t * 43));
+  }
+  if (lineCount > 0) {
+    return Math.min(88, 45 + Math.min(30, Math.floor(lineCount / 1_000_000)));
+  }
+  return 45;
+}
 
 function shouldReportParseProgress(state: ParseProgressState, options: { force: boolean }): boolean {
   if (state.lineCount < 1) {
@@ -183,9 +203,39 @@ async function maybeFlushParseProgress(
   }
   state.lastFlushMs = Date.now();
   state.lastFlushedBytes = state.byteWeight;
+
+  const fileProgress = computeProgressPercentWhileParsing(byteWeight, lineCount, progress.sizeBytes);
+  const msg = `A processar ${progress.fileLabel}: ${lineCount.toLocaleString("pt-PT")} linhas…`;
+  const liveStep = `Leitura: ${lineCount.toLocaleString("pt-PT")} linhas · ${formatBytesPt(byteWeight)} (≈${fileProgress}%)`;
+  const stdoutTail = [`Leitura em curso: ${progress.fileLabel}`, ...state.logLines].join("\n");
+  const jobEventProgress = Math.min(90, 38 + Math.round(fileProgress * 0.55));
+
   await updateAnalysisJob(progress.jobId, {
-    message: `A processar ${progress.fileLabel}: ${lineCount.toLocaleString("pt-PT")} linhas…`,
-    stdoutTail: [`Leitura em curso: ${progress.fileLabel}`, ...state.logLines].join("\n"),
+    message: msg,
+    stdoutTail,
+  });
+
+  if (!options.force && fileProgress === state.lastEmittedFileProgress) {
+    return;
+  }
+  state.lastEmittedFileProgress = fileProgress;
+
+  await addAnalysisEvent({
+    jobId: progress.jobId,
+    eventType: "file-stage",
+    stage: "redução heurística",
+    message: msg,
+    progress: jobEventProgress,
+    payloadJson: {
+      fileName: progress.fileLabel,
+      logType: progress.logType,
+      status: "running",
+      fileProgress,
+      currentStage: "Redução heurística",
+      currentStep: liveStep,
+      lastMessage: msg,
+      originalBytes: typeof progress.sizeBytes === "number" && progress.sizeBytes > 0 ? progress.sizeBytes : 0,
+    },
   });
 }
 
@@ -1173,7 +1223,7 @@ async function analyzeSingleLogFile(
 ): Promise<ParsedLogResult> {
   const logType = inferLogType(logFile.fileName, logFile.logType);
   const collector = createLogCollector(logFile.fileName, logType, perFileEventLimit);
-  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0, lastFlushedBytes: 0 };
+  const st: ParseProgressState = { lineCount: 0, byteWeight: 0, logLines: [], lastFlushMs: 0, lastFlushedBytes: 0, lastEmittedFileProgress: -1 };
 
   const bump = async (rawLine: string) => {
     collector.consume(rawLine);
@@ -1461,6 +1511,37 @@ export function buildLiveFileMetrics(
     });
   });
 
+  if (jobStatus === "running" && Array.isArray(summaryJson.fileMetrics)) {
+    (summaryJson.fileMetrics as unknown[]).forEach((raw) => {
+      if (!raw || typeof raw !== "object") return;
+      const entry = raw as Record<string, unknown>;
+      const fileName = typeof entry.fileName === "string" ? entry.fileName : null;
+      if (!fileName) return;
+      const sProg = entry.progress;
+      if (typeof sProg !== "number" || !Number.isFinite(sProg)) return;
+      const current = fileMap.get(fileName);
+      if (!current) return;
+      const p0 = current.progress ?? 0;
+      const merged = Math.max(p0, sProg);
+      if (merged > p0) {
+        const take = sProg >= p0;
+        fileMap.set(fileName, {
+          ...current,
+          progress: merged,
+          currentStage: take && typeof entry.currentStage === "string" && entry.currentStage
+            ? (entry.currentStage as string)
+            : current.currentStage,
+          currentStep: take && typeof entry.currentStep === "string" && entry.currentStep
+            ? (entry.currentStep as string)
+            : current.currentStep,
+          lastMessage: take && typeof entry.lastMessage === "string" && entry.lastMessage
+            ? (entry.lastMessage as string)
+            : current.lastMessage,
+        });
+      }
+    });
+  }
+
   if (jobStatus === "completed") {
     fileMap.forEach((value, fileName) => {
       fileMap.set(fileName, {
@@ -1571,6 +1652,8 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
       const parsed = await analyzeSingleLogFile(logFile, perFileEventLimit, {
         jobId,
         fileLabel: logFile.fileName,
+        sizeBytes: logFile.sizeBytes,
+        logType: inferredLogType,
       });
 
       parsed.suspiciousApis.forEach((api) => suspiciousApiSet.add(api));

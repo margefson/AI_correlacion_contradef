@@ -83,7 +83,7 @@ export function downloadReduceLogsExcelWorkbook(params: {
       getStatusLabel(file.uploadStatus),
       file.uploadProgress,
       getStatusLabel(file.processingStatus),
-      file.processingProgress,
+      file.processingProgress == null ? "—" : file.processingProgress,
       uploadTime,
       file.currentStage,
       file.currentStep,
