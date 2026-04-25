@@ -22,6 +22,8 @@ export type SessionPayload = {
   openId: string;
   appId: string;
   name: string;
+  email?: string;
+  loginMethod?: string;
 };
 
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
@@ -30,11 +32,13 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
+    if (ENV.authMode === "webdev") {
+      console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+      if (!ENV.oAuthServerUrl) {
+        console.error(
+          "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
+        );
+      }
     }
   }
 
@@ -78,7 +82,7 @@ class OAuthService {
 
 const createOAuthHttpClient = (): AxiosInstance =>
   axios.create({
-    baseURL: ENV.oAuthServerUrl,
+    baseURL: ENV.oAuthServerUrl || "http://127.0.0.1:1",
     timeout: AXIOS_TIMEOUT_MS,
   });
 
@@ -166,13 +170,20 @@ class SDKServer {
    */
   async createSessionToken(
     openId: string,
-    options: { expiresInMs?: number; name?: string } = {}
+    options: {
+      expiresInMs?: number;
+      name?: string;
+      email?: string | null;
+      loginMethod?: string;
+    } = {}
   ): Promise<string> {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        appId: ENV.sessionAppId,
         name: options.name || "",
+        email: options.email ?? undefined,
+        loginMethod: options.loginMethod,
       },
       options
     );
@@ -187,11 +198,15 @@ class SDKServer {
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 
-    return new SignJWT({
+    const claims: Record<string, unknown> = {
       openId: payload.openId,
       appId: payload.appId,
-      name: payload.name,
-    })
+      name: payload.name || "User",
+    };
+    if (payload.email) claims.email = payload.email;
+    if (payload.loginMethod) claims.loginMethod = payload.loginMethod;
+
+    return new SignJWT(claims)
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
@@ -199,7 +214,13 @@ class SDKServer {
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  ): Promise<{
+    openId: string;
+    appId: string;
+    name: string;
+    email?: string;
+    loginMethod?: string;
+  } | null> {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
       return null;
@@ -210,21 +231,21 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, appId, name, email, loginMethod } = payload as Record<string, unknown>;
 
-      if (
-        !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
-      ) {
-        console.warn("[Auth] Session payload missing required fields");
+      if (!isNonEmptyString(openId) || !isNonEmptyString(appId)) {
+        console.warn("[Auth] Session payload missing openId/appId");
         return null;
       }
+
+      const displayName = isNonEmptyString(name) ? name : "User";
 
       return {
         openId,
         appId,
-        name,
+        name: displayName,
+        ...(isNonEmptyString(email) ? { email } : {}),
+        ...(isNonEmptyString(loginMethod) ? { loginMethod } : {}),
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
@@ -270,8 +291,19 @@ class SDKServer {
     const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
 
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
+    if (!user && ENV.authMode === "oidc") {
+      await db.upsertUser({
+        openId: session.openId,
+        name: session.name || null,
+        email: session.email ?? null,
+        loginMethod: session.loginMethod ?? "oidc",
+        lastSignedIn: signedInAt,
+      });
+      user = await db.getUserByOpenId(session.openId);
+    }
+
+    // If user not in DB, sync from WebDev OAuth server automatically
+    if (!user && ENV.authMode === "webdev") {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({

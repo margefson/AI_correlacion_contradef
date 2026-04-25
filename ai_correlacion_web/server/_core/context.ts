@@ -12,9 +12,12 @@ export type TrpcContext = {
 
 /** Same identity resolution as tRPC context — use for authenticated Express routes (e.g. artifact download). */
 export async function getSessionUserFromRequest(req: Request): Promise<User | null> {
-  const allowDevBypass =
-    !ENV.isProduction &&
-    (!ENV.oAuthServerUrl || !ENV.appId);
+  const hasWebdev = Boolean(ENV.oAuthServerUrl && ENV.appId);
+  const hasOidc =
+    ENV.authMode === "oidc" &&
+    (Boolean(ENV.googleClientId?.trim() && ENV.googleClientSecret?.trim()) ||
+      Boolean(ENV.microsoftClientId?.trim() && ENV.microsoftClientSecret?.trim()));
+  const allowDevBypass = !ENV.isProduction && !hasWebdev && !hasOidc;
 
   try {
     return await sdk.authenticateRequest(req);

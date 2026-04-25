@@ -11,33 +11,48 @@ function isBrowserHttpUrl(base: string): boolean {
 
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
-  const oauthPortalUrl = String(import.meta.env.VITE_OAUTH_PORTAL_URL ?? "").trim();
-  const appId = String(import.meta.env.VITE_APP_ID ?? "").trim();
-  const redirectUri = `${window.location.origin}/api/oauth/callback`;
-  const state = btoa(redirectUri);
-
-  // In local/dev environments OAuth can be intentionally absent.
-  // Return current origin so auth checks do not crash UI rendering.
-  if (!oauthPortalUrl || !appId) {
-    return window.location.origin;
+  if (typeof window === "undefined") {
+    return "";
   }
+  const fallback = window.location.origin;
+  try {
+    const authMode = String(import.meta.env.VITE_AUTH_MODE ?? "").trim().toLowerCase();
+    if (authMode === "oidc") {
+      return `${window.location.origin}/api/oauth/login`;
+    }
 
-  // Evita TypeError se VITE_OAUTH_PORTAL_URL for postgresql:// ou outro valor inválido (erro comum no Render).
-  if (!isBrowserHttpUrl(oauthPortalUrl)) {
+    const oauthPortalUrl = String(import.meta.env.VITE_OAUTH_PORTAL_URL ?? "").trim();
+    const appId = String(import.meta.env.VITE_APP_ID ?? "").trim();
+    const redirectUri = `${window.location.origin}/api/oauth/callback`;
+    const state = btoa(redirectUri);
+
+    // In local/dev environments OAuth can be intentionally absent.
+    // Return current origin so auth checks do not crash UI rendering.
+    if (!oauthPortalUrl || !appId) {
+      return fallback;
+    }
+
+    // Evita TypeError se VITE_OAUTH_PORTAL_URL for postgresql:// ou outro valor inválido (erro comum no Render).
+    if (!isBrowserHttpUrl(oauthPortalUrl)) {
+      console.error(
+        "[Auth] VITE_OAUTH_PORTAL_URL must be http(s) URL for the OAuth portal, not a database string."
+      );
+      return fallback;
+    }
+
+    const baseUrl = oauthPortalUrl.replace(/\/+$/, "");
+    const url = new URL("app-auth", `${baseUrl}/`);
+    url.searchParams.set("appId", appId);
+    url.searchParams.set("redirectUri", redirectUri);
+    url.searchParams.set("state", state);
+    url.searchParams.set("type", "signIn");
+
+    return url.toString();
+  } catch (err) {
     console.error(
-      "[Auth] VITE_OAUTH_PORTAL_URL must be http(s) URL for the OAuth portal, not a database string."
+      "[Auth] getLoginUrl failed — check VITE_OAUTH_PORTAL_URL and VITE_APP_ID (Vite bakes VITE_* at build time; redeploy after fixing Render env).",
+      err
     );
-    return window.location.origin;
+    return fallback;
   }
-
-  const baseUrl = oauthPortalUrl.endsWith("/")
-    ? oauthPortalUrl.slice(0, -1)
-    : oauthPortalUrl;
-  const url = new URL(`${baseUrl}/app-auth`);
-  url.searchParams.set("appId", appId);
-  url.searchParams.set("redirectUri", redirectUri);
-  url.searchParams.set("state", state);
-  url.searchParams.set("type", "signIn");
-
-  return url.toString();
 };
