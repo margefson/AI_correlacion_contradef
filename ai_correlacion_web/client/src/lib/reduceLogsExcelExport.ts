@@ -1,5 +1,5 @@
 import { buildFlowJourneyNarrative, extractFlowNodeDetails, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
-import { formatBytes, formatDateTimeLocale, formatDurationMs, formatPercentFine } from "@/lib/format";
+import { formatBytes, formatDateTimeLocale, formatPercentFine } from "@/lib/format";
 import type { AnalysisJobDetail } from "@shared/analysis";
 import { listHeuristicsOutsideTa0005 } from "@shared/analysis";
 import {
@@ -60,7 +60,6 @@ export function downloadReduceLogsExcelWorkbook(params: {
     "% upload",
     "Estado processamento",
     "% processamento",
-    "Tempo de upload",
     "Etapa atual",
     "Passo atual",
     "Última atividade",
@@ -77,14 +76,12 @@ export function downloadReduceLogsExcelWorkbook(params: {
   const trackingRows = files.map((file) => {
     const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
     const meta = extra.get(file.fileName);
-    const uploadTime = file.uploadReused ? "Reaproveitado" : formatDurationMs(file.uploadDurationMs);
     return [
       file.fileName,
       getStatusLabel(file.uploadStatus),
       file.uploadProgress,
       getStatusLabel(file.processingStatus),
       file.processingProgress == null ? "—" : file.processingProgress,
-      uploadTime,
       file.currentStage,
       file.currentStep,
       meta?.lastActivity ?? "—",

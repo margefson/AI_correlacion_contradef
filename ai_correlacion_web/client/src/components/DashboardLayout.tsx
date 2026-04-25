@@ -21,6 +21,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { APP_NAME, appDocumentTitle } from "@/lib/brand";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { FileArchive, LayoutDashboard, LogOut } from "lucide-react";
@@ -119,6 +120,10 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
 
   useEffect(() => {
+    document.title = appDocumentTitle(activeMenuItem?.label);
+  }, [activeMenuItem?.label]);
+
+  useEffect(() => {
     if (isCollapsed) {
       setIsResizing(false);
     }
@@ -169,8 +174,17 @@ function DashboardLayoutContent({
                 title="Recolher ou expandir menu"
               />
               {!isCollapsed ? (
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-semibold tracking-tight">Contradef Analyzer</span>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <img
+                    src="/favicon.svg"
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 shrink-0 rounded-lg"
+                  />
+                  <span className="truncate font-semibold tracking-tight">
+                    {APP_NAME}
+                  </span>
                 </div>
               ) : null}
             </div>
@@ -250,7 +264,7 @@ function DashboardLayoutContent({
             />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-foreground">
-                {activeMenuItem?.label ?? "Contradef Analyzer"}
+                {activeMenuItem?.label ?? APP_NAME}
               </p>
               {!isMobile ? (
                 <p className="truncate text-xs text-muted-foreground">Área principal · mais espaço com o menu recolhido</p>
