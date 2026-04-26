@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   doublePrecision,
   integer,
   json,
@@ -46,6 +47,8 @@ export const users = pgTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  /** Bcrypt hash for AUTH_MODE=local; null for OAuth/OIDC users. */
+  passwordHash: varchar("passwordHash", { length: 128 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: userRoleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
@@ -54,6 +57,8 @@ export const users = pgTable("users", {
     .notNull()
     .$onUpdate(() => new Date()),
   lastSignedIn: timestamp("lastSignedIn", { mode: "date" }).defaultNow().notNull(),
+  /** true após redefinição de senha pelo admin até o usuário definir uma nova (login local). */
+  mustChangePassword: boolean("mustChangePassword").default(false).notNull(),
 });
 
 export const analysisJobs = pgTable("analysisJobs", {

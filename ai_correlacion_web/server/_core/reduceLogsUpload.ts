@@ -137,6 +137,14 @@ async function resolveAuthenticatedUser(req: Request, res: Response) {
     res.status(401).json(buildErrorPayload(401, "Autentique-se para enviar logs para redução."));
     return null;
   }
+  if (ctx.user.mustChangePassword) {
+    res
+      .status(403)
+      .json(
+        buildErrorPayload(403, "Deve alterar a palavra-passe antes de continuar. (10003)"),
+      );
+    return null;
+  }
 
   return ctx.user;
 }

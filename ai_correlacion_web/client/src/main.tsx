@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
+import { MUST_CHANGE_PASSWORD_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -15,11 +15,13 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  window.location.href = getLoginUrl();
+  if (error.message === UNAUTHED_ERR_MSG) {
+    window.location.href = getLoginUrl();
+    return;
+  }
+  if (error.message === MUST_CHANGE_PASSWORD_ERR_MSG) {
+    window.location.href = "/trocar-senha-obrigatorio";
+  }
 };
 
 queryClient.getQueryCache().subscribe(event => {

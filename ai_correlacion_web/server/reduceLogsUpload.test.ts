@@ -73,6 +73,7 @@ function createAuthenticatedContext() {
       openId: "analyst-user",
       email: "analyst@example.com",
       name: "Analyst User",
+      passwordHash: null,
       loginMethod: "oauth",
       role: "user",
       createdAt: new Date(),

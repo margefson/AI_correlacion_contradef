@@ -234,6 +234,32 @@ function getSemaforoTone(file: FileMonitor) {
 const DEFAULT_CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
 const STORAGE_CREDENTIALS_MISSING_FRAGMENT = "Storage proxy credentials missing";
 const STAGE_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
+
+/** tRPC espera JSON; respostas com `<!DOCTYPE` indicam página HTML (502/503, timeout, proxy) em vez da API. */
+function getDetailQueryErrorPresentation(message: string | undefined): {
+  headline: string;
+  body: string;
+  showTechnical: boolean;
+} {
+  const raw = String(message ?? "").trim();
+  const looksLikeHtmlResponse =
+    /Unexpected token ['"]<['"]/i.test(raw) || /DOCTYPE/i.test(raw) || /not valid JSON/i.test(raw);
+  if (looksLikeHtmlResponse) {
+    return {
+      headline: "Resposta inesperada do alojamento (HTML em vez de dados da API)",
+      body:
+        "O pedido a /api/trpc devia trazer JSON; recebeu-se uma página HTML — comum com timeout, 502/503 ou o serviço a reiniciar (ex. Render). O processamento do lote pode continuar em segundo plano: aguarde 30–60 s e use «Tentar novamente». Se repetir, abra os Logs do serviço no painel do alojamento e verifique memória, reinícios e erros.",
+      showTechnical: true,
+    };
+  }
+  return {
+    headline:
+      "Não foi possível carregar o detalhe completo deste job (pode ter expirado, rede ou o identificador deixou de ser válido).",
+    body: raw || "Erro ao contactar o servidor.",
+    showTechnical: Boolean(raw && raw.length > 120),
+  };
+}
+
 const REDUCE_LOGS_POLL_MS_KEY = "contradef.reduceLogsPollMs";
 const DEFAULT_REDUCE_LOGS_POLL_MS = 5000;
 const POLL_MS_OPTIONS = [2000, 5000, 10000, 30000, 60000] as const;
@@ -373,7 +399,7 @@ export default function ReduceLogs() {
   const [showRestoreHint, setShowRestoreHint] = useState(false);
   const [logDropHover, setLogDropHover] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  /** Mensagem de alto nível durante init/envio/completação (o utilizador vê o que o servidor está a fazer). */
+  /** Mensagem de alto nível durante init/envio/completação (o usuário vê o que o servidor está a fazer). */
   const [uploadPipelineStatus, setUploadPipelineStatus] = useState<string | null>(null);
   /** Só no envio multipart directo: bytes enviados para a barra / % real (fetch não reporta; usamos XHR). */
   const [directMultipartBytes, setDirectMultipartBytes] = useState<{ loaded: number; total: number } | null>(null);
@@ -1650,16 +1676,21 @@ export default function ReduceLogs() {
                   </Button>
                 </div>
               ) : null}
-              {submittedDetailQuery.isError && selectedJobId && !isLocalUploadLotSelected ? (
+              {submittedDetailQuery.isError && selectedJobId && !isLocalUploadLotSelected ? (() => {
+                const errPres = getDetailQueryErrorPresentation(submittedDetailQuery.error?.message);
+                return (
                 <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 p-5 text-sm leading-6 text-rose-950 dark:border-rose-400/25 dark:text-rose-100">
                   <p className="font-medium text-foreground">
-                    Não foi possível carregar o detalhe completo deste job (pode ter expirado, rede ou o identificador deixou de ser válido).
+                    {errPres.headline}
                   </p>
-                  <p className="mt-1 text-xs text-rose-900/90 dark:text-rose-200/90">
-                    {submittedDetailQuery.error?.message
-                      ? String(submittedDetailQuery.error.message)
-                      : "Erro ao contactar o servidor."}
+                  <p className="mt-1.5 text-xs text-rose-900/90 dark:text-rose-200/90">
+                    {errPres.body}
                   </p>
+                  {errPres.showTechnical && submittedDetailQuery.error?.message ? (
+                    <p className="mt-2 max-h-20 overflow-y-auto break-all font-mono text-[10px] text-rose-800/80 dark:text-rose-300/80">
+                      {String(submittedDetailQuery.error.message)}
+                    </p>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       type="button"
@@ -1696,7 +1727,8 @@ export default function ReduceLogs() {
                     </Button>
                   </div>
                 </div>
-              ) : null}
+                );
+              })() : null}
               {selectedJobId
                 && selectedJobId !== LOCAL_UPLOAD_LOT_ID
                 && submittedDetailQuery.isSuccess

@@ -10,6 +10,9 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -24,18 +27,29 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { APP_NAME, appDocumentTitle } from "@/lib/brand";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BrainCircuit, FileArchive, LayoutDashboard, LogOut } from "lucide-react";
+import {
+  Bell,
+  BrainCircuit,
+  FileArchive,
+  LayoutDashboard,
+  LogOut,
+  User,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createContext, CSSProperties, useContext, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
+const mainMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: BrainCircuit, label: "Interpretação Consolidada", path: "/interpretacao-consolidada" },
-  { icon: FileArchive, label: "Reduzir Logs", path: "/reduce-logs" },
+  { icon: BrainCircuit, label: "Interpretação consolidada", path: "/interpretacao-consolidada" },
+  { icon: FileArchive, label: "Reduzir logs", path: "/reduce-logs" },
 ];
+
+const accountMenuItem = { icon: User, label: "Meu perfil", path: "/perfil" as const };
+const adminMenuItem = { icon: Users, label: "Usuários", path: "/admin/usuarios" as const };
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -130,7 +144,15 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const allNavItems = [
+    ...mainMenuItems,
+    ...(user?.role === "admin" ? [accountMenuItem] : []),
+    ...(user?.role === "admin" ? [adminMenuItem] : []),
+  ];
+  /** Utilizadores normais acedem a /perfil só pelo menu do rodapé; `allNavItems` não inclui essa rota para eles. */
+  const activeMenuItem =
+    allNavItems.find(item => item.path === location) ??
+    (location === "/perfil" ? accountMenuItem : undefined);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -205,27 +227,88 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+          <SidebarContent className="gap-2">
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/80">
+                Principal
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="px-0 py-0">
+                  {mainMenuItems.map(item => {
+                    const isActive = location === item.path;
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => setLocation(item.path)}
+                          tooltip={item.label}
+                          className="h-10 transition-all font-normal"
+                        >
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-[var(--auth-brand)]" : ""}`}
+                          />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {user?.role === "admin" ? (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/80">
+                  Conta
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="px-0 py-0">
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        isActive={location === accountMenuItem.path}
+                        onClick={() => setLocation(accountMenuItem.path)}
+                        tooltip={accountMenuItem.label}
+                        className="h-10 transition-all font-normal"
+                      >
+                        <accountMenuItem.icon
+                          className={`h-4 w-4 ${
+                            location === accountMenuItem.path ? "text-[var(--auth-brand)]" : ""
+                          }`}
+                        />
+                        <span>{accountMenuItem.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ) : null}
+
+            {user?.role === "admin" ? (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-amber-500/80">
+                  Administração
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="px-0 py-0">
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        isActive={location === adminMenuItem.path}
+                        onClick={() => setLocation(adminMenuItem.path)}
+                        tooltip={adminMenuItem.label}
+                        className="h-10 transition-all font-normal"
+                      >
+                        <adminMenuItem.icon
+                          className={`h-4 w-4 ${
+                            location === adminMenuItem.path ? "text-[var(--auth-brand)]" : ""
+                          }`}
+                        />
+                        <span>{adminMenuItem.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ) : null}
           </SidebarContent>
 
           <SidebarFooter className="p-3">
@@ -238,21 +321,25 @@ function DashboardLayoutContent({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
+                    <p className="text-sm font-semibold truncate leading-none text-foreground">
+                      {user?.name || "—"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
+                    <p className="text-xs font-medium truncate mt-1.5 text-[var(--auth-brand)]">
+                      {user?.role === "admin" ? "Administrador" : "Usuário"}
                     </p>
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56 border-border/80 bg-popover/95">
+                <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => setLocation("/perfil")}>
+                  <User className="h-4 w-4" />
+                  <span>Meu Perfil</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
-                  className="cursor-pointer text-destructive focus:text-destructive"
+                  className="cursor-pointer gap-2 text-destructive focus:text-destructive"
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <LogOut className="h-4 w-4" />
                   <span>Sair</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -283,17 +370,42 @@ function DashboardLayoutContent({
               title={isMobile ? "Abrir menu" : "Mostrar menu lateral"}
             />
             <div className="min-w-0">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/90">
+                {APP_NAME} / {activeMenuItem?.label ?? "Início"}
+              </p>
               <p className="truncate text-sm font-medium text-foreground">
                 {activeMenuItem?.label ?? APP_NAME}
               </p>
               {!isMobile ? (
                 <p className="truncate text-xs text-muted-foreground">
-                  {isCollapsed ? "Menu recolhido — área principal alargada" : "Área principal · recolha o menu para mais espaço (ex.: grafo)"}
+                  {isCollapsed
+                    ? "Menu recolhido — área principal alargada"
+                    : "Área principal · recolha o menu para mais espaço (ex.: grafo)"}
                 </p>
               ) : null}
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-muted-foreground"
+              disabled
+              title="Notificações (em breve)"
+            >
+              <Bell className="h-4 w-4" />
+            </Button>
+            <div className="hidden sm:flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-xs font-semibold text-[var(--auth-brand)]">
+              {(user?.name ?? user?.email ?? "?")
+                .split(/\s+/)
+                .map(s => s[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()}
+            </div>
+            <ThemeToggle />
+          </div>
         </header>
         <div
           className={cn(

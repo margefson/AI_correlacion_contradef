@@ -287,6 +287,10 @@ class SDKServer {
       throw ForbiddenError("Invalid session cookie");
     }
 
+    if (session.appId !== ENV.sessionAppId) {
+      throw ForbiddenError("Session app mismatch (re-login after auth mode change)");
+    }
+
     const sessionUserId = session.openId;
     const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);

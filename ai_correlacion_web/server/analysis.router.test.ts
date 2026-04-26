@@ -50,6 +50,7 @@ function createAuthContext(userOverrides: Partial<AuthenticatedUser> = {}): Trpc
     openId: "analyst-user",
     email: "analyst@example.com",
     name: "Analyst User",
+    passwordHash: null,
     loginMethod: "oauth",
     role: "user",
     createdAt: new Date(),
@@ -223,7 +224,7 @@ describe("analysis router", () => {
     getJobSpy.mockRestore();
   });
 
-  it("recusa o detalhe de lote submetido por outro utilizador", async () => {
+  it("recusa o detalhe de lote submetido por outro usuário", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
     const db = await import("./db");
@@ -373,7 +374,7 @@ describe("analysis router", () => {
     delSpy.mockRestore();
   });
 
-  it("deleteJob: recusa lote de outro utilizador (não chama apagar na BD)", async () => {
+  it("deleteJob: recusa lote de outro usuário (não chama apagar na BD)", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
     const db = await import("./db");

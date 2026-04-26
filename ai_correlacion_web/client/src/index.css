@@ -44,6 +44,9 @@
 }
 
 :root {
+  --auth-brand: #00b4c4;
+  --auth-brand-hover: #009bab;
+  --auth-brand-muted: color-mix(in oklch, #00b4c4 35%, transparent);
   --radius: 1rem;
   --background: oklch(0.985 0.004 255);
   --foreground: oklch(0.22 0.03 255);

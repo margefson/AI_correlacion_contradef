@@ -7,10 +7,12 @@ import { sdk } from "./sdk";
 const NO_AUTH_BYPASS_USER: User = {
   id: 1,
   openId: "no-auth",
-  name: "Utilizador (auth desligada)",
+  name: "Usuário (auth desligada)",
   email: "noauth@local",
+  passwordHash: null,
   loginMethod: "none",
   role: "admin",
+  mustChangePassword: false,
   createdAt: new Date(0),
   updatedAt: new Date(0),
   lastSignedIn: new Date(),
@@ -33,7 +35,8 @@ export async function getSessionUserFromRequest(req: Request): Promise<User | nu
     ENV.authMode === "oidc" &&
     (Boolean(ENV.googleClientId?.trim() && ENV.googleClientSecret?.trim()) ||
       Boolean(ENV.microsoftClientId?.trim() && ENV.microsoftClientSecret?.trim()));
-  const allowDevBypass = !ENV.isProduction && !hasWebdev && !hasOidc;
+  const allowDevBypass =
+    !ENV.isProduction && !hasWebdev && !hasOidc && ENV.authMode !== "local";
 
   try {
     return await sdk.authenticateRequest(req);
@@ -44,8 +47,10 @@ export async function getSessionUserFromRequest(req: Request): Promise<User | nu
         openId: "local-dev-user",
         name: "Local Dev",
         email: "local-dev@localhost",
+        passwordHash: null,
         loginMethod: "local",
         role: "admin",
+        mustChangePassword: false,
         createdAt: new Date(),
         updatedAt: new Date(),
         lastSignedIn: new Date(),

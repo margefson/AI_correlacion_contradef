@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 
+import { MUST_CHANGE_PASSWORD_ERR_MSG } from "../shared/const";
 import { resolveLocalArtifactPath } from "./artifactLocalStore";
 import { getSessionUserFromRequest } from "./_core/context";
 import type { User } from "../drizzle/schema";
@@ -26,6 +27,10 @@ export function registerAnalysisArtifactDownloadRoute(app: Express) {
     const user = await getSessionUserFromRequest(req);
     if (!user) {
       res.status(401).send("Authentication required");
+      return;
+    }
+    if (user.mustChangePassword) {
+      res.status(403).send(MUST_CHANGE_PASSWORD_ERR_MSG);
       return;
     }
 
@@ -83,6 +88,10 @@ export function registerAnalysisArtifactDownloadRoute(app: Express) {
     const user = await getSessionUserFromRequest(req);
     if (!user) {
       res.status(401).send("Authentication required");
+      return;
+    }
+    if (user.mustChangePassword) {
+      res.status(403).send(MUST_CHANGE_PASSWORD_ERR_MSG);
       return;
     }
 

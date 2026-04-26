@@ -23,6 +23,9 @@ export const getLoginUrl = () => {
     if (authMode === "oidc") {
       return `${window.location.origin}/api/oauth/login`;
     }
+    if (authMode === "local" || authMode === "password") {
+      return "/login";
+    }
 
     const oauthPortalUrl = String(import.meta.env.VITE_OAUTH_PORTAL_URL ?? "").trim();
     const appId = String(import.meta.env.VITE_APP_ID ?? "").trim();
@@ -59,3 +62,28 @@ export const getLoginUrl = () => {
     return fallback;
   }
 };
+
+/** URL do portal OAuth institucional (WebDev) ou rota OIDC; null no modo local/none. */
+export function getInstitutionalOAuthUrl(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const authMode = String(import.meta.env.VITE_AUTH_MODE ?? "").trim().toLowerCase();
+  if (
+    authMode === "local" ||
+    authMode === "password" ||
+    authMode === "none" ||
+    authMode === "disabled"
+  ) {
+    return null;
+  }
+  if (authMode === "oidc") {
+    return `${window.location.origin}/api/oauth/login`;
+  }
+  const portal = getLoginUrl();
+  const origin = window.location.origin;
+  if (!portal || portal === origin || portal === "/login") {
+    return null;
+  }
+  return portal;
+}

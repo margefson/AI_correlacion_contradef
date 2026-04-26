@@ -1,4 +1,4 @@
-import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
+import { MUST_CHANGE_PASSWORD_ERR_MSG, NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -25,21 +25,27 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+/** Sessão válida, inclusive quando ainda falta trocar a palavra-passe (p.ex. após redefinição). */
+export const sessionProcedure = t.procedure.use(requireUser);
 
-export const adminProcedure = t.procedure.use(
-  t.middleware(async opts => {
-    const { ctx, next } = opts;
+const requireUnlocked = t.middleware(async opts => {
+  const { next, ctx } = opts;
+  if (ctx.user?.mustChangePassword) {
+    throw new TRPCError({ code: "FORBIDDEN", message: MUST_CHANGE_PASSWORD_ERR_MSG });
+  }
+  return next({ ctx });
+});
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
-      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
-    }
+/** Sessão válida e palavra-passe já trocada (ou não requerida). */
+export const protectedProcedure = t.procedure.use(requireUser).use(requireUnlocked);
 
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    });
-  }),
-);
+const requireAdmin = t.middleware(async opts => {
+  const { ctx, next } = opts;
+  if (!ctx.user || ctx.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+/** Admin e conta desbloqueada (pode apagar/gerir). */
+export const adminProcedure = t.procedure.use(requireUser).use(requireUnlocked).use(requireAdmin);

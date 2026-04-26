@@ -10,7 +10,12 @@ import {
   syncActiveAnalysisJobs,
   syncAnalysisJob,
 } from "./analysisService";
-import { deleteAnalysisJobAndRelatedData, getAnalysisJobByJobId, listAnalysisJobs } from "./db";
+import {
+  deleteAnalysisJobAndRelatedData,
+  getAnalysisDashboardStats,
+  getAnalysisJobByJobId,
+  listAnalysisJobs,
+} from "./db";
 import { protectedProcedure, router } from "./_core/trpc";
 
 const listJobsInputSchema = z.object({
@@ -38,7 +43,7 @@ const jobIdInputSchema = z.object({
 
 /**
  * Só o perfil `admin` vê a lista e o detalhe de todas as análises do sistema; os restantes
- * utilizadores autenticados vêem apenas o que submeteram (`createdByUserId` = sessão).
+ * Usuários autenticados vêem apenas o que submeteram (`createdByUserId` = sessão).
  */
 function isGlobalAnalysisScope(user: { role: string }): boolean {
   return user.role === "admin";
@@ -52,8 +57,15 @@ function canAccessJob(user: { id: number; role: string }, job: { createdByUserId
 }
 
 export const analysisRouter = router({
+  dashboardStats: protectedProcedure.query(async ({ ctx }) => {
+    const user = ctx.user!;
+    const listOwnOnly = !isGlobalAnalysisScope(user);
+    return getAnalysisDashboardStats(listOwnOnly ? { createdByUserId: user.id } : {});
+  }),
+
   list: protectedProcedure.input(listJobsInputSchema).query(async ({ ctx, input }) => {
-    const listOwnOnly = !isGlobalAnalysisScope(ctx.user);
+    const user = ctx.user!;
+    const listOwnOnly = !isGlobalAnalysisScope(user);
     return listAnalysisJobs({
       sampleName: input?.sampleName,
       focusFunction: input?.focusFunction,
@@ -61,16 +73,17 @@ export const analysisRouter = router({
       createdTo: input?.createdTo,
       status: input?.status,
       limit: input?.limit ?? 50,
-      ...(listOwnOnly ? { createdByUserId: ctx.user.id } : {}),
+      ...(listOwnOnly ? { createdByUserId: user.id } : {}),
     });
   }),
 
   detail: protectedProcedure.input(jobIdInputSchema).query(async ({ ctx, input }) => {
+    const user = ctx.user!;
     const job = await getAnalysisJobByJobId(input.jobId);
     if (!job) {
       return null;
     }
-    if (!canAccessJob(ctx.user, job)) {
+    if (!canAccessJob(user, job)) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Só pode ver o detalhe dos lotes que submeteu.",
@@ -84,14 +97,15 @@ export const analysisRouter = router({
 
   /**
    * Remove o lote do Postgres (e tabelas derivadas) e a pasta de artefatos local do processo, se existir.
-   * Só o utilizador que submeteu o lote (`createdByUserId`) — não há apagar lotes alheios (nem via admin, nesta rota).
+   * Só o usuário que submeteu o lote (`createdByUserId`) — não há apagar lotes alheios (nem via admin, nesta rota).
    */
   deleteJob: protectedProcedure.input(jobIdInputSchema).mutation(async ({ ctx, input }) => {
+    const user = ctx.user!;
     const job = await getAnalysisJobByJobId(input.jobId);
     if (!job) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Lote não encontrado." });
     }
-    if (job.createdByUserId == null || job.createdByUserId !== ctx.user.id) {
+    if (job.createdByUserId == null || job.createdByUserId !== user.id) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Só pode apagar lotes que submeteu.",
@@ -114,23 +128,25 @@ export const analysisRouter = router({
   }),
 
   submit: protectedProcedure.input(submitJobInputSchema).mutation(async ({ ctx, input }) => {
+    const user = ctx.user!;
     return startAnalysisJob({
       analysisName: input.analysisName,
       logFiles: input.logFiles,
       focusTerms: input.focusTerms,
       focusRegexes: input.focusRegexes,
       origin: input.origin,
-      createdByUserId: ctx.user.id,
+      createdByUserId: user.id,
       sampleSha256: input.sampleSha256 || null,
     });
   }),
 
   sync: protectedProcedure.input(jobIdInputSchema).mutation(async ({ ctx, input }) => {
+    const user = ctx.user!;
     const job = await getAnalysisJobByJobId(input.jobId);
     if (!job) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Lote não encontrado." });
     }
-    if (!canAccessJob(ctx.user, job)) {
+    if (!canAccessJob(user, job)) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Só pode sincronizar lotes que submeteu.",
@@ -140,9 +156,10 @@ export const analysisRouter = router({
   }),
 
   resumeActiveSync: protectedProcedure.mutation(async ({ ctx }) => {
+    const user = ctx.user!;
     try {
       const resumedJobs = await syncActiveAnalysisJobs(
-        isGlobalAnalysisScope(ctx.user) ? undefined : { createdByUserId: ctx.user.id },
+        isGlobalAnalysisScope(user) ? undefined : { createdByUserId: user.id },
       );
       return { resumedJobs };
     } catch (error) {

@@ -11,6 +11,7 @@ import { registerReduceLogsUploadRoute } from "./reduceLogsUpload";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { validateProductionEnv } from "./env";
+import { seedDefaultLocalAdminIfNeeded } from "../localAdminSeed";
 import { applyPostgresSchemaIfNeeded } from "./postgresSchemaSync";
 import { serveStatic, setupVite } from "./vite";
 
@@ -79,6 +80,7 @@ async function startServer() {
 
   try {
     await pingDatabaseIfConfigured();
+    await seedDefaultLocalAdminIfNeeded();
   } catch (error) {
     console.error("[Database] Connection check failed:", error);
     console.error(

@@ -15,12 +15,13 @@ function looksLikeHttpUrl(value: string): boolean {
   }
 }
 
-export type AuthMode = "webdev" | "oidc" | "none";
+export type AuthMode = "webdev" | "oidc" | "none" | "local";
 
 function resolveAuthModeFromEnv(): AuthMode {
   const m = process.env.AUTH_MODE?.trim().toLowerCase();
   if (m === "none" || m === "disabled") return "none";
   if (m === "oidc") return "oidc";
+  if (m === "local" || m === "password") return "local";
   return "webdev";
 }
 
@@ -82,7 +83,7 @@ export function validateProductionEnv(): void {
     if (!isNonEmpty(process.env.OAUTH_SERVER_URL)) missing.push("OAUTH_SERVER_URL");
     if (!isNonEmpty(process.env.VITE_APP_ID)) missing.push("VITE_APP_ID");
   }
-  // authMode === "none": no OAuth / OIDC configuration required
+  // authMode === "none" | "local": no WebDev / OIDC client configuration
 
   if (missing.length > 0) {
     throw new Error(
@@ -91,7 +92,9 @@ export function validateProductionEnv(): void {
           ? "Set them on the Render service (and rebuild after adding any VITE_* vars)."
           : authMode === "oidc"
             ? "For OIDC, set Google/Microsoft credentials and PUBLIC_APP_URL (WebDev vars are not used)."
-            : "For AUTH_MODE=none, only JWT_SECRET and DATABASE_URL are required.")
+            : authMode === "local"
+              ? "For AUTH_MODE=local, set JWT_SECRET, DATABASE_URL, and build with VITE_AUTH_MODE=local (no OAuth server)."
+              : "For AUTH_MODE=none, only JWT_SECRET and DATABASE_URL are required.")
     );
   }
 
@@ -126,9 +129,15 @@ const authMode = resolveAuthModeFromEnv();
 
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
-  /** appId value embedded in the session JWT (WebDev: VITE_APP_ID; OIDC: "oidc"; none: "none"). */
+  /** appId value embedded in the session JWT (WebDev: VITE_APP_ID; OIDC: "oidc"; none: "none"; local: "local"). */
   sessionAppId:
-    authMode === "oidc" ? "oidc" : authMode === "none" ? "none" : process.env.VITE_APP_ID ?? "",
+    authMode === "oidc"
+      ? "oidc"
+      : authMode === "none"
+        ? "none"
+        : authMode === "local"
+          ? "local"
+          : process.env.VITE_APP_ID ?? "",
   authMode,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
@@ -142,7 +151,7 @@ export const ENV = {
     (process.env.NODE_ENV !== "production" ? "local-dev-secret" : ""),
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl:
-    authMode === "oidc" || authMode === "none"
+    authMode === "oidc" || authMode === "none" || authMode === "local"
       ? ""
       : process.env.OAUTH_SERVER_URL ??
         (process.env.NODE_ENV !== "production" ? "http://localhost:9999" : ""),

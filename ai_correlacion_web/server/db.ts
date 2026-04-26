@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, like, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, like, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
@@ -103,6 +103,15 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
     textFields.forEach(assignNullable);
 
+    if (user.passwordHash !== undefined) {
+      values.passwordHash = user.passwordHash;
+      (updateSet as Record<string, unknown>).passwordHash = user.passwordHash;
+    }
+    if (user.mustChangePassword !== undefined) {
+      values.mustChangePassword = user.mustChangePassword;
+      (updateSet as Record<string, unknown>).mustChangePassword = user.mustChangePassword;
+    }
+
     if (user.lastSignedIn !== undefined) {
       values.lastSignedIn = user.lastSignedIn;
       updateSet.lastSignedIn = user.lastSignedIn;
@@ -145,6 +154,55 @@ export async function getUserByOpenId(openId: string) {
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserByEmail(emailCanonical: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user by email: database not available");
+    return undefined;
+  }
+
+  const email = emailCanonical.trim().toLowerCase();
+  const result = await db
+    .select()
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createLocalUser(data: {
+  openId: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role?: "user" | "admin";
+}): Promise<typeof users.$inferSelect> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const [row] = await db
+    .insert(users)
+    .values({
+      openId: data.openId,
+      name: data.name,
+      email: data.email,
+      passwordHash: data.passwordHash,
+      loginMethod: "local",
+      role: data.role ?? "user",
+      mustChangePassword: false,
+      lastSignedIn: new Date(),
+    })
+    .returning();
+
+  if (!row) {
+    throw new Error("Failed to create user");
+  }
+
+  return row;
 }
 
 export async function createAnalysisJob(job: InsertAnalysisJob) {
@@ -479,4 +537,190 @@ export async function deleteAnalysisJobAndRelatedData(jobId: string): Promise<bo
       .returning({ id: analysisJobs.id });
     return removed.length > 0;
   });
+}
+
+export type UserListRow = {
+  id: number;
+  openId: string;
+  name: string | null;
+  email: string | null;
+  role: "user" | "admin";
+  loginMethod: string | null;
+  createdAt: Date;
+  lastSignedIn: Date;
+  hasLocalPassword: boolean;
+  mustChangePassword: boolean;
+};
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    return undefined;
+  }
+  const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function listUsersForAdmin(): Promise<UserListRow[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+  const rows = await db
+    .select({
+      id: users.id,
+      openId: users.openId,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      loginMethod: users.loginMethod,
+      createdAt: users.createdAt,
+      lastSignedIn: users.lastSignedIn,
+      passwordHash: users.passwordHash,
+      mustChangePassword: users.mustChangePassword,
+    })
+    .from(users)
+    .orderBy(desc(users.createdAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    openId: r.openId,
+    name: r.name,
+    email: r.email,
+    role: r.role,
+    loginMethod: r.loginMethod,
+    createdAt: r.createdAt,
+    lastSignedIn: r.lastSignedIn,
+    hasLocalPassword: r.passwordHash != null && r.passwordHash.length > 0,
+    mustChangePassword: r.mustChangePassword,
+  }));
+}
+
+export async function countAdmins() {
+  const db = await getDb();
+  if (!db) {
+    return 0;
+  }
+  const rows = await db
+    .select({ n: count() })
+    .from(users)
+    .where(eq(users.role, "admin"));
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function deleteUserById(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    return false;
+  }
+  return await db.transaction(async (tx) => {
+    await tx
+      .update(analysisJobs)
+      .set({ createdByUserId: null })
+      .where(eq(analysisJobs.createdByUserId, id));
+    const removed = await tx.delete(users).where(eq(users.id, id)).returning({ id: users.id });
+    return removed.length > 0;
+  });
+}
+
+export type AnalysisDashboardStats = {
+  totalJobs: number;
+  byStatus: Record<string, number>;
+  /** Chave yyyy-mm-dd, últimos 7 dias; valores 0 se vazio. */
+  createdLast7Days: { date: string; count: number }[];
+};
+
+/**
+ * Estatísticas agregadas para o dashboard; `createdByUserId` restringe a analistas não-admin.
+ */
+export async function getAnalysisDashboardStats(filters: {
+  createdByUserId?: number;
+}): Promise<AnalysisDashboardStats> {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const db = await getDb();
+  if (!db) {
+    const all = Array.from(inMemoryAnalysisJobs.values());
+    const scoped = all.filter(
+      (j) => filters.createdByUserId == null || j.createdByUserId === filters.createdByUserId,
+    );
+    const byStatus: Record<string, number> = {};
+    for (const s of ["queued", "running", "completed", "failed", "cancelled"] as const) {
+      byStatus[s] = 0;
+    }
+    for (const j of scoped) {
+      byStatus[j.status] = (byStatus[j.status] ?? 0) + 1;
+    }
+    const days: { date: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const key = d.toISOString().slice(0, 10);
+      const next = new Date(d);
+      next.setDate(next.getDate() + 1);
+      const c = scoped.filter((j) => j.createdAt >= d && j.createdAt < next).length;
+      days.push({ date: key, count: c });
+    }
+    return {
+      totalJobs: scoped.length,
+      byStatus,
+      createdLast7Days: days,
+    };
+  }
+
+  const scope = filters.createdByUserId != null ? eq(analysisJobs.createdByUserId, filters.createdByUserId) : undefined;
+
+  const statusBase = db
+    .select({
+      status: analysisJobs.status,
+      n: count(),
+    })
+    .from(analysisJobs);
+  const statusRows = scope
+    ? await statusBase.where(scope).groupBy(analysisJobs.status)
+    : await statusBase.groupBy(analysisJobs.status);
+
+  const byStatus: Record<string, number> = {
+    queued: 0,
+    running: 0,
+    completed: 0,
+    failed: 0,
+    cancelled: 0,
+  };
+  for (const row of statusRows) {
+    byStatus[row.status] = Number(row.n);
+  }
+
+  const totalBase = db.select({ n: count() }).from(analysisJobs);
+  const totalRows = scope ? await totalBase.where(scope) : await totalBase;
+  const totalJobs = Number(totalRows[0]?.n ?? 0);
+
+  const dayExpr = sql<string>`to_char(date_trunc('day', ${analysisJobs.createdAt}), 'YYYY-MM-DD')`;
+  const dayFilter = scope
+    ? and(scope, gte(analysisJobs.createdAt, sevenDaysAgo))
+    : gte(analysisJobs.createdAt, sevenDaysAgo);
+  const dayBase = db
+    .select({
+      day: dayExpr,
+      n: count(),
+    })
+    .from(analysisJobs)
+    .where(dayFilter)
+    .groupBy(sql`date_trunc('day', ${analysisJobs.createdAt})`);
+  const dayRows = await dayBase;
+
+  const byDay = new Map(dayRows.map((r) => [r.day, Number(r.n)]));
+  const createdLast7Days: { date: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const key = d.toISOString().slice(0, 10);
+    createdLast7Days.push({ date: key, count: byDay.get(key) ?? 0 });
+  }
+
+  return { totalJobs, byStatus, createdLast7Days };
 }
