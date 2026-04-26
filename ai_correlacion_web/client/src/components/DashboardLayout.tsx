@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createContext, CSSProperties, useContext, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
@@ -89,26 +89,38 @@ export default function DashboardLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex flex-col items-center gap-6">
-              <h1 className="text-2xl font-semibold tracking-tight text-center">
-                Acesse a plataforma para continuar
-              </h1>
-              <p className="text-sm text-muted-foreground text-center max-w-sm">
-                Este painel exige autenticação para proteger os dados analíticos e os artefatos gerados pela investigação.
-              </p>
-
+      <div className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-background via-background to-[var(--auth-brand-muted)]/20 p-6">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_25%,rgba(34,211,238,0.11),transparent_58%)]"
+          aria-hidden
+        />
+        <div className="absolute right-4 top-4 z-20">
+          <ThemeToggle />
+        </div>
+        <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              Acesse a plataforma para continuar
+            </h1>
+            <p className="text-sm leading-relaxed text-muted-foreground max-w-sm">
+              Este painel exige autenticação para proteger os dados analíticos e os artefatos gerados pela investigação.
+            </p>
           </div>
           <Button
             onClick={() => {
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full max-w-sm rounded-full bg-[var(--auth-brand)] text-base font-semibold text-white shadow-lg shadow-cyan-950/30 hover:bg-[var(--auth-brand-hover)]"
           >
             Entrar
           </Button>
+          <Link
+            href="/"
+            className="text-sm text-muted-foreground transition-colors hover:text-[var(--auth-brand)]"
+          >
+            ← Voltar ao início
+          </Link>
         </div>
       </div>
     );
