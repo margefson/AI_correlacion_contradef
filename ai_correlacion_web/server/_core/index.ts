@@ -10,7 +10,7 @@ import { registerAnalysisArtifactDownloadRoute } from "../analysisArtifactDownlo
 import { registerReduceLogsUploadRoute } from "./reduceLogsUpload";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { validateProductionEnv } from "./env";
+import { ENV, validateProductionEnv } from "./env";
 import { seedDefaultLocalAdminIfNeeded } from "../localAdminSeed";
 import { applyPostgresSchemaIfNeeded } from "./postgresSchemaSync";
 import { serveStatic, setupVite } from "./vite";
@@ -36,6 +36,13 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   validateProductionEnv();
+  if (ENV.isProduction && ENV.authMode === "none") {
+    console.warn(
+      "[Auth] AUTH_MODE=none: a app não exige login (bypass de administrador). " +
+        "Para ecrã de login, registo e contas: defina AUTH_MODE=local e VITE_AUTH_MODE=local, " +
+        "garanta o mesmo VITE no build, e faça deploy de novo."
+    );
+  }
   await applyPostgresSchemaIfNeeded();
 
   const app = express();

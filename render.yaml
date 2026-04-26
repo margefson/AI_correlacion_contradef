@@ -4,7 +4,9 @@
 # Segredos (sync: false): preencher no painel após criar o serviço.
 # DATABASE_URL: PostgreSQL (ex.: instância Render Postgres → postgresql://...)
 # VITE_*: devem existir no ambiente do Render antes do build — o Vite embute-as no cliente.
-# OAuth: regista no portal o redirect https://<serviço>.onrender.com/api/oauth/callback
+# Autenticação: AUTH_MODE=local + VITE_AUTH_MODE=local para login com email/senha (VITE_* no build).
+# Com AUTH_MODE=none o utilizador "Usuário (auth desligada)" entra sem login (só testes/legado).
+# OAuth (WebDev): regista o redirect https://<serviço>.onrender.com/api/oauth/callback
 # O package.json fixa pnpm@10.4.1 (packageManager) e há patches pnpm (ex.: wouter). `npm ci` com
 # package-lock.json ignora pnpm-lock.yaml e o ecossistema pnpm. Build com Corepack + pnpm.
 # No Render, NODE_ENV=production faz o pnpm instalar só dependências de produção; o Vite fica
@@ -26,6 +28,10 @@ services:
         value: 22.12.0
       - key: NODE_ENV
         value: production
+      - key: AUTH_MODE
+        value: local
+      - key: VITE_AUTH_MODE
+        value: local
       - key: JWT_SECRET
         sync: false
       - key: DATABASE_URL
