@@ -83,7 +83,20 @@ export function validateProductionEnv(): void {
     if (!isNonEmpty(process.env.OAUTH_SERVER_URL)) missing.push("OAUTH_SERVER_URL");
     if (!isNonEmpty(process.env.VITE_APP_ID)) missing.push("VITE_APP_ID");
   }
-  // authMode === "none" | "local": no WebDev / OIDC client configuration
+  if (authMode === "local") {
+    const oauth = process.env.OAUTH_SERVER_URL?.trim();
+    if (isNonEmpty(oauth)) {
+      if (!looksLikeHttpUrl(oauth!)) {
+        throw new Error(
+          "[Production] Com AUTH_MODE=local, OAUTH_SERVER_URL deve ser http(s) (API WebDev) para o botão «Entrar com OAuth» funcionar. Não use postgresql://."
+        );
+      }
+      if (!isNonEmpty(process.env.VITE_APP_ID)) {
+        missing.push("VITE_APP_ID (necessário no servidor e no build para trocar o código OAuth)");
+      }
+    }
+  }
+  // authMode === "none": no client configuration
 
   if (missing.length > 0) {
     throw new Error(
@@ -150,11 +163,14 @@ export const ENV = {
     process.env.JWT_SECRET ??
     (process.env.NODE_ENV !== "production" ? "local-dev-secret" : ""),
   databaseUrl: process.env.DATABASE_URL ?? "",
+  /** Com AUTH_MODE=local, preencha OAUTH_SERVER_URL (e VITE_*) para habilitar OAuth institucional além do login com senha. */
   oAuthServerUrl:
-    authMode === "oidc" || authMode === "none" || authMode === "local"
+    authMode === "oidc" || authMode === "none"
       ? ""
-      : process.env.OAUTH_SERVER_URL ??
-        (process.env.NODE_ENV !== "production" ? "http://localhost:9999" : ""),
+      : authMode === "local"
+        ? (process.env.OAUTH_SERVER_URL?.trim() || "")
+        : process.env.OAUTH_SERVER_URL ??
+          (process.env.NODE_ENV !== "production" ? "http://localhost:9999" : ""),
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",

@@ -184,7 +184,7 @@ export default function Login() {
                 variant="outline"
                 className="w-full h-11 border-dashed border-border/60 text-muted-foreground"
                 disabled
-                title="Indisponível com login local (email e senha). Configure OIDC ou WebDev noutro modo."
+                title="Defina no ambiente (e rebuild) VITE_OAUTH_PORTAL_URL, VITE_APP_ID e, no servidor, OAUTH_SERVER_URL — o mesmo appId e API WebDev usados no modo full webdev."
               >
                 Entrar com OAuth
               </Button>
