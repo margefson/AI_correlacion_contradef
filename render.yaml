@@ -5,7 +5,9 @@
 # DATABASE_URL: PostgreSQL (ex.: instância Render Postgres → postgresql://...)
 # VITE_*: devem existir no ambiente do Render antes do build — o Vite embute-as no cliente.
 # OAuth: regista no portal o redirect https://<serviço>.onrender.com/api/oauth/callback
-# NODE_ENV=production faz o npm omitir devDependencies; o build precisa de Vite → npm ci --include=dev
+# NODE_ENV=production faria o npm omitir devDependencies; o Vite está em devDependencies.
+# Não use `npm ci --include=dev` (inválido em `npm ci` nalgumas versões do npm; gera o erro "Run npm help ci").
+# Para uma instalação limpa: NPM_CONFIG_PRODUCTION=false npm ci
 
 services:
   - type: web
@@ -14,7 +16,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: ai_correlacion_web
-    buildCommand: npm ci --include=dev && npm run build
+    buildCommand: NPM_CONFIG_PRODUCTION=false npm ci && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
