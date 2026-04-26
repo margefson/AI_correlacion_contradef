@@ -31,3 +31,6 @@ api_stderr.log
 
 # Artefatos legados pesados comprimidos
 /legacy_artifacts/**/compressed/
+
+# Referência local (não versionar)
+/_ref_incident_security_system/
