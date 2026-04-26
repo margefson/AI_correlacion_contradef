@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 720px; background: #0d1117; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; position: relative; }
+    .accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: linear-gradient(180deg, #00b4d8 0%, #0369a1 100%); }
+
+    .slide-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 60px 18px 30px; border-bottom: 2px solid #21262d; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .slide-number { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; letter-spacing: 2px; }
+    .slide-title-bar { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; color: #e6edf3; }
+    .slide-title-bar span { color: #3fb950; }
+    .header-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; }
+
+    /* Status banner */
+    .status-banner {
+      background: rgba(63,185,80,0.07);
+      border-bottom: 1px solid #21262d;
+      padding: 12px 50px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .status-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: #3fb950;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border: 1px solid rgba(63,185,80,0.4);
+    }
+    .status-desc { font-family: 'Inter', sans-serif; font-size: 13px; color: #8b949e; }
+    .status-desc strong { color: #e6edf3; }
+
+    /* Achievements section */
+    .achievements-section { padding: 20px 50px 0 50px; }
+    .section-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px; }
+    .achievements-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .ach-block { background: #161b22; border-top: 2px solid #00b4d8; padding: 14px 16px; }
+    .ach-block.orange { border-top-color: #ff8a00; }
+    .ach-block.green { border-top-color: #3fb950; }
+    .ach-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; color: #e6edf3; margin-bottom: 8px; }
+    .ach-items { display: flex; flex-direction: column; gap: 4px; }
+    .ach-item { display: flex; align-items: flex-start; gap: 8px; }
+    .ach-dot { width: 5px; height: 5px; background: #00b4d8; margin-top: 6px; flex-shrink: 0; }
+    .ach-dot.orange { background: #ff8a00; }
+    .ach-dot.green { background: #3fb950; }
+    .ach-text { font-family: 'Inter', sans-serif; font-size: 12px; color: #8b949e; line-height: 1.4; }
+    .ach-text strong { color: #e6edf3; }
+
+    /* Next steps section */
+    .nextsteps-section { padding: 16px 50px 0 50px; }
+    .nextsteps-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 10px; }
+    .ns-block { background: #161b22; border-top: 2px solid #ff8a00; padding: 12px 14px; }
+    .ns-num { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #ff8a00; letter-spacing: 2px; margin-bottom: 5px; }
+    .ns-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; color: #e6edf3; margin-bottom: 4px; }
+    .ns-desc { font-family: 'Inter', sans-serif; font-size: 11px; color: #8b949e; line-height: 1.4; }
+
+    /* Agradecimentos bar */
+    .thanks-bar {
+      background: #161b22;
+      border-top: 2px solid #21262d;
+      padding: 16px 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+    }
+    .thanks-left { display: flex; flex-direction: column; gap: 4px; }
+    .thanks-title { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 20px; color: #e6edf3; }
+    .thanks-title span { color: #00b4d8; }
+    .thanks-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e; }
+    .thanks-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .thanks-team { font-family: 'Inter', sans-serif; font-size: 13px; color: #8b949e; }
+    .thanks-team strong { color: #e6edf3; }
+    .thanks-year { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; }
+  </style>
+</head>
+<body>
+<div class="slide-container">
+  <div class="accent-bar"></div>
+
+  <div class="slide-header">
+    <div class="header-left">
+      <div class="slide-number">18 / 18</div>
+      <div class="slide-title-bar">Conclusão e <span>Próximos Passos</span></div>
+    </div>
+    <div class="header-right">INCIDENT_SYS · 2025/2026</div>
+  </div>
+
+  <!-- Status banner -->
+  <div class="status-banner">
+    <div class="status-badge">PRONTO PARA PRODUÇÃO</div>
+    <div class="status-desc"><strong>347 testes passando</strong> · acurácia ML 97% · &lt;200ms end-to-end · documentação completa · GitHub atualizado</div>
+  </div>
+
+  <!-- Achievements -->
+  <div class="achievements-section">
+    <div class="section-label">O que foi entregue</div>
+    <div class="achievements-grid">
+
+      <div class="ach-block">
+        <div class="ach-title">Plataforma Completa</div>
+        <div class="ach-items">
+          <div class="ach-item"><div class="ach-dot"></div><div class="ach-text"><strong>32 funcionalidades</strong> entregues em 6 sessões iterativas</div></div>
+          <div class="ach-item"><div class="ach-dot"></div><div class="ach-text">Autenticação JWT, RBAC user/admin, proteção IDOR</div></div>
+          <div class="ach-item"><div class="ach-dot"></div><div class="ach-text">Busca, filtros, histórico, status, exportação PDF/CSV</div></div>
+        </div>
+      </div>
+
+      <div class="ach-block orange">
+        <div class="ach-title">Machine Learning Integrado</div>
+        <div class="ach-items">
+          <div class="ach-item"><div class="ach-dot orange"></div><div class="ach-text"><strong>97% de acurácia</strong> com TF-IDF + Naive Bayes (meta: 90%)</div></div>
+          <div class="ach-item"><div class="ach-dot orange"></div><div class="ach-text">Retreinamento dinâmico com dados reais de produção</div></div>
+          <div class="ach-item"><div class="ach-dot orange"></div><div class="ach-text">Classificação automática em &lt;200ms end-to-end</div></div>
+        </div>
+      </div>
+
+      <div class="ach-block green">
+        <div class="ach-title">Qualidade e Documentação</div>
+        <div class="ach-items">
+          <div class="ach-item"><div class="ach-dot green"></div><div class="ach-text"><strong>347 testes</strong> em 11 arquivos · 100% pass rate · zero erros TS</div></div>
+          <div class="ach-item"><div class="ach-dot green"></div><div class="ach-text">README + manual do usuário + manual de implantação (PDF)</div></div>
+          <div class="ach-item"><div class="ach-dot green"></div><div class="ach-text">Diagrama de arquitetura · histórico completo no GitHub</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Next steps -->
+  <div class="nextsteps-section">
+    <div class="section-label">Próximos Passos</div>
+    <div class="nextsteps-grid">
+
+      <div class="ns-block">
+        <div class="ns-num">PASSO 01</div>
+        <div class="ns-title">Notificações WebSocket</div>
+        <div class="ns-desc">Alertas em tempo real quando admin altera status ou reclassifica incidente</div>
+      </div>
+
+      <div class="ns-block">
+        <div class="ns-num">PASSO 02</div>
+        <div class="ns-title">MTTR Dashboard</div>
+        <div class="ns-desc">Tempo médio de resolução por categoria, taxa de resolução, gráfico de tendência</div>
+      </div>
+
+      <div class="ns-block">
+        <div class="ns-num">PASSO 03</div>
+        <div class="ns-title">Integração SIEM</div>
+        <div class="ns-desc">Exportação para Splunk/Elastic via webhook — correlação com outros sistemas</div>
+      </div>
+
+      <div class="ns-block">
+        <div class="ns-num">PASSO 04</div>
+        <div class="ns-title">Exportação Histórico CSV</div>
+        <div class="ns-desc">Download do log completo de alterações de um incidente em formato planilha</div>
+      </div>
+
+      <div class="ns-block">
+        <div class="ns-num">PASSO 05</div>
+        <div class="ns-title">MFA (2FA)</div>
+        <div class="ns-desc">Autenticação multifator com TOTP (Google Authenticator) para perfis admin</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Agradecimentos -->
+  <div class="thanks-bar">
+    <div class="thanks-left">
+      <div class="thanks-title">Obrigado pela <span>atenção!</span></div>
+      <div class="thanks-sub">Perguntas e discussões são bem-vindas</div>
+    </div>
+    <div class="thanks-right">
+      <div class="thanks-team"><strong>Margefson · Nattan · Keven · Josias</strong></div>
+      <div class="thanks-year">INCIDENT_SYS · 2025/2026 · github.com/margefson/incident_security_system</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

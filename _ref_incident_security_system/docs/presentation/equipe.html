@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 720px; background: #0d1117; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; position: relative; }
+    .accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: linear-gradient(180deg, #00b4d8 0%, #0369a1 100%); }
+
+    .slide-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 60px 18px 30px; border-bottom: 2px solid #21262d; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .slide-number { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; letter-spacing: 2px; }
+    .slide-title-bar { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; color: #e6edf3; }
+    .slide-title-bar span { color: #00b4d8; }
+    .header-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; }
+
+    /* Team grid — 4 equal columns */
+    .team-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      padding: 24px 50px 0 50px;
+      gap: 16px;
+    }
+
+    .member-col { display: flex; flex-direction: column; }
+
+    /* Member header */
+    .member-header { padding-top: 0; padding-left: 0; padding-right: 0; margin-bottom: 12px; }
+    .member-index {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      font-size: 40px;
+      color: #21262d;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .member-name {
+      font-family: 'Inter', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      color: #e6edf3;
+      margin-bottom: 6px;
+    }
+    .member-role {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      display: inline-block;
+    }
+    .role-cyan { background: rgba(0,180,216,0.12); color: #00b4d8; border: 1px solid rgba(0,180,216,0.3); }
+    .role-orange { background: rgba(255,138,0,0.12); color: #ff8a00; border: 1px solid rgba(255,138,0,0.3); }
+    .role-purple { background: rgba(210,168,255,0.12); color: #d2a8ff; border: 1px solid rgba(210,168,255,0.3); }
+    .role-green { background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+
+    /* Divider line */
+    .member-divider { height: 2px; margin-bottom: 12px; }
+    .divider-cyan { background: #00b4d8; }
+    .divider-orange { background: #ff8a00; }
+    .divider-purple { background: #d2a8ff; }
+    .divider-green { background: #3fb950; }
+
+    /* Stack tags */
+    .stack-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+    .stack-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 3px 7px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      color: #8b949e;
+    }
+
+    /* Responsibilities */
+    .resp-list { display: flex; flex-direction: column; gap: 5px; }
+    .resp-item { display: flex; align-items: flex-start; gap: 8px; }
+    .resp-dot { width: 5px; height: 5px; margin-top: 6px; flex-shrink: 0; }
+    .dot-cyan { background: #00b4d8; }
+    .dot-orange { background: #ff8a00; }
+    .dot-purple { background: #d2a8ff; }
+    .dot-green { background: #3fb950; }
+    .resp-text { font-family: 'Inter', sans-serif; font-size: 12px; color: #8b949e; line-height: 1.4; }
+    .resp-text strong { color: #e6edf3; }
+
+    /* Methodology strip */
+    .methodology-strip {
+      background: #161b22;
+      border-top: 1px solid #21262d;
+      padding: 14px 50px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .method-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #8b949e;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      min-width: 130px;
+      flex-shrink: 0;
+    }
+    .method-steps { display: flex; align-items: center; gap: 0; flex: 1; }
+    .method-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 140px;
+    }
+    .method-step-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #30363d;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .method-step-box {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      padding: 5px 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: #e6edf3;
+      font-weight: 600;
+      text-align: center;
+    }
+    .method-arrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: #30363d;
+      padding: 0 6px;
+      margin-top: 10px;
+    }
+
+    .bottom-bar { padding: 12px 60px 12px 30px; border-top: 1px solid #21262d; display: flex; justify-content: space-between; align-items: center; }
+    .bottom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #30363d; letter-spacing: 1px; }
+    .presenter-note { font-family: 'Inter', sans-serif; font-size: 11px; color: #30363d; }
+    .presenter-note span { color: #00b4d8; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="slide-container">
+  <div class="accent-bar"></div>
+
+  <div class="slide-header">
+    <div class="header-left">
+      <div class="slide-number">15 / 18</div>
+      <div class="slide-title-bar">Divisão do <span>Time</span></div>
+    </div>
+    <div class="header-right">INCIDENT_SYS · 2025/2026</div>
+  </div>
+
+  <!-- Team grid -->
+  <div class="team-grid">
+
+    <!-- Margefson -->
+    <div class="member-col">
+      <div class="member-header">
+        <div class="member-index">01</div>
+        <div class="member-name">Margefson</div>
+        <div class="member-role role-cyan">Tech Lead · Backend</div>
+      </div>
+      <div class="member-divider divider-cyan"></div>
+      <div class="stack-row">
+        <span class="stack-tag">Node.js</span>
+        <span class="stack-tag">tRPC</span>
+        <span class="stack-tag">Drizzle</span>
+        <span class="stack-tag">TiDB</span>
+      </div>
+      <div class="resp-list">
+        <div class="resp-item"><div class="resp-dot dot-cyan"></div><div class="resp-text"><strong>Arquitetura geral</strong> do sistema e decisões técnicas</div></div>
+        <div class="resp-item"><div class="resp-dot dot-cyan"></div><div class="resp-text">Procedures tRPC, <strong>schema Drizzle</strong> e migrações</div></div>
+        <div class="resp-item"><div class="resp-dot dot-cyan"></div><div class="resp-text"><strong>RBAC</strong> — adminProcedure, protectedProcedure, IDOR</div></div>
+        <div class="resp-item"><div class="resp-dot dot-cyan"></div><div class="resp-text">Gerenciamento de usuários, <strong>reset de senha</strong></div></div>
+        <div class="resp-item"><div class="resp-dot dot-cyan"></div><div class="resp-text">Coordenação de <strong>entregas e revisão de código</strong></div></div>
+      </div>
+    </div>
+
+    <!-- Nattan -->
+    <div class="member-col">
+      <div class="member-header">
+        <div class="member-index">02</div>
+        <div class="member-name">Nattan</div>
+        <div class="member-role role-orange">Frontend · Banco de Dados</div>
+      </div>
+      <div class="member-divider divider-orange"></div>
+      <div class="stack-row">
+        <span class="stack-tag">React 19</span>
+        <span class="stack-tag">Tailwind 4</span>
+        <span class="stack-tag">shadcn/ui</span>
+        <span class="stack-tag">MySQL</span>
+      </div>
+      <div class="resp-list">
+        <div class="resp-item"><div class="resp-dot dot-orange"></div><div class="resp-text"><strong>Dashboard</strong> com KPIs, gráficos e estatísticas</div></div>
+        <div class="resp-item"><div class="resp-dot dot-orange"></div><div class="resp-text">Listagem com <strong>filtros avançados</strong> (5 dimensões)</div></div>
+        <div class="resp-item"><div class="resp-dot dot-orange"></div><div class="resp-text"><strong>Schema do banco</strong> — tabelas, enums, relações</div></div>
+        <div class="resp-item"><div class="resp-dot dot-orange"></div><div class="resp-text">Exportação <strong>CSV</strong> com BOM UTF-8 e labels PT-BR</div></div>
+        <div class="resp-item"><div class="resp-dot dot-orange"></div><div class="resp-text">Página de <strong>perfil do usuário</strong> com estatísticas</div></div>
+      </div>
+    </div>
+
+    <!-- Keven -->
+    <div class="member-col">
+      <div class="member-header">
+        <div class="member-index">03</div>
+        <div class="member-name">Keven</div>
+        <div class="member-role role-purple">Frontend · Integração ML</div>
+      </div>
+      <div class="member-divider divider-purple"></div>
+      <div class="stack-row">
+        <span class="stack-tag">React</span>
+        <span class="stack-tag">Zod</span>
+        <span class="stack-tag">PDFKit</span>
+        <span class="stack-tag">tRPC</span>
+      </div>
+      <div class="resp-list">
+        <div class="resp-item"><div class="resp-dot dot-purple"></div><div class="resp-text"><strong>Formulário de incidente</strong> com validação Zod</div></div>
+        <div class="resp-item"><div class="resp-dot dot-purple"></div><div class="resp-text">Integração frontend ↔ Flask ML — <strong>badge de confiança</strong></div></div>
+        <div class="resp-item"><div class="resp-dot dot-purple"></div><div class="resp-text"><strong>Busca de texto completo</strong> com destaque visual</div></div>
+        <div class="resp-item"><div class="resp-dot dot-purple"></div><div class="resp-text">Exportação <strong>PDF nativa</strong> (PDFKit) com fallback</div></div>
+        <div class="resp-item"><div class="resp-dot dot-purple"></div><div class="resp-text">Histórico de alterações — <strong>timeline dinâmica</strong></div></div>
+      </div>
+    </div>
+
+    <!-- Josias -->
+    <div class="member-col">
+      <div class="member-header">
+        <div class="member-index">04</div>
+        <div class="member-name">Josias</div>
+        <div class="member-role role-green">ML Engineer</div>
+      </div>
+      <div class="member-divider divider-green"></div>
+      <div class="stack-row">
+        <span class="stack-tag">Python</span>
+        <span class="stack-tag">Flask</span>
+        <span class="stack-tag">scikit-learn</span>
+        <span class="stack-tag">pandas</span>
+      </div>
+      <div class="resp-list">
+        <div class="resp-item"><div class="resp-dot dot-green"></div><div class="resp-text"><strong>Modelo TF-IDF + Naive Bayes</strong> — treinamento inicial</div></div>
+        <div class="resp-item"><div class="resp-dot dot-green"></div><div class="resp-text">Dataset de 100 incidentes em <strong>5 categorias</strong></div></div>
+        <div class="resp-item"><div class="resp-dot dot-green"></div><div class="resp-text">API Flask :5001 — <strong>classify</strong> e <strong>retrain</strong> endpoints</div></div>
+        <div class="resp-item"><div class="resp-dot dot-green"></div><div class="resp-text"><strong>Retreinamento dinâmico</strong> com incidentes do banco</div></div>
+        <div class="resp-item"><div class="resp-dot dot-green"></div><div class="resp-text">Métricas: acurácia, precisão, recall, <strong>F1-score</strong></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Methodology strip -->
+  <div class="methodology-strip">
+    <div class="method-label">METODOLOGIA</div>
+    <div class="method-steps">
+      <div class="method-step">
+        <div class="method-step-label">SESSÃO 1</div>
+        <div class="method-step-box">Scaffolding + Auth</div>
+      </div>
+      <div class="method-arrow">→</div>
+      <div class="method-step">
+        <div class="method-step-label">SESSÃO 2</div>
+        <div class="method-step-box">Incidentes + ML</div>
+      </div>
+      <div class="method-arrow">→</div>
+      <div class="method-step">
+        <div class="method-step-label">SESSÃO 3</div>
+        <div class="method-step-box">Filtros + CSV + PDF</div>
+      </div>
+      <div class="method-arrow">→</div>
+      <div class="method-step">
+        <div class="method-step-label">SESSÃO 4</div>
+        <div class="method-step-box">Busca + Histórico</div>
+      </div>
+      <div class="method-arrow">→</div>
+      <div class="method-step">
+        <div class="method-step-label">SESSÃO 5–6</div>
+        <div class="method-step-box">Admin + ML Avançado</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="bottom-label">INCIDENT_SYS · Divisão do Time</div>
+    <div class="presenter-note">Apresentação: <span>Todos os integrantes</span></div>
+  </div>
+</div>
+</body>
+</html>

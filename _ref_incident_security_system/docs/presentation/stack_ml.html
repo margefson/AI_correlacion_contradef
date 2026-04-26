@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 720px; background: #0d1117; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; position: relative; }
+    .accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: linear-gradient(180deg, #00b4d8 0%, #0369a1 100%); }
+    .slide-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 60px 18px 30px; border-bottom: 2px solid #21262d; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .slide-number { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; letter-spacing: 2px; }
+    .slide-title-bar { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; color: #e6edf3; }
+    .slide-title-bar span { color: #00b4d8; }
+    .header-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; }
+
+    .content-area { flex: 1; display: flex; }
+
+    /* Left col — pipeline */
+    .left-col { flex: 0 0 380px; padding: 24px 28px 16px 50px; border-right: 1px solid #21262d; display: flex; flex-direction: column; }
+    .col-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 18px; }
+
+    .pipeline-step { background: #161b22; padding: 12px 14px; display: flex; align-items: flex-start; gap: 12px; }
+    .step-num { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 11px; color: #00b4d8; min-width: 22px; margin-top: 2px; }
+    .step-content { flex: 1; }
+    .step-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; color: #e6edf3; margin-bottom: 3px; }
+    .step-detail { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e; }
+
+    .pipeline-arrow { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #30363d; text-align: center; padding: 3px 0; }
+
+    /* Center col — categories */
+    .center-col { flex: 0 0 480px; padding: 24px 28px 16px 28px; border-right: 1px solid #21262d; display: flex; flex-direction: column; }
+
+    .cat-table { width: 100%; border-collapse: collapse; }
+    .cat-table thead tr { border-bottom: 2px solid #21262d; }
+    .cat-table th { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; letter-spacing: 1px; text-transform: uppercase; padding: 0 0 10px 0; text-align: left; }
+    .cat-table tbody tr { border-bottom: 1px solid #21262d; }
+    .cat-table tbody tr:last-child { border-bottom: none; }
+    .cat-table td { padding: 10px 0; vertical-align: top; }
+    .cat-name { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; color: #e6edf3; }
+    .cat-examples { font-family: 'Inter', sans-serif; font-size: 11px; color: #8b949e; margin-top: 2px; }
+    .risk-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; padding: 3px 8px; letter-spacing: 1px; display: inline-block; }
+    .risk-critico { background: rgba(255,77,79,0.15); color: #ff4d4f; border: 1px solid rgba(255,77,79,0.3); }
+    .risk-alto { background: rgba(255,138,0,0.15); color: #ff8a00; border: 1px solid rgba(255,138,0,0.3); }
+    .risk-medio { background: rgba(255,214,0,0.15); color: #ffd600; border: 1px solid rgba(255,214,0,0.3); }
+
+    /* Right col — metrics */
+    .right-col { flex: 1; padding: 24px 40px 16px 28px; display: flex; flex-direction: column; gap: 16px; }
+
+    .metric-block { background: #161b22; padding: 16px; }
+    .metric-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 44px; color: #00b4d8; line-height: 1; }
+    .metric-label { font-family: 'Inter', sans-serif; font-size: 12px; color: #8b949e; margin-top: 6px; }
+
+    .info-block { background: rgba(0,180,216,0.06); border: 1px solid rgba(0,180,216,0.2); padding: 14px; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(0,180,216,0.1); }
+    .info-row:last-child { border-bottom: none; }
+    .info-key { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e; }
+    .info-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #e6edf3; font-weight: 600; }
+
+    .team-block { margin-top: auto; }
+    .team-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #30363d; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+    .team-names { display: flex; gap: 12px; }
+    .team-chip { background: rgba(0,180,216,0.1); border: 1px solid rgba(0,180,216,0.25); padding: 5px 12px; }
+    .team-chip-name { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; color: #e6edf3; }
+    .team-chip-role { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; margin-top: 2px; }
+
+    .bottom-bar { padding: 12px 60px 12px 30px; border-top: 1px solid #21262d; display: flex; justify-content: space-between; align-items: center; }
+    .bottom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #30363d; letter-spacing: 1px; }
+    .presenter-note { font-family: 'Inter', sans-serif; font-size: 11px; color: #30363d; }
+    .presenter-note span { color: #00b4d8; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="slide-container">
+  <div class="accent-bar"></div>
+
+  <div class="slide-header">
+    <div class="header-left">
+      <div class="slide-number">08 / 18</div>
+      <div class="slide-title-bar">Stack: <span>Machine Learning</span></div>
+    </div>
+    <div class="header-right">INCIDENT_SYS · 2025/2026</div>
+  </div>
+
+  <div class="content-area">
+    <!-- Left: pipeline -->
+    <div class="left-col">
+      <div class="col-label">Pipeline de Classificação</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <div class="step-title">Entrada de Texto</div>
+          <div class="step-detail">título + descrição do incidente</div>
+        </div>
+      </div>
+      <div class="pipeline-arrow">↓</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <div class="step-title">TF-IDF Vectorizer</div>
+          <div class="step-detail">5.000 features · bigramas</div>
+        </div>
+      </div>
+      <div class="pipeline-arrow">↓</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <div class="step-title">Multinomial Naive Bayes</div>
+          <div class="step-detail">alpha=0.1 · scikit-learn</div>
+        </div>
+      </div>
+      <div class="pipeline-arrow">↓</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <div class="step-title">Saída</div>
+          <div class="step-detail">categoria + score de confiança</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: categories -->
+    <div class="center-col">
+      <div class="col-label">5 Categorias Classificadas</div>
+      <table class="cat-table">
+        <thead>
+          <tr>
+            <th style="width:50%;">Categoria</th>
+            <th style="width:30%;">Risco</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="cat-name">Phishing</div>
+              <div class="cat-examples">e-mail falso, link suspeito, engenharia social</div>
+            </td>
+            <td><span class="risk-badge risk-alto">ALTO</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="cat-name">Malware</div>
+              <div class="cat-examples">vírus, ransomware, trojan, criptografia</div>
+            </td>
+            <td><span class="risk-badge risk-critico">CRÍTICO</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="cat-name">Força Bruta</div>
+              <div class="cat-examples">tentativas de login, bloqueio de conta</div>
+            </td>
+            <td><span class="risk-badge risk-alto">ALTO</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="cat-name">DDoS</div>
+              <div class="cat-examples">negação de serviço, tráfego anômalo</div>
+            </td>
+            <td><span class="risk-badge risk-medio">MÉDIO</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="cat-name">Vazamento de Dados</div>
+              <div class="cat-examples">exposição, LGPD, exfiltração de dados</div>
+            </td>
+            <td><span class="risk-badge risk-critico">CRÍTICO</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: metrics + team -->
+    <div class="right-col">
+      <div class="col-label">Métricas do Modelo</div>
+
+      <div class="metric-block">
+        <div class="metric-value">97%</div>
+        <div class="metric-label">Acurácia — Cross-Validation 5-fold</div>
+      </div>
+
+      <div class="info-block">
+        <div class="info-row">
+          <span class="info-key">Dataset</span>
+          <span class="info-val">100 amostras reais</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Algoritmo</span>
+          <span class="info-val">TF-IDF + Naive Bayes</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Features máx.</span>
+          <span class="info-val">5.000</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">N-gramas</span>
+          <span class="info-val">uni + bigramas</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Retreinamento</span>
+          <span class="info-val">Dinâmico (banco)</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Runtime</span>
+          <span class="info-val">Python 3.11 · Flask</span>
+        </div>
+      </div>
+
+      <div class="team-block">
+        <div class="team-label">Responsáveis</div>
+        <div class="team-names">
+          <div class="team-chip">
+            <div class="team-chip-name">Josias</div>
+            <div class="team-chip-role">ML Engineer</div>
+          </div>
+          <div class="team-chip">
+            <div class="team-chip-name">Keven</div>
+            <div class="team-chip-role">Frontend · ML</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="bottom-label">INCIDENT_SYS · Stack ML</div>
+    <div class="presenter-note">Apresentação: <span>Josias</span> e <span>Keven</span></div>
+  </div>
+</div>
+</body>
+</html>

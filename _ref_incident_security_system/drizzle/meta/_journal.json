@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1775516167524,
+      "tag": "0000_whole_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1775516322946,
+      "tag": "0001_nice_darkstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775579270720,
+      "tag": "0002_pale_expediter",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1775585561027,
+      "tag": "0003_needy_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1775586185823,
+      "tag": "0004_lame_gideon",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1775588460741,
+      "tag": "0005_chief_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1775600670296,
+      "tag": "0006_easy_dagger",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1775605378770,
+      "tag": "0007_flaky_gladiator",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1775675119115,
+      "tag": "0008_complete_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1775676396163,
+      "tag": "0009_thick_trauma",
+      "breakpoints": true
+    }
+  ]
+}

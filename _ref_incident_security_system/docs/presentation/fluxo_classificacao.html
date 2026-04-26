@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 720px; background: #0d1117; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; position: relative; }
+    .accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: linear-gradient(180deg, #00b4d8 0%, #0369a1 100%); }
+    .slide-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 60px 18px 30px; border-bottom: 2px solid #21262d; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .slide-number { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; letter-spacing: 2px; }
+    .slide-title-bar { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; color: #e6edf3; }
+    .slide-title-bar span { color: #00b4d8; }
+    .header-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; }
+
+    /* Flow banner */
+    .flow-banner {
+      background: #161b22;
+      border-bottom: 2px solid #21262d;
+      padding: 14px 50px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow: hidden;
+    }
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 118px;
+    }
+    .flow-step-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: #00b4d8;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .flow-step-box {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      padding: 7px 10px;
+      text-align: center;
+      width: 110px;
+    }
+    .flow-step-box.active { border-color: #00b4d8; background: rgba(0,180,216,0.06); }
+    .flow-step-box.ml { border-color: #d2a8ff; background: rgba(210,168,255,0.06); }
+    .flow-step-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 11px; color: #e6edf3; }
+    .flow-step-sub { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #8b949e; margin-top: 2px; }
+    .flow-step-sub.cyan { color: #00b4d8; }
+    .flow-step-sub.purple { color: #d2a8ff; }
+    .flow-arrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      color: #30363d;
+      padding: 0 4px;
+      margin-top: 14px;
+    }
+
+    /* Content area */
+    .content-area { flex: 1; display: flex; }
+
+    /* Left: diagram */
+    .left-col {
+      flex: 0 0 620px;
+      padding: 20px 24px 16px 50px;
+      border-right: 1px solid #21262d;
+      display: flex;
+      flex-direction: column;
+    }
+    .col-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+    .diagram-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #161b22;
+      border: 1px solid #21262d;
+    }
+    .diagram-wrapper img { width: 560px; height: 400px; object-fit: contain; }
+
+    /* Right: timing + highlights */
+    .right-col {
+      flex: 1;
+      padding: 20px 40px 16px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .timing-block { background: #161b22; padding: 14px 16px; }
+    .timing-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #00b4d8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+    .timing-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #21262d; }
+    .timing-row:last-child { border-bottom: none; }
+    .timing-step { font-family: 'Inter', sans-serif; font-size: 12px; color: #8b949e; }
+    .timing-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e6edf3; font-weight: 600; }
+    .timing-val.cyan { color: #00b4d8; }
+    .timing-val.green { color: #3fb950; }
+
+    .highlight-block { background: rgba(0,180,216,0.06); border: 1px solid rgba(0,180,216,0.2); padding: 14px 16px; }
+    .highlight-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #00b4d8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+    .highlight-item { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(0,180,216,0.1); }
+    .highlight-item:last-child { border-bottom: none; }
+    .highlight-dot { width: 5px; height: 5px; background: #00b4d8; margin-top: 6px; flex-shrink: 0; }
+    .highlight-text { font-family: 'Inter', sans-serif; font-size: 12px; color: #8b949e; line-height: 1.4; }
+    .highlight-text strong { color: #e6edf3; }
+
+    .total-block { background: #161b22; border-top: 2px solid #3fb950; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+    .total-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; }
+    .total-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 28px; color: #3fb950; }
+
+    .bottom-bar { padding: 12px 60px 12px 30px; border-top: 1px solid #21262d; display: flex; justify-content: space-between; align-items: center; }
+    .bottom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #30363d; letter-spacing: 1px; }
+    .presenter-note { font-family: 'Inter', sans-serif; font-size: 11px; color: #30363d; }
+    .presenter-note span { color: #00b4d8; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="slide-container">
+  <div class="accent-bar"></div>
+
+  <div class="slide-header">
+    <div class="header-left">
+      <div class="slide-number">09 / 18</div>
+      <div class="slide-title-bar">Fluxo de <span>Classificação</span></div>
+    </div>
+    <div class="header-right">INCIDENT_SYS · 2025/2026</div>
+  </div>
+
+  <!-- Flow banner: 8 steps -->
+  <div class="flow-banner">
+    <div class="flow-step">
+      <div class="flow-step-num">01</div>
+      <div class="flow-step-box active">
+        <div class="flow-step-title">Formulário</div>
+        <div class="flow-step-sub cyan">React + Zod</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">02</div>
+      <div class="flow-step-box">
+        <div class="flow-step-title">Validação</div>
+        <div class="flow-step-sub">tRPC input</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">03</div>
+      <div class="flow-step-box">
+        <div class="flow-step-title">Procedure</div>
+        <div class="flow-step-sub">Node.js :3000</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">04</div>
+      <div class="flow-step-box ml">
+        <div class="flow-step-title">Flask ML</div>
+        <div class="flow-step-sub purple">:5001 POST</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">05</div>
+      <div class="flow-step-box ml">
+        <div class="flow-step-title">TF-IDF + NB</div>
+        <div class="flow-step-sub purple">scikit-learn</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">06</div>
+      <div class="flow-step-box">
+        <div class="flow-step-title">Categoria</div>
+        <div class="flow-step-sub">+ confiança %</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">07</div>
+      <div class="flow-step-box">
+        <div class="flow-step-title">Banco TiDB</div>
+        <div class="flow-step-sub">Drizzle ORM</div>
+      </div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="flow-step-num">08</div>
+      <div class="flow-step-box active">
+        <div class="flow-step-title">Badge + Alerta</div>
+        <div class="flow-step-sub cyan">UI atualizada</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content area -->
+  <div class="content-area">
+    <!-- Left: architecture diagram -->
+    <div class="left-col">
+      <div class="col-label">Diagrama de Arquitetura — Caminho do Dado</div>
+      <div class="diagram-wrapper">
+        <img src="/home/ubuntu/incident_security_system/docs/architecture.png" alt="Arquitetura do Sistema — Fluxo de Classificação">
+      </div>
+    </div>
+
+    <!-- Right: timing + highlights -->
+    <div class="right-col">
+      <div class="timing-block">
+        <div class="timing-label">Breakdown de Tempo</div>
+        <div class="timing-row">
+          <span class="timing-step">Validação Zod (frontend)</span>
+          <span class="timing-val">&lt; 1ms</span>
+        </div>
+        <div class="timing-row">
+          <span class="timing-step">tRPC → Node.js (rede local)</span>
+          <span class="timing-val">~5ms</span>
+        </div>
+        <div class="timing-row">
+          <span class="timing-step">Node.js → Flask :5001 (HTTP)</span>
+          <span class="timing-val">~10ms</span>
+        </div>
+        <div class="timing-row">
+          <span class="timing-step">TF-IDF + Naive Bayes (inferência)</span>
+          <span class="timing-val cyan">~30ms</span>
+        </div>
+        <div class="timing-row">
+          <span class="timing-step">Escrita no banco (TiDB)</span>
+          <span class="timing-val">~20ms</span>
+        </div>
+        <div class="timing-row">
+          <span class="timing-step">Retorno ao frontend + render</span>
+          <span class="timing-val">~15ms</span>
+        </div>
+      </div>
+
+      <div class="highlight-block">
+        <div class="highlight-label">Destaques do Fluxo</div>
+        <div class="highlight-item">
+          <div class="highlight-dot"></div>
+          <div class="highlight-text"><strong>Fallback automático</strong> — se Flask offline, backend retorna categoria "Outros" sem quebrar o fluxo</div>
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-dot"></div>
+          <div class="highlight-text"><strong>Score de confiança</strong> salvo no banco — analista pode revisar classificações com baixa confiança</div>
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-dot"></div>
+          <div class="highlight-text"><strong>Histórico automático</strong> — toda reclassificação manual gera entrada em incident_history</div>
+        </div>
+      </div>
+
+      <div class="total-block">
+        <div class="total-label">Tempo Total End-to-End</div>
+        <div class="total-value">&lt; 200ms</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="bottom-label">INCIDENT_SYS · Fluxo de Classificação</div>
+    <div class="presenter-note">Apresentação: <span>Josias</span> — ML Engineer</div>
+  </div>
+</div>
+</body>
+</html>

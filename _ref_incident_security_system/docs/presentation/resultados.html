@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .slide-container { width: 1280px; min-height: 720px; background: #0d1117; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; position: relative; }
+    .accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: linear-gradient(180deg, #00b4d8 0%, #0369a1 100%); }
+    .slide-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 60px 18px 30px; border-bottom: 2px solid #21262d; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .slide-number { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; letter-spacing: 2px; }
+    .slide-title-bar { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; color: #e6edf3; }
+    .slide-title-bar span { color: #3fb950; }
+    .header-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #30363d; }
+
+    /* Top KPI strip */
+    .kpi-strip { display: flex; border-bottom: 1px solid #21262d; background: #161b22; }
+    .kpi-cell { flex: 1; padding: 14px 0 14px 28px; border-right: 1px solid #21262d; display: flex; align-items: center; gap: 14px; }
+    .kpi-cell:last-child { border-right: none; }
+    .kpi-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 42px; color: #3fb950; line-height: 1; }
+    .kpi-value.cyan { color: #00b4d8; }
+    .kpi-info { display: flex; flex-direction: column; gap: 2px; }
+    .kpi-label { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; color: #e6edf3; }
+    .kpi-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; }
+    .kpi-badge { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; padding: 2px 6px; background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.3); letter-spacing: 1px; }
+
+    /* Two-column content */
+    .content-area { flex: 1; display: flex; }
+
+    /* Left: comparison table */
+    .left-col { flex: 0 0 700px; padding: 20px 36px 16px 50px; border-right: 1px solid #21262d; display: flex; flex-direction: column; }
+    .col-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+
+    .cmp-table { width: 100%; border-collapse: collapse; }
+    .cmp-table thead tr { border-bottom: 2px solid #21262d; }
+    .cmp-table th { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #30363d; letter-spacing: 2px; text-transform: uppercase; padding: 0 0 8px 0; text-align: left; }
+    .cmp-table th.right { text-align: right; padding-right: 0; }
+    .cmp-table tbody tr { border-bottom: 1px solid #21262d; }
+    .cmp-table tbody tr:last-child { border-bottom: none; }
+    .cmp-table td { padding: 10px 0; vertical-align: middle; }
+    .kpi-name { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; color: #e6edf3; }
+    .kpi-area { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b949e; margin-top: 2px; }
+    .meta-val { font-family: 'JetBrains Mono', monospace; font-size: 16px; color: #8b949e; text-align: center; }
+    .result-val { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; color: #3fb950; text-align: right; }
+    .result-val.cyan { color: #00b4d8; }
+    .delta-col { text-align: center; }
+    .delta-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; padding: 3px 8px; background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.3); display: inline-block; }
+    .delta-badge.cyan { background: rgba(0,180,216,0.12); color: #00b4d8; border-color: rgba(0,180,216,0.3); }
+
+    /* Right: beyond goals */
+    .right-col { flex: 1; padding: 20px 40px 16px 32px; display: flex; flex-direction: column; gap: 14px; }
+
+    .beyond-block { background: rgba(63,185,80,0.06); border: 1px solid rgba(63,185,80,0.2); padding: 14px 16px; }
+    .beyond-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #3fb950; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+    .beyond-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(63,185,80,0.1); }
+    .beyond-item:last-child { border-bottom: none; }
+    .beyond-dot { width: 6px; height: 6px; background: #3fb950; margin-top: 5px; flex-shrink: 0; }
+    .beyond-text { font-family: 'Inter', sans-serif; font-size: 12px; color: #8b949e; line-height: 1.4; }
+    .beyond-text strong { color: #e6edf3; }
+
+    .tech-block { background: #161b22; padding: 14px 16px; }
+    .tech-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #00b4d8; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+    .tech-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #21262d; }
+    .tech-row:last-child { border-bottom: none; }
+    .tech-key { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8b949e; }
+    .tech-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; color: #e6edf3; }
+    .tech-val.green { color: #3fb950; }
+
+    .bottom-bar { padding: 12px 60px 12px 30px; border-top: 1px solid #21262d; display: flex; justify-content: space-between; align-items: center; }
+    .bottom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #30363d; letter-spacing: 1px; }
+    .presenter-note { font-family: 'Inter', sans-serif; font-size: 11px; color: #30363d; }
+    .presenter-note span { color: #3fb950; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="slide-container">
+  <div class="accent-bar"></div>
+
+  <div class="slide-header">
+    <div class="header-left">
+      <div class="slide-number">13 / 18</div>
+      <div class="slide-title-bar">Resultados e <span>Métricas</span></div>
+    </div>
+    <div class="header-right">INCIDENT_SYS · 2025/2026</div>
+  </div>
+
+  <!-- Top KPI strip -->
+  <div class="kpi-strip">
+    <div class="kpi-cell">
+      <div class="kpi-value">97%</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Acurácia ML</div>
+        <div class="kpi-sub">meta: 90%</div>
+        <div class="kpi-badge">+7pp</div>
+      </div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-value">347</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Testes</div>
+        <div class="kpi-sub">meta: 300</div>
+        <div class="kpi-badge">+47</div>
+      </div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-value cyan">&lt;200</div>
+      <div class="kpi-info">
+        <div class="kpi-label">ms end-to-end</div>
+        <div class="kpi-sub">meta: &lt;500ms</div>
+        <div class="kpi-badge" style="background:rgba(0,180,216,0.12);color:#00b4d8;border-color:rgba(0,180,216,0.3);">2.5× mais rápido</div>
+      </div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-value">3</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Servidores</div>
+        <div class="kpi-sub">Node + Flask×2</div>
+        <div class="kpi-badge">integrados</div>
+      </div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-value cyan">11</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Arquivos Teste</div>
+        <div class="kpi-sub">meta: 5</div>
+        <div class="kpi-badge" style="background:rgba(0,180,216,0.12);color:#00b4d8;border-color:rgba(0,180,216,0.3);">+6 extras</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Two-column content -->
+  <div class="content-area">
+    <!-- Left: comparison table -->
+    <div class="left-col">
+      <div class="col-label">Meta vs. Resultado — Comparativo</div>
+      <table class="cmp-table">
+        <thead>
+          <tr>
+            <th style="width:220px;">KPI</th>
+            <th style="width:100px;text-align:center;">Meta</th>
+            <th style="width:100px;text-align:center;">Delta</th>
+            <th style="text-align:right;">Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="kpi-name">Acurácia do Modelo ML</div>
+              <div class="kpi-area">TF-IDF + Naive Bayes · 5-fold CV</div>
+            </td>
+            <td><div class="meta-val">90%</div></td>
+            <td class="delta-col"><div class="delta-badge">+7pp</div></td>
+            <td><div class="result-val">97%</div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="kpi-name">Testes Automatizados</div>
+              <div class="kpi-area">Vitest · TypeScript · 11 arquivos</div>
+            </td>
+            <td><div class="meta-val">300</div></td>
+            <td class="delta-col"><div class="delta-badge">+47</div></td>
+            <td><div class="result-val">347</div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="kpi-name">Latência de Classificação</div>
+              <div class="kpi-area">Frontend → ML → Banco → UI</div>
+            </td>
+            <td><div class="meta-val">&lt;500ms</div></td>
+            <td class="delta-col"><div class="delta-badge cyan">2.5×</div></td>
+            <td><div class="result-val cyan">&lt;200ms</div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="kpi-name">Funcionalidades Entregues</div>
+              <div class="kpi-area">Usuário + Admin + ML + Histórico</div>
+            </td>
+            <td><div class="meta-val">20</div></td>
+            <td class="delta-col"><div class="delta-badge">+12</div></td>
+            <td><div class="result-val">32</div></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="kpi-name">Sessões de Entrega</div>
+              <div class="kpi-area">Incrementos semanais com testes</div>
+            </td>
+            <td><div class="meta-val">4</div></td>
+            <td class="delta-col"><div class="delta-badge">+2</div></td>
+            <td><div class="result-val">6</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right: beyond goals + tech -->
+    <div class="right-col">
+      <div class="beyond-block">
+        <div class="beyond-label">Além das Metas</div>
+        <div class="beyond-item">
+          <div class="beyond-dot"></div>
+          <div class="beyond-text"><strong>Histórico de alterações</strong> — tabela incident_history com auditoria completa</div>
+        </div>
+        <div class="beyond-item">
+          <div class="beyond-dot"></div>
+          <div class="beyond-text"><strong>Busca de texto completo</strong> com destaque visual nos resultados</div>
+        </div>
+        <div class="beyond-item">
+          <div class="beyond-dot"></div>
+          <div class="beyond-text"><strong>Retreinamento dinâmico</strong> com dados reais de produção</div>
+        </div>
+        <div class="beyond-item">
+          <div class="beyond-dot"></div>
+          <div class="beyond-text"><strong>PDF nativo Node.js</strong> — fallback sem dependência de Python</div>
+        </div>
+        <div class="beyond-item">
+          <div class="beyond-dot"></div>
+          <div class="beyond-text"><strong>Gerenciamento de usuários</strong> com reset de senha e RBAC completo</div>
+        </div>
+      </div>
+
+      <div class="tech-block">
+        <div class="tech-label">Indicadores de Qualidade</div>
+        <div class="tech-row">
+          <span class="tech-key">Pass rate dos testes</span>
+          <span class="tech-val green">100% (347/347)</span>
+        </div>
+        <div class="tech-row">
+          <span class="tech-key">Erros TypeScript</span>
+          <span class="tech-val green">0 (npx tsc)</span>
+        </div>
+        <div class="tech-row">
+          <span class="tech-key">Commits no GitHub</span>
+          <span class="tech-val">6 sessões · histórico completo</span>
+        </div>
+        <div class="tech-row">
+          <span class="tech-key">Documentação</span>
+          <span class="tech-val">README + 2 manuais PDF</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="bottom-label">INCIDENT_SYS · Resultados e Métricas</div>
+    <div class="presenter-note">Apresentação: <span>Margefson</span> — Tech Lead</div>
+  </div>
+</div>
+</body>
+</html>
