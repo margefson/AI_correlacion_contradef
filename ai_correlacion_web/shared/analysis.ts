@@ -1,8 +1,19 @@
 import { z } from "zod";
 import { mitreDefenseEvasionSchema } from "./mitreDefenseEvasion";
 
-export type { MitreDefenseEvasion } from "./mitreDefenseEvasion";
-export { buildMitreDefenseEvasion, listHeuristicsOutsideTa0005 } from "./mitreDefenseEvasion";
+export type {
+  MitreDefenseEvasion,
+  MitreDefenseEvidenceItem,
+  MitreEvidenceOccurrence,
+  MitreTraceEvent,
+} from "./mitreDefenseEvasion";
+export {
+  buildMitreDefenseEvasion,
+  buildMitreDefenseEvasionFromEvidence,
+  listHeuristicsOutsideTa0005,
+  mitreDefenseEvasionSchema,
+  traceMitreEvidenceOccurrences,
+} from "./mitreDefenseEvasion";
 
 export const supportedLogTypeSchema = z.enum([
   "FunctionInterceptor",
@@ -130,6 +141,10 @@ export const reductionFileMetricSchema = z.object({
   triggerCount: z.number().default(0),
   uploadDurationMs: z.number().default(0),
   uploadReused: z.boolean().default(false),
+  /** Contagem de linhas lidas por fase heurística (log original). Análises antigas podem omitir. */
+  originalLinesByStage: z.record(z.string(), z.number()).optional(),
+  /** Linhas mantidas no reduzido, por fase da linha de origem. Análises antigas podem omitir. */
+  keptLinesByStage: z.record(z.string(), z.number()).optional(),
 });
 export type ReductionFileMetric = z.infer<typeof reductionFileMetricSchema>;
 

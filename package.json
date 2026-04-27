@@ -1,0 +1,12 @@
+{
+  "name": "ai-correlacion-contradef-main",
+  "private": true,
+  "description": "Ponto de entrada na raiz do repositório; a aplicação em Node vive em ai_correlacion_web/.",
+  "scripts": {
+    "dev": "npm run dev --prefix ai_correlacion_web",
+    "build": "npm run build --prefix ai_correlacion_web",
+    "start": "npm run start --prefix ai_correlacion_web",
+    "test": "npm run test --prefix ai_correlacion_web",
+    "check": "npm run check --prefix ai_correlacion_web"
+  }
+}

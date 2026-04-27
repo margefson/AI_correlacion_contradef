@@ -158,37 +158,28 @@ export default function Login() {
               </div>
             </form>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center" aria-hidden>
-                <span className="w-full border-t border-border/60" />
-              </div>
-              <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
-                <span className="bg-card px-3 text-muted-foreground">Ou aceda via OAuth institucional</span>
-              </div>
-            </div>
-
             {oauthUrl ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-11 border-border/80 bg-background/50 hover:bg-muted/30"
-                onClick={() => {
-                  window.location.href = oauthUrl;
-                }}
-              >
-                Entrar com OAuth
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-11 border-dashed border-border/60 text-muted-foreground"
-                disabled
-                title="Defina no ambiente (e rebuild) VITE_OAUTH_PORTAL_URL, VITE_APP_ID e, no servidor, OAUTH_SERVER_URL — o mesmo appId e API WebDev usados no modo full webdev."
-              >
-                Entrar com OAuth
-              </Button>
-            )}
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center" aria-hidden>
+                    <span className="w-full border-t border-border/60" />
+                  </div>
+                  <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
+                    <span className="bg-card px-3 text-muted-foreground">Ou aceda via OAuth institucional</span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11 border-border/80 bg-background/50 hover:bg-muted/30"
+                  onClick={() => {
+                    window.location.href = oauthUrl;
+                  }}
+                >
+                  Entrar com OAuth
+                </Button>
+              </>
+            ) : null}
           </CardContent>
         </Card>
       </div>

@@ -5,3 +5,13 @@ export const UNAUTHED_ERR_MSG = 'Please login (10001)';
 export const NOT_ADMIN_ERR_MSG = 'You do not have required permission (10002)';
 /** tRPC/Express: a conta deve alterar a palavra-passe antes de usar a aplicação. */
 export const MUST_CHANGE_PASSWORD_ERR_MSG = "MUST_CHANGE_PASSWORD (10003)";
+
+/** Ordem das fases heurísticas (determina `determineStage` / `buildFlowGraph`) — alinhar com `analysisService.stageOrder`. */
+export const LOG_HEURISTIC_STAGE_ORDER = [
+  "Inicialização",
+  "Evasão",
+  "Desempacotamento",
+  "Execução maliciosa",
+  "Persistência",
+  "Exfiltração",
+] as const;

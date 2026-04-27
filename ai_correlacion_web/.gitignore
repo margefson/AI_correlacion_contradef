@@ -108,3 +108,7 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+
+# MITRE CTI full Enterprise bundle (very large; optional local STIX)
+scripts/_enterprise-attack-tmp.json
+scripts/enterprise-attack.json

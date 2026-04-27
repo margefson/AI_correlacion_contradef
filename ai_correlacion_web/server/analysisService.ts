@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { path7za } from "7zip-bin";
 import { nanoid } from "nanoid";
 
+import { LOG_HEURISTIC_STAGE_ORDER } from "../shared/const";
 import {
   addAnalysisEvent,
   createAnalysisJob,
@@ -29,7 +30,6 @@ import { getServerProcessDebugSnapshot } from "./_core/serverProcessDebug";
 import { storageGetBuffer, storagePut } from "./storage";
 import { normalizeOptionalSampleSha256 } from "../shared/virusTotal";
 import {
-  buildMitreDefenseEvasion,
   type AnalysisArtifactDto,
   type AnalysisInsightDto,
   type AnalysisJobDetail,
@@ -37,10 +37,13 @@ import {
   type FlowGraph,
   type FlowNode,
   type MalwareCategory,
+  type MitreTraceEvent,
   type ReductionFileMetric,
   type ReductionMetrics,
   type RiskLevel,
   type SupportedLogType,
+  buildMitreDefenseEvasionFromEvidence,
+  mitreDefenseEvasionSchema,
 } from "../shared/analysis";
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -63,6 +66,35 @@ function isNoSpaceError(error: unknown): boolean {
   return /enospc|no space left|espaço insuficiente|write could not be completed|NSPOSIXErrorDomain.*28|errno:\s*28/i.test(
     blob,
   );
+}
+
+function shouldLogAnalysisToConsole(): boolean {
+  if (process.env.ANALYSIS_DEBUG_LOGS === "1" || process.env.ANALYSIS_DEBUG_LOGS === "true") {
+    return true;
+  }
+  return process.env.NODE_ENV !== "production";
+}
+
+/** Erros de processamento por ficheiro (consola local; em produção usar ANALYSIS_DEBUG_LOGS=1). */
+function logAnalysisFileProcessingError(jobId: string, fileName: string, userMessage: string, caught: unknown): void {
+  if (!shouldLogAnalysisToConsole()) {
+    return;
+  }
+  console.error(`[Analysis] Erro ao processar arquivo (jobId=${jobId}): ${fileName}`);
+  console.error(`  ${userMessage.split("\n").join("\n  ")}`);
+  if (caught instanceof Error && caught.stack) {
+    console.error(caught.stack);
+  }
+}
+
+function logAnalysisJobFailure(jobId: string, message: string, error: unknown): void {
+  if (!shouldLogAnalysisToConsole()) {
+    return;
+  }
+  console.error(`[Analysis] Job falhou (jobId=${jobId}): ${message}`);
+  if (error instanceof Error && error.stack) {
+    console.error(error.stack);
+  }
 }
 
 const WORK_TMP_ROOT = process.env.CONTRADEF_WORK_TMP?.trim()
@@ -109,14 +141,7 @@ const suspiciousApis = [
   "DeleteFile",
 ];
 
-const stageOrder = [
-  "Inicialização",
-  "Evasão",
-  "Desempacotamento",
-  "Execução maliciosa",
-  "Persistência",
-  "Exfiltração",
-];
+const stageOrder = LOG_HEURISTIC_STAGE_ORDER;
 
 type LogParseProgress = {
   jobId: string;
@@ -367,6 +392,10 @@ type ParsedLogResult = {
   logType: SupportedLogType;
   keptLines: Array<{ lineNumber: number; text: string }>;
   events: NormalizedEvent[];
+  /** Uma ocorrência por API e por etiqueta heurística (1.ª linha no ficheiro) para o rastreio MITRE, independentemente do teto de eventos. */
+  mitreAnchorEvents: NormalizedEvent[];
+  originalLinesByStage: Record<string, number>;
+  keptLinesByStage: Record<string, number>;
   suspiciousApis: string[];
   techniqueTags: string[];
   originalLineCount: number;
@@ -714,6 +743,43 @@ function deriveCurrentPhase(events: NormalizedEvent[]) {
     if (discovered.has(stage)) current = stage;
   }
   return current;
+}
+
+/** Deve seguir a mesma regra de ids que `buildFlowGraph` (jornada suspeita, até 28 eventos). */
+function buildSuspiciousJourneyFileLineToNodeId(events: NormalizedEvent[]): Map<string, string> {
+  const journey = events.filter((e) => e.suspicious).slice(0, 28);
+  const map = new Map<string, string>();
+  journey.forEach((event, index) => {
+    const apiLabel = event.suspiciousApis[0] ?? event.eventType;
+    const nodeId = `event:${index}:${apiLabel}`;
+    map.set(`${event.fileName}\0${String(event.lineNumber)}`, nodeId);
+  });
+  return map;
+}
+
+function normalizedEventsToMitreTrace(events: NormalizedEvent[]): MitreTraceEvent[] {
+  return events.map((e) => ({
+    fileName: e.fileName,
+    lineNumber: e.lineNumber,
+    stage: e.stage,
+    suspicious: e.suspicious,
+    suspiciousApis: e.suspiciousApis,
+    techniqueTags: e.techniqueTags,
+  }));
+}
+
+function mergeMitreTraceEventsForEvidence(primary: NormalizedEvent[], anchors: NormalizedEvent[]): NormalizedEvent[] {
+  const by = new Map<string, NormalizedEvent>();
+  for (const e of primary) {
+    by.set(`${e.fileName}\0${String(e.lineNumber)}`, e);
+  }
+  for (const e of anchors) {
+    const k = `${e.fileName}\0${String(e.lineNumber)}`;
+    if (!by.has(k)) {
+      by.set(k, e);
+    }
+  }
+  return Array.from(by.values());
 }
 
 function buildFlowGraph(
@@ -1171,13 +1237,17 @@ function toNormalizedEvent(item: ProcessedLogLine): NormalizedEvent {
 }
 
 function createLogCollector(fileName: string, logType: SupportedLogType, perFileEventLimit: number) {
-  const keepLineMap = new Map<number, string>();
+  /** Só guarda linhas de contexto (nº limitado), não o ficheiro completo. O stage fica aqui, não num Map por linha. */
+  const keepLineMap = new Map<number, { text: string; stage: string }>();
   const previousLines: ProcessedLogLine[] = [];
   const lastLines: ProcessedLogLine[] = [];
   const firstLines: ProcessedLogLine[] = [];
   const suspiciousApiSet = new Set<string>();
   const techniqueSet = new Set<string>();
   const events: NormalizedEvent[] = [];
+  const firstHitByApi = new Map<string, ProcessedLogLine>();
+  const firstHitByTag = new Map<string, ProcessedLogLine>();
+  const originalLinesByStage: Record<string, number> = {};
 
   let futureContextBudget = 0;
   let originalLineCount = 0;
@@ -1187,7 +1257,7 @@ function createLogCollector(fileName: string, logType: SupportedLogType, perFile
 
   const rememberLine = (item: ProcessedLogLine) => {
     if (item.rawLine.trim().length > 0) {
-      keepLineMap.set(item.lineNumber, item.rawLine);
+      keepLineMap.set(item.lineNumber, { text: item.rawLine, stage: item.stage });
     }
   };
 
@@ -1196,6 +1266,8 @@ function createLogCollector(fileName: string, logType: SupportedLogType, perFile
     approximateOriginalBytes += Buffer.byteLength(rawLine, "utf-8") + 1;
 
     const item = buildProcessedLine(rawLine, fileName, logType, originalLineCount);
+
+    originalLinesByStage[item.stage] = (originalLinesByStage[item.stage] ?? 0) + 1;
 
     item.apis.forEach((api) => suspiciousApiSet.add(api));
     item.techniqueTags.forEach((tag) => techniqueSet.add(tag));
@@ -1218,6 +1290,16 @@ function createLogCollector(fileName: string, logType: SupportedLogType, perFile
       futureContextBudget = 4;
       if (events.length < perFileEventLimit && (item.normalizedLine || item.rawLine)) {
         events.push(toNormalizedEvent(item));
+      }
+      for (const api of item.apis) {
+        if (!firstHitByApi.has(api)) {
+          firstHitByApi.set(api, item);
+        }
+      }
+      for (const tag of item.techniqueTags) {
+        if (!firstHitByTag.has(tag)) {
+          firstHitByTag.set(tag, item);
+        }
       }
     }
 
@@ -1243,17 +1325,45 @@ function createLogCollector(fileName: string, logType: SupportedLogType, perFile
       firstLines.slice(0, Math.min(25, firstLines.length)).forEach(rememberLine);
     }
 
-    const keptLines = Array.from(keepLineMap.entries())
+    const keptEntries = Array.from(keepLineMap.entries())
       .sort((left, right) => left[0] - right[0])
-      .map(([lineNumber, text]) => ({ lineNumber, text }))
+      .map(([lineNumber, { text, stage }]) => ({ lineNumber, text, stage }))
       .filter((entry) => entry.text.trim().length > 0);
 
+    const keptLines = keptEntries.map(({ lineNumber, text }) => ({ lineNumber, text }));
+
+    const keptLinesByStage: Record<string, number> = {};
+    for (const { stage } of keptEntries) {
+      const st = stage ?? "—";
+      keptLinesByStage[st] = (keptLinesByStage[st] ?? 0) + 1;
+    }
+
     const reducedBytes = Buffer.byteLength(keptLines.map((entry) => entry.text).join("\n"), "utf-8");
+
+    const lineSeen = new Set<string>();
+    const mitreAnchorEvents: NormalizedEvent[] = [];
+    const addAnchor = (pl: ProcessedLogLine) => {
+      const k = `${String(pl.lineNumber)}`;
+      if (lineSeen.has(k)) {
+        return;
+      }
+      lineSeen.add(k);
+      mitreAnchorEvents.push(toNormalizedEvent(pl));
+    };
+    for (const pl of Array.from(firstHitByApi.values())) {
+      addAnchor(pl);
+    }
+    for (const pl of Array.from(firstHitByTag.values())) {
+      addAnchor(pl);
+    }
 
     return {
       logType,
       keptLines,
       events,
+      mitreAnchorEvents,
+      originalLinesByStage: { ...originalLinesByStage },
+      keptLinesByStage,
       suspiciousApis: Array.from(suspiciousApiSet),
       techniqueTags: Array.from(techniqueSet),
       originalLineCount,
@@ -1455,6 +1565,20 @@ function readNumericValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function readStageCountRecord(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const o = value as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+      out[k] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 type BuildLiveFileMetricEvent = {
   eventType: string | null;
   stage: string | null;
@@ -1519,6 +1643,8 @@ export function buildLiveFileMetrics(
         triggerCount: readNumericValue(entry.triggerCount),
         uploadDurationMs: readNumericValue(entry.uploadDurationMs),
         uploadReused: Boolean(entry.uploadReused),
+        originalLinesByStage: readStageCountRecord(entry.originalLinesByStage) ?? previous.originalLinesByStage,
+        keptLinesByStage: readStageCountRecord(entry.keptLinesByStage) ?? previous.keptLinesByStage,
       });
     });
   }
@@ -1543,15 +1669,25 @@ export function buildLiveFileMetrics(
               ? "running"
               : previous.status;
 
+    let nextProgress =
+      typeof payload.fileProgress === "number"
+        ? payload.fileProgress
+        : typeof event.progress === "number"
+          ? event.progress
+          : previous.progress;
+    /**
+     * `file-failed` não envia `fileProgress` (evita confundir com o marco 45% da heurística); falhas legadas
+     * podiam ter 45% fixo. Nunca retroceder em relação ao último `file-stage`.
+     */
+    if (event.eventType === "file-failed" || event.eventType === "error") {
+      nextProgress = Math.max(previous.progress ?? 0, nextProgress ?? 0);
+    }
+
     fileMap.set(fileName, {
       ...previous,
       logType: (payload.logType as SupportedLogType | undefined) ?? previous.logType,
       status: nextStatus,
-      progress: typeof payload.fileProgress === "number"
-        ? payload.fileProgress
-        : typeof event.progress === "number"
-          ? event.progress
-          : previous.progress,
+      progress: nextProgress,
       currentStage: typeof payload.currentStage === "string"
         ? payload.currentStage
         : event.stage ?? previous.currentStage,
@@ -1619,6 +1755,7 @@ export function buildLiveFileMetrics(
 
 async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise<AnalysisComputationResult> {
   const normalizedEvents: NormalizedEvent[] = [];
+  const mitreAnchorAll: NormalizedEvent[] = [];
   const suspiciousApiSet = new Set<string>();
   const techniqueSet = new Set<string>();
   const reducedLogEntries: Array<{ fileName: string; logType: SupportedLogType; keptLines: Array<{ lineNumber: number; text: string }> }> = [];
@@ -1774,6 +1911,8 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
         triggerCount: parsed.triggerCount,
         uploadDurationMs: logFile.uploadDurationMs ?? 0,
         uploadReused: logFile.uploadReused ?? false,
+        originalLinesByStage: parsed.originalLinesByStage,
+        keptLinesByStage: parsed.keptLinesByStage,
       });
 
       const endProgress = Math.min(95, 25 + Math.round((fileOrdinal / Math.max(1, input.logFiles.length)) * 60));
@@ -1801,6 +1940,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
       });
 
       normalizedEvents.push(...parsed.events);
+      mitreAnchorAll.push(...parsed.mitreAnchorEvents);
       artifacts.push(await buildSourceArtifact(jobId, logFile, parsed.logType));
     } catch (caught) {
       const base = caught instanceof Error ? caught.message : String(caught);
@@ -1809,6 +1949,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
             "Em alojamento (p.ex. Render), o disco do contentor é limitado: defina CONTRADEF_WORK_TMP, suba o plano, ou reduza/fragmente o 7z. " +
             `Detalhe: ${base}`
         : `Falha em ${logFile.fileName}: ${base}`;
+      logAnalysisFileProcessingError(jobId, logFile.fileName, userMsg, caught);
       await addAnalysisEvent({
         jobId,
         eventType: "file-failed",
@@ -1819,7 +1960,6 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
           fileName: logFile.fileName,
           logType: inferredLogType,
           status: "failed",
-          fileProgress: 45,
           currentStage: "Falha",
           currentStep: isNoSpaceError(caught) ? "Espaço de disco" : "Erro de processamento",
           lastMessage: userMsg,
@@ -1869,6 +2009,14 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
   const flowGraph = buildFlowGraph(sortedEvents, currentPhase, classification, riskLevel);
   const techniques = Array.from(techniqueSet);
   const suspiciousApisList = Array.from(suspiciousApiSet);
+  const fileLineToNodeId = buildSuspiciousJourneyFileLineToNodeId(sortedEvents);
+  const mitreTraceForEvidence = mergeMitreTraceEventsForEvidence(sortedEvents, mitreAnchorAll);
+  const mitreDefenseEvasion = buildMitreDefenseEvasionFromEvidence({
+    heuristicTags: techniques,
+    suspiciousApis: suspiciousApisList,
+    events: normalizedEventsToMitreTrace(mitreTraceForEvidence),
+    fileLineToNodeId,
+  });
   const recommendations = buildRecommendations(techniques, classification);
   const insight = await generateInsight({
     analysisName: input.analysisName,
@@ -1888,7 +2036,7 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     riskLevel: insight.riskLevel,
     currentPhase: insight.currentPhase,
     techniques,
-    mitreDefenseEvasion: buildMitreDefenseEvasion(techniques, suspiciousApisList),
+    mitreDefenseEvasion,
     suspiciousApis: suspiciousApisList,
     recommendations: insight.recommendations,
     metrics,
@@ -2024,6 +2172,7 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, s
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha inesperada durante a análise.";
+    logAnalysisJobFailure(jobId, message, error);
     await updateAnalysisJob(jobId, {
       status: "failed",
       progress: 100,
@@ -2177,10 +2326,17 @@ export async function getAnalysisJobDetail(
     fileMetrics: buildLiveFileMetrics(events, summaryJson, job.status),
     suspiciousApis: Array.isArray(summaryJson.suspiciousApis) ? summaryJson.suspiciousApis as string[] : [],
     techniques: Array.isArray(summaryJson.techniques) ? summaryJson.techniques as string[] : [],
-    mitreDefenseEvasion: buildMitreDefenseEvasion(
-      Array.isArray(summaryJson.techniques) ? summaryJson.techniques as string[] : [],
-      Array.isArray(summaryJson.suspiciousApis) ? summaryJson.suspiciousApis as string[] : [],
-    ),
+    mitreDefenseEvasion: (() => {
+      const raw = summaryJson.mitreDefenseEvasion;
+      const parsed = mitreDefenseEvasionSchema.safeParse(raw);
+      if (parsed.success) {
+        return parsed.data;
+      }
+      return buildMitreDefenseEvasionFromEvidence({
+        heuristicTags: Array.isArray(summaryJson.techniques) ? summaryJson.techniques as string[] : [],
+        suspiciousApis: Array.isArray(summaryJson.suspiciousApis) ? summaryJson.suspiciousApis as string[] : [],
+      });
+    })(),
     recommendations: Array.isArray(summaryJson.recommendations) ? summaryJson.recommendations as string[] : [],
     classification: (summaryJson.classification as MalwareCategory | undefined) ?? "Unknown",
     riskLevel: (summaryJson.riskLevel as RiskLevel | undefined) ?? "low",

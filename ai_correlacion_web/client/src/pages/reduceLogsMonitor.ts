@@ -90,6 +90,29 @@ export function inferLogType(fileName: string): LogType {
   return "Unknown";
 }
 
+/**
+ * % mostrada na coluna "Reduzido": após conclusão, redução real de volume; antes disso, 0% ou o progresso
+ * de leitura/heurística (0–100) para não mostrar 100% por engano com `reducedBytes === 0`.
+ */
+export function getFileReductionDisplayPercent(file: FileMonitor): number {
+  if (file.originalBytes <= 0) {
+    return 0;
+  }
+  if (file.processingStatus === "completed") {
+    return Math.max(0, Math.min(100, 100 * (1 - file.reducedBytes / file.originalBytes)));
+  }
+  if (file.processingStatus === "failed") {
+    return 0;
+  }
+  if (file.reducedBytes > 0 && file.reducedBytes < file.originalBytes) {
+    return Math.max(0, Math.min(100, 100 * (1 - file.reducedBytes / file.originalBytes)));
+  }
+  if (file.processingStatus === "running" && file.processingProgress != null) {
+    return Math.max(0, Math.min(100, file.processingProgress));
+  }
+  return 0;
+}
+
 export function getFileInterpretation(file: FileMonitor) {
   if (file.uploadStatus === "failed" || file.processingStatus === "failed") {
     return "O fluxo foi interrompido antes da consolidação final e exige nova submissão ou revisão do arquivo.";

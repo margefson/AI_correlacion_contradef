@@ -32,9 +32,10 @@ import { downloadReduceLogsAnalysisExcel, downloadReduceLogsFlowExcel } from "@/
 import { asRecord } from "@/lib/payload";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import type { MitreEvidenceOccurrence } from "@shared/analysis";
 import { AlertTriangle, ArrowRight, BrainCircuit, FileDown, FileSpreadsheet, Filter, Hash, ShieldAlert, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "wouter";
 import { toast } from "sonner";
 
@@ -43,6 +44,7 @@ function InterpretacaoConsolidadaContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [eventSearch, setEventSearch] = useState("");
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
+  const [interpretationTab, setInterpretationTab] = useState("overview");
 
   const selectedJobId = searchParams.get("job");
 
@@ -67,6 +69,7 @@ function InterpretacaoConsolidadaContent() {
 
   useEffect(() => {
     setSelectedGraphNodeId(null);
+    setInterpretationTab("overview");
   }, [selectedJobId]);
 
   const detailQuery = trpc.analysis.detail.useQuery(
@@ -148,6 +151,17 @@ function InterpretacaoConsolidadaContent() {
       toast.error(err instanceof Error ? err.message : "Não foi possível gerar o Excel de análise.");
     }
   }
+
+  const handleMitreTrace = useCallback((occ: MitreEvidenceOccurrence) => {
+    setInterpretationTab("graph");
+    const target = occ.graphNodeId ?? occ.phaseNodeId;
+    setSelectedGraphNodeId(target);
+    toast.info(`${occ.fileName} · linha ${occ.lineNumber} · fase: ${occ.stage}`);
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-flow-node-id="${CSS.escape(target)}"]`);
+      el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, []);
 
   function handleExportFlowExcel() {
     if (!selectedDetail?.flowGraph.nodes.length) {
@@ -253,7 +267,7 @@ function InterpretacaoConsolidadaContent() {
                     <MetricCard icon={BrainCircuit} label="APIs suspeitas" value={String(selectedDetail.suspiciousApis.length)} helper={`${selectedDetail.metrics.triggerCount} gatilho(s) heurísticos`} />
                   </div>
 
-                  <Tabs defaultValue="overview" className="space-y-4">
+                  <Tabs value={interpretationTab} onValueChange={setInterpretationTab} className="space-y-4">
                     <div className="space-y-2">
                       <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Conteúdo da visão geral</p>
                       <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 rounded-xl border border-border bg-muted p-1.5 dark:border-white/12 dark:bg-slate-950/85">
@@ -325,6 +339,7 @@ function InterpretacaoConsolidadaContent() {
                             <MitreDefenseEvasionPanel
                               mitre={selectedDetail.mitreDefenseEvasion}
                               heuristicTags={selectedDetail.techniques}
+                              onEvidenceTrace={handleMitreTrace}
                             />
                             <div className="space-y-2">
                               <p className="text-sm font-medium text-foreground">Heurísticas destacadas nos logs</p>
@@ -395,6 +410,7 @@ function InterpretacaoConsolidadaContent() {
                               <button
                                 key={node.id}
                                 type="button"
+                                data-flow-node-id={node.id}
                                 onClick={() => setSelectedGraphNodeId(node.id)}
                                 className={`rounded-2xl border px-3 py-2 text-left text-sm transition ${effectiveGraphNodeId === node.id ? "border-cyan-500/50 bg-cyan-500/15 text-foreground dark:border-cyan-400/40 dark:bg-cyan-500/10 dark:text-white" : "border-border bg-muted/50 text-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"}`}
                               >

@@ -37,6 +37,7 @@ import {
 } from "@/services/analysisService";
 import {
   buildMonitoredFiles,
+  getFileReductionDisplayPercent,
   getFileInterpretation,
   getFileRecommendation,
   inferLogType,
@@ -51,6 +52,7 @@ import {
   Filter,
   FileArchive,
   FileDown,
+  FileText,
   FileSpreadsheet,
   FolderOpen,
   LayoutDashboard,
@@ -66,13 +68,15 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 
 /** Lote “virtual” antes do servidor devolver o `jobId` (ctr-…), para acompanhar o envio ficheiro a ficheiro. */
-/** 10 colunas: `table-fixed` + colgroup desalinhava; grid com `minmax(0,1fr)` alinha cabeçalho e células. */
-const FILE_TRACKING_GRID_10 =
-  "grid w-full min-w-0 [grid-template-columns:repeat(10,minmax(0,1fr))] gap-0 text-xs [word-break:break-word]";
+/** 11 colunas: tamanhos compactos em Antes/Depois/Reduzido/Semáforo + coluna de relatório de preservação. */
+const FILE_TRACKING_GRID_11 =
+  "grid w-full min-w-0 [grid-template-columns:minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,0.95fr)_minmax(0,0.4fr)_minmax(0,0.4fr)_minmax(0,0.36fr)_minmax(0,0.5fr)_minmax(0,0.4fr)_minmax(0,0.4fr)_minmax(0,0.4fr)] gap-0 text-xs [word-break:break-word]";
 const fileTrackTh =
   "text-left min-w-0 border-r border-border/70 bg-muted/50 px-1.5 py-1.5 align-top text-[11px] font-medium leading-tight [overflow-wrap:anywhere] first:bg-muted first:dark:bg-slate-950 last:border-r-0 dark:border-white/10";
+const fileTrackThNarrow = `${fileTrackTh} px-1 py-1 text-[10px]`;
 const fileTrackTd =
   "text-left min-w-0 border-r border-border/70 px-1.5 py-1.5 align-top [overflow-wrap:anywhere] first:bg-muted first:font-medium first:text-foreground first:dark:bg-slate-950 last:border-r-0 dark:border-white/10";
+const fileTrackTdNarrow = `${fileTrackTd} px-0.5 py-1 text-[10px]`;
 
 const LOCAL_UPLOAD_LOT_ID = "__local-uploading__" as const;
 
@@ -88,6 +92,10 @@ function fileNameBase(fileName: string) {
 
 function buildReducedLogDownloadUrl(jobId: string, fileName: string) {
   return `/api/analysis-artifacts/reduced-log-by-file?${new URLSearchParams({ jobId, fileName }).toString()}`;
+}
+
+function buildPreservationReportDownloadUrl(jobId: string, fileName: string) {
+  return `/api/analysis-artifacts/preservation-report?${new URLSearchParams({ jobId, fileName }).toString()}`;
 }
 
 function staleThresholdMsForFile(file: FileMonitor) {
@@ -675,7 +683,10 @@ export default function ReduceLogs() {
     const discardedLines = Math.max(0, totalOriginalLines - totalReducedLines);
     const suspiciousCount = monitoredFiles.reduce((sum, file) => sum + file.suspiciousEventCount, 0);
     const triggerCount = monitoredFiles.reduce((sum, file) => sum + file.triggerCount, 0);
-    const reductionPercent = totalOriginalBytes > 0 ? 100 * (1 - totalReducedBytes / totalOriginalBytes) : 0;
+    const doneFiles = monitoredFiles.filter((f) => f.processingStatus === "completed");
+    const doneOrig = doneFiles.reduce((s, f) => s + f.originalBytes, 0);
+    const doneRed = doneFiles.reduce((s, f) => s + f.reducedBytes, 0);
+    const reductionPercent = doneOrig > 0 ? 100 * (1 - doneRed / doneOrig) : 0;
 
     return {
       completedFiles,
@@ -2027,20 +2038,35 @@ export default function ReduceLogs() {
                     ) : null}
 
                     <div className="mt-4 hidden w-full min-w-0 max-w-full overflow-x-hidden rounded-xl border border-border md:block dark:border-white/10">
-                      <div className={`${FILE_TRACKING_GRID_10} border-b-2 border-border`}>
+                      <div className={`${FILE_TRACKING_GRID_11} border-b-2 border-border`}>
                         <div className={fileTrackTh}>Arquivo</div>
                         <div className={fileTrackTh}>Upload</div>
                         <div className={fileTrackTh}>Processamento</div>
                         <div className={fileTrackTh}>Etapa atual</div>
-                        <div className={`${fileTrackTh} tabular-nums`}>Antes</div>
-                        <div className={`${fileTrackTh} tabular-nums`}>Depois</div>
-                        <div className={`${fileTrackTh} tabular-nums`}>Reduzido</div>
+                        <div className={`${fileTrackThNarrow} tabular-nums`}>Antes</div>
+                        <div className={`${fileTrackThNarrow} tabular-nums`}>Depois</div>
+                        <div
+                          className={`${fileTrackThNarrow} tabular-nums`}
+                          title="Só após conclusão: % de redução de volume. Enquanto processa, segue o progresso de leitura do ficheiro (0–100%)."
+                        >
+                          Reduz.
+                        </div>
                         <div className={fileTrackTh}>Sinais</div>
-                        <div className={fileTrackTh} title="Indicador heurístico (preservado / rotina / …)">Semáforo</div>
-                        <div className={fileTrackTh} title="Descarregar log reduzido (.txt)">Download</div>
+                        <div className={fileTrackThNarrow} title="Indicador heurístico (preservado / rotina / …)">
+                          Sem.
+                        </div>
+                        <div
+                          className={fileTrackThNarrow}
+                          title="Relatório textual: o que foi preservado e amostra das linhas mantidas (.txt)"
+                        >
+                          Resumo
+                        </div>
+                        <div className={fileTrackTh} title="Log reduzido completo (.txt)">
+                          Fich.
+                        </div>
                       </div>
                       {visibleMonitoredFiles.map((file) => {
-                        const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
+                        const reduction = getFileReductionDisplayPercent(file);
                         const uploadVisual = getUploadStatusVisual(file.uploadStatus);
                         const processingVisual = getProcessingStatusVisual(file.processingStatus);
                         const lastEventAt = fileLastEventAtMap.get(file.fileName);
@@ -2058,7 +2084,7 @@ export default function ReduceLogs() {
                         return (
                           <div
                             key={`${selectedJobId ?? "lote"}-${file.fileName}`}
-                            className={`${FILE_TRACKING_GRID_10} border-b border-border [align-items:start] ${processingVisual.row}`}
+                            className={`${FILE_TRACKING_GRID_11} border-b border-border [align-items:start] ${processingVisual.row}`}
                           >
                             <div className={fileTrackTd} title={file.fileName}>
                               {file.fileName}
@@ -2115,27 +2141,50 @@ export default function ReduceLogs() {
                                 </p>
                               </div>
                             </div>
-                            <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatBytes(file.originalBytes)}</div>
-                            <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatBytes(file.reducedBytes)}</div>
-                            <div className={`${fileTrackTd} whitespace-nowrap text-left text-[11px] tabular-nums`}>{formatPercentFine(reduction)}</div>
+                            <div className={`${fileTrackTdNarrow} whitespace-nowrap text-left tabular-nums`}>{formatBytes(file.originalBytes)}</div>
+                            <div className={`${fileTrackTdNarrow} whitespace-nowrap text-left tabular-nums`}>{formatBytes(file.reducedBytes)}</div>
+                            <div
+                              className={`${fileTrackTdNarrow} whitespace-nowrap text-left tabular-nums`}
+                              title={
+                                file.processingStatus === "completed"
+                                  ? "Redução de volume (ficheiro concluído)"
+                                  : "Progresso de leitura/heurística até concluir; depois mostra a redução de volume"
+                              }
+                            >
+                              {formatPercentFine(reduction)}
+                            </div>
                             <div className={`${fileTrackTd} text-[10px] leading-tight text-muted-foreground`}>
                               <span className="text-foreground">{file.suspiciousEventCount}</span> evt
                               <span className="mx-0.5 text-muted-foreground/70">·</span>
                               <span className="text-foreground">{file.triggerCount}</span> gat.
                             </div>
-                            <div className={`${fileTrackTd} break-words text-xs [overflow-wrap:anywhere] ${getSemaforoTone(file)}`}>{getSemaforo(file)}</div>
-                            <div className={`${fileTrackTd} p-0.5`}>
+                            <div className={`${fileTrackTdNarrow} break-words [overflow-wrap:anywhere] ${getSemaforoTone(file)}`}>{getSemaforo(file)}</div>
+                            <div className={`${fileTrackTdNarrow} p-0.5`}>
+                              {canDownloadReduced && selectedJobId ? (
+                                <a
+                                  href={buildPreservationReportDownloadUrl(selectedJobId, file.fileName)}
+                                  className="inline-flex justify-start rounded-md p-1 text-violet-700 hover:bg-violet-500/15 hover:underline dark:text-violet-300"
+                                  title="Relatório de preservação: métricas e amostra do que foi mantido (.preservacao.txt)"
+                                  aria-label={`Relatório de preservação: ${file.fileName}`}
+                                >
+                                  <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">—</span>
+                              )}
+                            </div>
+                            <div className={`${fileTrackTdNarrow} p-0.5`}>
                               {canDownloadReduced && selectedJobId ? (
                                 <a
                                   href={buildReducedLogDownloadUrl(selectedJobId, file.fileName)}
-                                  className="inline-flex justify-start rounded-md p-1.5 text-cyan-700 hover:bg-cyan-500/15 hover:underline dark:text-cyan-300"
-                                  title="Descarregar linhas reduzidas (.txt) para comparar com o ficheiro original"
+                                  className="inline-flex justify-start rounded-md p-1 text-cyan-700 hover:bg-cyan-500/15 hover:underline dark:text-cyan-300"
+                                  title="Descarregar log reduzido completo (.txt) para comparar com o ficheiro original"
                                   aria-label={`Descarregar log reduzido: ${file.fileName}`}
                                 >
-                                  <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+                                  <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                                 </a>
                               ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
+                                <span className="text-[10px] text-muted-foreground">—</span>
                               )}
                             </div>
                           </div>
@@ -2145,7 +2194,7 @@ export default function ReduceLogs() {
 
                     <div className="mt-4 space-y-3 md:hidden">
                       {visibleMonitoredFiles.map((file) => {
-                        const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
+                        const reduction = getFileReductionDisplayPercent(file);
                         const processingVisual = getProcessingStatusVisual(file.processingStatus);
                         const lastEventAt = fileLastEventAtMap.get(file.fileName);
                         const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
@@ -2185,12 +2234,18 @@ export default function ReduceLogs() {
                               && selectedJobId !== LOCAL_UPLOAD_LOT_ID
                               && file.processingStatus === "completed"
                               && file.reducedLineCount > 0 ? (
-                                <p className="pt-1">
+                                <p className="space-y-1.5 pt-1">
+                                  <a
+                                    href={buildPreservationReportDownloadUrl(selectedJobId, file.fileName)}
+                                    className="block font-medium text-violet-700 underline-offset-2 hover:underline dark:text-violet-300"
+                                  >
+                                    Relatório de preservação (métricas + amostra, .txt)
+                                  </a>
                                   <a
                                     href={buildReducedLogDownloadUrl(selectedJobId, file.fileName)}
-                                    className="font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300"
+                                    className="block font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300"
                                   >
-                                    Descarregar log reduzido (.txt)
+                                    Descarregar log reduzido completo (.txt)
                                   </a>
                                 </p>
                                 ) : null}
@@ -2323,7 +2378,7 @@ export default function ReduceLogs() {
                         </div>
 
                         {visibleMonitoredFiles.map((file) => {
-                          const reduction = file.originalBytes > 0 ? 100 * (1 - file.reducedBytes / file.originalBytes) : 0;
+                          const reduction = getFileReductionDisplayPercent(file);
                           const lastEventAt = fileLastEventAtMap.get(file.fileName);
                           const isPossiblyStalled = file.processingStatus === "running" && (!lastEventAt || (uiNowMs - lastEventAt.getTime() > staleThresholdMsForFile(file)));
                           const stageSince = fileCurrentStageSinceMap.get(file.fileName);

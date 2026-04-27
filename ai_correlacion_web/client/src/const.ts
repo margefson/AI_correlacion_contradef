@@ -30,6 +30,14 @@ function buildWebDevAppAuthUrl(): string | null {
     return null;
   }
   const baseUrl = oauthPortalUrl.replace(/\/+$/, "");
+  // O login OAuth abre o portal WebDev em …/app-auth; esta app no Render não serve essa rota.
+  if (baseUrl === window.location.origin) {
+    console.error(
+      "[Auth] VITE_OAUTH_PORTAL_URL não pode ser o mesmo URL desta aplicação. " +
+        "Use o host do portal WebDev onde existe /app-auth (o indicado no painel da plataforma / Manus), não o URL do Render."
+    );
+    return null;
+  }
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
   const state = btoa(redirectUri);
   const url = new URL("app-auth", `${baseUrl}/`);

@@ -39,7 +39,7 @@ vi.mock("./artifactLocalStore", () => ({
   removeLocalJobWorkspace: mockRemoveLocalJobWorkspace,
 }));
 
-import { buildMitreDefenseEvasion } from "../shared/analysis";
+import { buildMitreDefenseEvasionFromEvidence } from "../shared/analysis";
 import { appRouter } from "./routers";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -207,7 +207,7 @@ describe("analysis router", () => {
       ],
       suspiciousApis: ["VirtualProtect"],
       techniques: ["Anti-debug"],
-      mitreDefenseEvasion: buildMitreDefenseEvasion(["Anti-debug"], ["VirtualProtect"]),
+      mitreDefenseEvasion: buildMitreDefenseEvasionFromEvidence({ heuristicTags: ["Anti-debug"], suspiciousApis: ["VirtualProtect"] }),
       recommendations: ["Revisar o ponto de desempacotamento."],
       classification: "Trojan",
       riskLevel: "high",

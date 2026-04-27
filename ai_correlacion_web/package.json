@@ -11,6 +11,7 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "mitre:ta0005-catalog": "node scripts/generate-ta0005-catalog.mjs",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

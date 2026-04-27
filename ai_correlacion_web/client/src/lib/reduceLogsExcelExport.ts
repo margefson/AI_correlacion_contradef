@@ -202,15 +202,28 @@ export function downloadReduceLogsAnalysisExcel(params: {
       "Heurísticas fora de TA0005",
       listHeuristicsOutsideTa0005(d.techniques).join("; ") || "—",
     ],
+    [
+      "TA0005: entradas do catálogo (global) / com evidência (esta análise)",
+      (() => {
+        const nCat = d.mitreDefenseEvasion.tacticCatalogEntryCount;
+        return `${nCat ?? "—"} / ${d.mitreDefenseEvasion.techniques.length}`;
+      })(),
+    ],
   ];
 
   const mitreHeaders = ["ID", "Técnica_MITRE", "URL", "Evidencia_logs"];
-  const mitreRows = d.mitreDefenseEvasion.techniques.map((t) => [
-    t.id,
-    t.name,
-    t.url,
-    t.heuristicEvidence.join("; "),
-  ]);
+  const mitreRows = d.mitreDefenseEvasion.techniques.map((t) => {
+    const ev = t.heuristicEvidence
+      .map((item) => {
+        const loc =
+          item.occurrences.length > 0
+            ? ` [${item.occurrences.map((o) => `${o.fileName}:${o.lineNumber}`).join("; ")}]`
+            : "";
+        return `${item.label}${loc}`;
+      })
+      .join(" | ");
+    return [t.id, t.name, t.url, ev];
+  });
 
   const heuristicRows = [["Heuristica"], ...d.techniques.map((h) => [h])];
   const apiRows = [["API_suspeita"], ...d.suspiciousApis.map((a) => [a])];

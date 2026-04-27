@@ -1,6 +1,15 @@
 import { z } from "zod";
 
+import mitreTa0005Catalog from "./data/mitreTa0005Catalog.json";
+
 type MitreRef = { id: string; name: string; url: string };
+
+/** Catálogo estático (técnicas + sub-técnicas) para TA0005, regenerado com `node scripts/generate-ta0005-catalog.mjs`. */
+export const MITRE_TA0005_CATALOG = mitreTa0005Catalog;
+export const MITRE_TA0005_CATALOG_ENTRY_COUNT = mitreTa0005Catalog.techniques.length;
+export const MITRE_TA0005_PARENT_TECHNIQUE_COUNT = mitreTa0005Catalog.techniques.filter(
+  (t) => !t.id.includes("."),
+).length;
 
 function techniqueUrl(id: string): string {
   const dot = id.indexOf(".");
@@ -33,19 +42,52 @@ const HEURISTIC_BASE: Record<string, MitreRef> = {
 
 export const DEFENSE_EVASION_HEURISTIC_TAGS = new Set(Object.keys(HEURISTIC_BASE));
 
+/** Evento reduzido usado para localizar ficheiro/linha/nó no grafo. */
+export type MitreTraceEvent = {
+  fileName: string;
+  lineNumber: number;
+  stage: string;
+  suspicious: boolean;
+  suspiciousApis: string[];
+  techniqueTags: string[];
+};
+
+export const mitreEvidenceOccurrenceSchema = z.object({
+  fileName: z.string(),
+  lineNumber: z.number().int().nonnegative(),
+  stage: z.string(),
+  /** Nó `event:…` no grafo de fluxo, quando a linha entra na jornada suspeita (até 28 eventos). */
+  graphNodeId: z.string().nullable(),
+  /** Nó `phase:…` correspondente à fase inferida (sempre definido). */
+  phaseNodeId: z.string(),
+});
+
+export type MitreEvidenceOccurrence = z.infer<typeof mitreEvidenceOccurrenceSchema>;
+
+export const mitreDefenseEvidenceItemSchema = z.object({
+  label: z.string(),
+  occurrences: z.array(mitreEvidenceOccurrenceSchema),
+});
+
+export type MitreDefenseEvidenceItem = z.infer<typeof mitreDefenseEvidenceItemSchema>;
+
 export const mitreDefenseEvasionTechniqueSchema = z.object({
   id: z.string(),
   name: z.string(),
   url: z.string().url(),
-  heuristicEvidence: z.array(z.string()),
+  heuristicEvidence: z.array(mitreDefenseEvidenceItemSchema),
 });
 
 export const mitreDefenseEvasionSchema = z.object({
   tacticId: z.literal("TA0005"),
   tacticName: z.string(),
   tacticUrl: z.string().url(),
-  /** Total Enterprise techniques under TA0005 (Defense Evasion), per MITRE — for analyst context. */
+  /** Técnicas de nível superior do TA0005 (MITRE lista 47 abaixo da táctica). */
   tacticTechniqueCount: z.number().int().nonnegative(),
+  /** Soma técnicas + sub-técnicas do catálogo completo; opcional em relatórios antigos. */
+  tacticCatalogEntryCount: z.number().int().nonnegative().optional(),
+  /** Redundante com tacticTechniqueCount para novas análises; opcional em relatórios antigos. */
+  tacticParentTechniqueCount: z.number().int().nonnegative().optional(),
   techniques: z.array(mitreDefenseEvasionTechniqueSchema),
 });
 
@@ -63,6 +105,10 @@ export const MITRE_DEFENSE_EVASION_TACTIC = {
 type BuildInput = {
   heuristicTags: string[];
   suspiciousApis: string[];
+  /** Quando presente, preenche `occurrences` por evidência (ficheiro, linha, nós do grafo). */
+  events?: MitreTraceEvent[];
+  /** `fileName + "\\0" + lineNumber` → id do nó API no grafo (`buildFlowGraph`). */
+  fileLineToNodeId?: Map<string, string>;
 };
 
 function addEvidence(
@@ -73,6 +119,74 @@ function addEvidence(
   const cur = map.get(ref.id) ?? { ref, evidence: new Set<string>() };
   cur.evidence.add(evidence);
   map.set(ref.id, cur);
+}
+
+const fileLineKey = (fileName: string, lineNumber: number) => `${fileName}\0${String(lineNumber)}`;
+
+/**
+ * Localiza linhas de log e o nó do grafo associado a uma etiqueta de evidência (API:… / Heurística:…).
+ * Etiquetas combinadas com ", " (ex.: várias APIs na mesma técnica) são divididas.
+ */
+export function traceMitreEvidenceOccurrences(
+  label: string,
+  events: MitreTraceEvent[],
+  fileLineToNodeId: Map<string, string>,
+): MitreEvidenceOccurrence[] {
+  if (!events.length) {
+    return [];
+  }
+
+  const parts = label
+    .split(/\s*[,;]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return [];
+  }
+
+  const out: MitreEvidenceOccurrence[] = [];
+  const seen = new Set<string>();
+
+  for (const part of parts) {
+    if (part.startsWith("API:")) {
+      const api = part.slice(4).trim();
+      for (const e of events) {
+        if (!e.suspicious) continue;
+        if (!e.suspiciousApis.includes(api)) continue;
+        const dedupe = fileLineKey(e.fileName, e.lineNumber);
+        if (seen.has(dedupe)) continue;
+        seen.add(dedupe);
+        const graphNodeId = fileLineToNodeId.get(dedupe) ?? null;
+        out.push({
+          fileName: e.fileName,
+          lineNumber: e.lineNumber,
+          stage: e.stage,
+          graphNodeId,
+          phaseNodeId: `phase:${e.stage}`,
+        });
+      }
+    } else if (part.startsWith("Heurística:")) {
+      const tag = part.slice(11).trim();
+      for (const e of events) {
+        if (!e.suspicious) continue;
+        if (!e.techniqueTags.includes(tag)) continue;
+        const dedupe = fileLineKey(e.fileName, e.lineNumber);
+        if (seen.has(dedupe)) continue;
+        seen.add(dedupe);
+        const graphNodeId = fileLineToNodeId.get(dedupe) ?? null;
+        out.push({
+          fileName: e.fileName,
+          lineNumber: e.lineNumber,
+          stage: e.stage,
+          graphNodeId,
+          phaseNodeId: `phase:${e.stage}`,
+        });
+      }
+    }
+  }
+
+  out.sort((a, b) => a.fileName.localeCompare(b.fileName) || a.lineNumber - b.lineNumber);
+  return out;
 }
 
 export function buildMitreDefenseEvasion(heuristicTags: string[], suspiciousApis: string[] = []): MitreDefenseEvasion {
@@ -123,12 +237,20 @@ export function buildMitreDefenseEvasionFromEvidence(input: BuildInput): MitreDe
     addEvidence(map, ref, `Heurística:${tag}`);
   }
 
+  const events = input.events ?? [];
+  const fileLineToNodeId = input.fileLineToNodeId ?? new Map<string, string>();
+
   const techniques = Array.from(map.values())
     .map((entry) => ({
       id: entry.ref.id,
       name: entry.ref.name,
       url: entry.ref.url,
-      heuristicEvidence: Array.from(entry.evidence).sort((a, b) => a.localeCompare(b)),
+      heuristicEvidence: Array.from(entry.evidence)
+        .sort((a, b) => a.localeCompare(b))
+        .map((label) => ({
+          label,
+          occurrences: traceMitreEvidenceOccurrences(label, events, fileLineToNodeId),
+        })),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 
@@ -137,6 +259,8 @@ export function buildMitreDefenseEvasionFromEvidence(input: BuildInput): MitreDe
     tacticName: MITRE_DEFENSE_EVASION_TACTIC.name,
     tacticUrl: MITRE_DEFENSE_EVASION_TACTIC.url,
     tacticTechniqueCount: MITRE_DEFENSE_EVASION_TACTIC.techniqueCount,
+    tacticCatalogEntryCount: MITRE_TA0005_CATALOG_ENTRY_COUNT,
+    tacticParentTechniqueCount: MITRE_TA0005_PARENT_TECHNIQUE_COUNT,
     techniques,
   };
 }

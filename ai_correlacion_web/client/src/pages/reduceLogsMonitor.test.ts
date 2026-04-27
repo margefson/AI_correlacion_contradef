@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildMonitoredFiles,
+  getFileReductionDisplayPercent,
   getFileInterpretation,
   getFileRecommendation,
   type DetailFileMonitor,
+  type FileMonitor,
   type SubmittedFileMonitor,
 } from "./reduceLogsMonitor";
 
@@ -136,6 +138,60 @@ describe("reduceLogsMonitor", () => {
       },
     ];
     expect(buildMonitoredFiles(submittedFiles, [])).toHaveLength(0);
+  });
+
+  it("getFileReductionDisplayPercent: 0% com reducedBytes=0 em curso, não 100% enganador", () => {
+    const f: FileMonitor = {
+      fileName: "x.log",
+      logType: "TraceInstructions",
+      sizeBytes: 1000,
+      uploadProgress: 100,
+      uploadStatus: "completed",
+      processingStatus: "running",
+      processingProgress: 0,
+      currentStage: "Redução",
+      currentStep: "…",
+      lastMessage: "…",
+      originalLineCount: 0,
+      reducedLineCount: 0,
+      originalBytes: 1000,
+      reducedBytes: 0,
+      suspiciousEventCount: 0,
+      triggerCount: 0,
+      uploadDurationMs: 0,
+      uploadReused: false,
+    };
+    expect(getFileReductionDisplayPercent(f)).toBe(0);
+    expect(
+      getFileReductionDisplayPercent({
+        ...f,
+        processingProgress: 38,
+      }),
+    ).toBe(38);
+  });
+
+  it("getFileReductionDisplayPercent: concluído usa redução real de bytes", () => {
+    const f: FileMonitor = {
+      fileName: "x.log",
+      logType: "TraceInstructions",
+      sizeBytes: 1000,
+      uploadProgress: 100,
+      uploadStatus: "completed",
+      processingStatus: "completed",
+      processingProgress: 100,
+      currentStage: "OK",
+      currentStep: "OK",
+      lastMessage: "OK",
+      originalLineCount: 100,
+      reducedLineCount: 10,
+      originalBytes: 1000,
+      reducedBytes: 400,
+      suspiciousEventCount: 0,
+      triggerCount: 0,
+      uploadDurationMs: 0,
+      uploadReused: false,
+    };
+    expect(getFileReductionDisplayPercent(f)).toBeCloseTo(60, 5);
   });
 
   it("oculta o contêiner .7z quando o backend já retornou logs extraídos", () => {

@@ -6,8 +6,8 @@
 # VITE_*: devem existir no ambiente do Render antes do build — o Vite embute-as no cliente.
 # Autenticação: AUTH_MODE=local + VITE_AUTH_MODE=local para login com email/senha (VITE_* no build).
 # Com AUTH_MODE=none o utilizador "Usuário (auth desligada)" entra sem login (só testes/legado).
-# OAuth institucional (WebDev) com login local: OAUTH_SERVER_URL + VITE_OAUTH_PORTAL_URL + VITE_APP_ID
-# (preencha no painel, rebuild com VITE_*). Registo: https://<serviço>.onrender.com/api/oauth/callback
+# OAuth WebDev (opcional): adicione no painel OAUTH_SERVER_URL + VITE_OAUTH_PORTAL_URL + VITE_APP_ID
+# e registe https://<serviço>.onrender.com/api/oauth/callback. Caso contrário, só login com email/senha.
 # O package.json fixa pnpm@10.4.1 (packageManager) e há patches pnpm (ex.: wouter). `npm ci` com
 # package-lock.json ignora pnpm-lock.yaml e o ecossistema pnpm. Build com Corepack + pnpm.
 # No Render, NODE_ENV=production faz o pnpm instalar só dependências de produção; o Vite fica
@@ -36,12 +36,4 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: DATABASE_URL
-        sync: false
-      - key: OAUTH_SERVER_URL
-        sync: false
-      - key: VITE_APP_ID
-        sync: false
-      - key: VITE_OAUTH_PORTAL_URL
-        sync: false
-      - key: OWNER_OPEN_ID
         sync: false

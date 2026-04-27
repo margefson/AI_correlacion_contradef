@@ -169,4 +169,55 @@ describe("buildLiveFileMetrics", () => {
     }));
     expect(b[0]).toEqual(a[0]);
   });
+
+  it("em falha, mantém a percentagem do último file-stage (não fixa 45% nem cai para o progresso do job)", () => {
+    const fileName = "TraceInstructions.cdf";
+    const events = [
+      {
+        eventType: "file-queued" as const,
+        stage: "fila do lote",
+        message: `${fileName} na fila.`,
+        progress: 8,
+        payloadJson: { fileName, logType: "TraceInstructions", fileProgress: 0 },
+      },
+      {
+        eventType: "file-start" as const,
+        stage: "preparando redução",
+        message: "início",
+        progress: 26,
+        payloadJson: { fileName, logType: "TraceInstructions", fileProgress: 10 },
+      },
+      {
+        eventType: "file-stage" as const,
+        stage: "leitura",
+        message: "lendo blocos",
+        progress: 30,
+        payloadJson: { fileName, logType: "TraceInstructions", fileProgress: 78, currentStage: "Leitura" },
+      },
+      {
+        eventType: "file-failed" as const,
+        stage: "falha no arquivo",
+        message: `Falha em ${fileName}: limite de memória`,
+        progress: 26,
+        payloadJson: {
+          fileName,
+          logType: "TraceInstructions",
+          status: "failed",
+          currentStage: "Falha",
+          currentStep: "Erro de processamento",
+        },
+      },
+    ];
+
+    const m = buildLiveFileMetrics(events, {}, "failed");
+    expect(m[0]).toEqual(
+      expect.objectContaining({
+        fileName,
+        status: "failed",
+        progress: 78,
+        currentStage: "Falha",
+        currentStep: "Erro de processamento",
+      }),
+    );
+  });
 });
