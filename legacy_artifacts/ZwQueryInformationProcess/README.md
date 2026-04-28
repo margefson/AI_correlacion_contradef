@@ -14,4 +14,5 @@ Nos registos pode aparecer o par **`NtQueryInformationProcess`**; ver o document
 
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/) — scripts CSV e exemplos.  
 - [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — elo anterior na cadeia anti‑debug.  
-- [`../LoadLibraryA/`](../LoadLibraryA/) — outro fluxo multi‑arte.
+- [`../LoadLibraryA/`](../LoadLibraryA/) — outro fluxo multi‑arte.  
+- [`../CreateThread/`](../CreateThread/) — novas threads e **`lpStartAddress`**.

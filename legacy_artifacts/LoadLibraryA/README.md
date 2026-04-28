@@ -12,4 +12,5 @@ Correlação entre os logs **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **
 
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/) — pacote do fluxo `IsDebuggerPresent` (scripts CSV, exemplos, diagramas relacionados).  
 - [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — fluxo `CheckRemoteDebuggerPresent` na mesma cadeia Contradef.  
-- [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxo `ZwQueryInformationProcess`.
+- [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxo `ZwQueryInformationProcess`.  
+- [`../CreateThread/`](../CreateThread/) — fluxo `CreateThread`.
