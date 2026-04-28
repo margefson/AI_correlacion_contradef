@@ -17,4 +17,5 @@ Correlação entre os logs **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** (FLS).  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
 - [`../FlsSetValue/`](../FlsSetValue/).  
-- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — **`FreeEnvironmentStringsW`** (ambiente / *paths*).
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — **`FreeEnvironmentStringsW`** (ambiente / *paths*).  
+- [`../GetACP/`](../GetACP/) — **`GetACP`** (code page ANSI).

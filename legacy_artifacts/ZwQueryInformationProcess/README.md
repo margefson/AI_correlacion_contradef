@@ -19,4 +19,5 @@ Nos registos pode aparecer o par **`NtQueryInformationProcess`**; ver o document
 - [`../FlsAlloc/`](../FlsAlloc/) — **FLS** / **`FlsAlloc`**.  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
 - [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.  
-- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — **`FreeEnvironmentStringsW`**.
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — **`FreeEnvironmentStringsW`**.  
+- [`../GetACP/`](../GetACP/) — **`GetACP`**.

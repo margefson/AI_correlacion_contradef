@@ -16,4 +16,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** / FLS.  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
 - [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.  
-- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/).
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/).  
+- [`../GetACP/`](../GetACP/).

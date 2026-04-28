@@ -12,4 +12,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 
 - [`../LoadLibraryA/`](../LoadLibraryA/) — políticas de *path*.  
 - [`../CreateThread/`](../CreateThread/).  
-- [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/).
+- [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/).  
+- [`../GetACP/`](../GetACP/) — **`GetACP`**.

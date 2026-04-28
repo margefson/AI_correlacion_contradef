@@ -14,4 +14,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../FlsGetValue/`](../FlsGetValue/) — leitura do *slot*.  
 - [`../CreateThread/`](../CreateThread/).  
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/).  
-- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — variáveis de ambiente.
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — variáveis de ambiente.  
+- [`../GetACP/`](../GetACP/) — code page ANSI.
