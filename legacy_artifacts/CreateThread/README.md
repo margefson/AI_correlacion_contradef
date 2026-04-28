@@ -12,4 +12,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/) — scripts e exemplos.  
 - [`../LoadLibraryA/`](../LoadLibraryA/), [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxos paralelos típicos antes ou em conjunto com **novas threads**.  
-- [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — cadeia anti‑debug relacionável.
+- [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — cadeia anti‑debug relacionável.  
+- [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** / FLS.
