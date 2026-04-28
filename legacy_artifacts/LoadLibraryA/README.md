@@ -16,4 +16,5 @@ Correlação entre os logs **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **
 - [`../CreateThread/`](../CreateThread/) — fluxo `CreateThread`.  
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** (FLS).  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
-- [`../FlsSetValue/`](../FlsSetValue/).
+- [`../FlsSetValue/`](../FlsSetValue/).  
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — **`FreeEnvironmentStringsW`** (ambiente / *paths*).

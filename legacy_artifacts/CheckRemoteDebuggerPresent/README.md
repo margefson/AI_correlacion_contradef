@@ -16,4 +16,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../CreateThread/`](../CreateThread/) — **`CreateThread`**.  
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`**.  
 - [`../FlsGetValue/`](../FlsGetValue/).  
-- [`../FlsSetValue/`](../FlsSetValue/).
+- [`../FlsSetValue/`](../FlsSetValue/).  
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/).

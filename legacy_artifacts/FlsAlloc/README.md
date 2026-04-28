@@ -14,4 +14,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../CreateThread/`](../CreateThread/) — *threads* vs *fibers*.  
 - [`../LoadLibraryA/`](../LoadLibraryA/) — carga de *runtime*.  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`** (leitura do *slot*).  
-- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`** (escrita no *slot*).
+- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`** (escrita no *slot*).  
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/).

@@ -15,4 +15,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — cadeia anti‑debug relacionável.  
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** / FLS.  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
-- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.
+- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.  
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/).

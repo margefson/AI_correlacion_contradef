@@ -16,6 +16,7 @@ Este pacote foi preparado para duas finalidades complementares. A primeira é **
 | `legacy_artifacts/FlsAlloc/fluxo_flsalloc_mapeado.md` | Relatório paralelo (pivô `FlsAlloc`) | FLS, índice, **`FlsSetValue`**, *fibers* — [GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/FlsAlloc) |
 | `legacy_artifacts/FlsGetValue/fluxo_flsgetvalue_mapeado.md` | Relatório paralelo (pivô `FlsGetValue`) | Ler *slot* FLS, **`dwFlsIndex`**, **`LPVOID`** — [GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/FlsGetValue) |
 | `legacy_artifacts/FlsSetValue/fluxo_flssetvalue_mapeado.md` | Relatório paralelo (pivô `FlsSetValue`) | Escrita FLS, **`dwFlsIndex`**, **`lpValue`** — [GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/FlsSetValue) |
+| `legacy_artifacts/FreeEnvironmentStringsW/fluxo_freeenvironmentstringsw_mapeado.md` | Relatório paralelo (pivô `FreeEnvironmentStringsW`) | Par **`GetEnvironmentStringsW` → Free**; UTF‑16 ambiente — [GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/FreeEnvironmentStringsW) |
 | `docs/fluxo_isdebuggerpresent.mmd` | Diagrama Mermaid | Representa visualmente a cadeia anti-debug até a classificação |
 | `outputs/fluxo_isdebuggerpresent.png` | Imagem do diagrama | Visualização pronta para anexos e apresentações |
 | `outputs/fluxo_isdebuggerpresent.json` | Mapeamento estruturado | Base para automação e reuso |

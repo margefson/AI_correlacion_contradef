@@ -18,4 +18,5 @@ Nos registos pode aparecer o par **`NtQueryInformationProcess`**; ver o document
 - [`../CreateThread/`](../CreateThread/) — novas threads e **`lpStartAddress`**.  
 - [`../FlsAlloc/`](../FlsAlloc/) — **FLS** / **`FlsAlloc`**.  
 - [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
-- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.
+- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.  
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/) — **`FreeEnvironmentStringsW`**.

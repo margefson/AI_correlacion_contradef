@@ -13,4 +13,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** e índice FLS.  
 - [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.  
 - [`../CreateThread/`](../CreateThread/).  
+- [`../FreeEnvironmentStringsW/`](../FreeEnvironmentStringsW/).  
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/).
