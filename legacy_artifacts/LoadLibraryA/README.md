@@ -14,4 +14,5 @@ Correlação entre os logs **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **
 - [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — fluxo `CheckRemoteDebuggerPresent` na mesma cadeia Contradef.  
 - [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxo `ZwQueryInformationProcess`.  
 - [`../CreateThread/`](../CreateThread/) — fluxo `CreateThread`.  
-- [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** (FLS).
+- [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`** (FLS).  
+- [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.

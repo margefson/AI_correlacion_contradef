@@ -16,4 +16,5 @@ Nos registos pode aparecer o par **`NtQueryInformationProcess`**; ver o document
 - [`../CheckRemoteDebuggerPresent/`](../CheckRemoteDebuggerPresent/) — elo anterior na cadeia anti‑debug.  
 - [`../LoadLibraryA/`](../LoadLibraryA/) — outro fluxo multi‑arte.  
 - [`../CreateThread/`](../CreateThread/) — novas threads e **`lpStartAddress`**.  
-- [`../FlsAlloc/`](../FlsAlloc/) — **FLS** / **`FlsAlloc`**.
+- [`../FlsAlloc/`](../FlsAlloc/) — **FLS** / **`FlsAlloc`**.  
+- [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.

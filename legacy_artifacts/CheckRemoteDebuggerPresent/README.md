@@ -14,4 +14,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../LoadLibraryA/`](../LoadLibraryA/) — fluxo paralelo para **`LoadLibraryA`**.  
 - [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxo **`ZwQueryInformationProcess`** / **`NtQueryInformationProcess`**.  
 - [`../CreateThread/`](../CreateThread/) — **`CreateThread`**.  
-- [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`**.
+- [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`**.  
+- [`../FlsGetValue/`](../FlsGetValue/).
