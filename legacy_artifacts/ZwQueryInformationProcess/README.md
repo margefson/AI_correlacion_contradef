@@ -17,4 +17,5 @@ Nos registos pode aparecer o par **`NtQueryInformationProcess`**; ver o document
 - [`../LoadLibraryA/`](../LoadLibraryA/) — outro fluxo multi‑arte.  
 - [`../CreateThread/`](../CreateThread/) — novas threads e **`lpStartAddress`**.  
 - [`../FlsAlloc/`](../FlsAlloc/) — **FLS** / **`FlsAlloc`**.  
-- [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.
+- [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`**.  
+- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`**.

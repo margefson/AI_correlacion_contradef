@@ -15,4 +15,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxo **`ZwQueryInformationProcess`** / **`NtQueryInformationProcess`**.  
 - [`../CreateThread/`](../CreateThread/) — **`CreateThread`**.  
 - [`../FlsAlloc/`](../FlsAlloc/) — **`FlsAlloc`**.  
-- [`../FlsGetValue/`](../FlsGetValue/).
+- [`../FlsGetValue/`](../FlsGetValue/).  
+- [`../FlsSetValue/`](../FlsSetValue/).

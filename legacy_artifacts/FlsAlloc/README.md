@@ -13,4 +13,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/) — scripts e exemplos.  
 - [`../CreateThread/`](../CreateThread/) — *threads* vs *fibers*.  
 - [`../LoadLibraryA/`](../LoadLibraryA/) — carga de *runtime*.  
-- [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`** (leitura do *slot*).
+- [`../FlsGetValue/`](../FlsGetValue/) — **`FlsGetValue`** (leitura do *slot*).  
+- [`../FlsSetValue/`](../FlsSetValue/) — **`FlsSetValue`** (escrita no *slot*).
