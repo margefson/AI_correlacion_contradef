@@ -11,4 +11,5 @@ Correlação entre **`FunctionInterceptor`**, **`TraceFcnCall.M1`** / **`TraceFc
 ## Ver também
 
 - [`../isdebuggerpresent_flow/`](../isdebuggerpresent_flow/) — scripts, CSV de exemplo e diagramas ligados ao fluxo **`IsDebuggerPresent`**.  
-- [`../LoadLibraryA/`](../LoadLibraryA/) — fluxo paralelo para **`LoadLibraryA`**.
+- [`../LoadLibraryA/`](../LoadLibraryA/) — fluxo paralelo para **`LoadLibraryA`**.  
+- [`../ZwQueryInformationProcess/`](../ZwQueryInformationProcess/) — fluxo **`ZwQueryInformationProcess`** / **`NtQueryInformationProcess`**.

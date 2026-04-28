@@ -11,6 +11,7 @@ Este pacote foi preparado para duas finalidades complementares. A primeira é **
 | `docs/legacy/isdebuggerpresent_flow/fluxo_isdebuggerpresent_mapeado.md` | Relatório técnico em Markdown | Explica o fluxo correlacionado em todos os arquivos [1] |
 | `legacy_artifacts/LoadLibraryA/fluxo_loadlibrarya_mapeado.md` | Relatório paralelo (pivô `LoadLibraryA`) | Mesma cadeia de artefatos Contradef contra o repositório oficial [ver pasta no GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/LoadLibraryA) |
 | `legacy_artifacts/CheckRemoteDebuggerPresent/fluxo_checkremotedebuggerpresent_mapeado.md` | Relatório paralelo (pivô `CheckRemoteDebuggerPresent`) | Cadeia anti‑debug típica a seguir a `IsDebuggerPresent` — [pastas no GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/CheckRemoteDebuggerPresent) |
+| `legacy_artifacts/ZwQueryInformationProcess/fluxo_zwqueryinformationprocess_mapeado.md` | Relatório paralelo (pivô `ZwQueryInformationProcess` / `Nt*`) | Nível **`ntdll`**, **ProcessInformationClass** e buffers — [GitHub](https://github.com/margefson/AI_correlacion_contradef/tree/main/legacy_artifacts/ZwQueryInformationProcess) |
 | `docs/fluxo_isdebuggerpresent.mmd` | Diagrama Mermaid | Representa visualmente a cadeia anti-debug até a classificação |
 | `outputs/fluxo_isdebuggerpresent.png` | Imagem do diagrama | Visualização pronta para anexos e apresentações |
 | `outputs/fluxo_isdebuggerpresent.json` | Mapeamento estruturado | Base para automação e reuso |
