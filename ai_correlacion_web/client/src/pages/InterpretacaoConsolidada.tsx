@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
 import { buildFlowJourneyNarrative, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
 import { formatBytes } from "@/lib/format";
+import { downloadAnalysisFlowGraphJson, downloadAnalysisSummaryJson } from "@/lib/analysisJsonExport";
 import { downloadReduceLogsAnalysisExcel, downloadReduceLogsFlowExcel } from "@/lib/reduceLogsExcelExport";
 import { asRecord } from "@/lib/payload";
 import { cn } from "@/lib/utils";
@@ -233,6 +234,32 @@ function InterpretacaoConsolidadaContent() {
     }
   }
 
+  function handleExportFlowGraphJson() {
+    if (!selectedDetail) {
+      toast.error("Não há dados de análise para exportar.");
+      return;
+    }
+    try {
+      downloadAnalysisFlowGraphJson({ detail: selectedDetail, jobId: selectedJobId });
+      toast.success("JSON do grafo de fluxo descarregado.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível gerar o JSON do fluxo.");
+    }
+  }
+
+  function handleExportSummaryJson() {
+    if (!selectedDetail) {
+      toast.error("Não há dados de análise para exportar.");
+      return;
+    }
+    try {
+      downloadAnalysisSummaryJson({ detail: selectedDetail, jobId: selectedJobId });
+      toast.success("JSON de resumo descarregado (payload do servidor quando existente).");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível gerar o JSON de resumo.");
+    }
+  }
+
   return (
     <div className="w-full min-w-0 space-y-6 text-foreground">
         <section>
@@ -302,6 +329,28 @@ function InterpretacaoConsolidadaContent() {
                     >
                       <FileSpreadsheet className="mr-2 h-4 w-4" />
                       Exportar análise (Excel)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-border text-foreground hover:bg-muted dark:border-white/15"
+                      onClick={handleExportFlowGraphJson}
+                      title='Apenas nós e arestas do grafo (schema contradef.flowGraph.v1)'
+                    >
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Fluxo (.json)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-border text-foreground hover:bg-muted dark:border-white/15"
+                      onClick={handleExportSummaryJson}
+                      title="Resumo do servidor insight.summaryJson; se faltar, campos sintetizados no detail"
+                    >
+                      <FileDown className="mr-2 h-4 w-4 shrink-0" />
+                      Resumo (.json)
                     </Button>
                     <Badge className={jobStatusBadgeClass(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge>
                     <Badge className={riskLevelBadgeClass(selectedDetail.riskLevel)}>{selectedDetail.riskLevel}</Badge>
@@ -456,6 +505,28 @@ function InterpretacaoConsolidadaContent() {
                             >
                               <FileSpreadsheet className="mr-2 h-4 w-4" />
                               Exportar fluxo (Excel)
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 border-border text-foreground hover:bg-muted dark:border-white/15"
+                              onClick={handleExportFlowGraphJson}
+                              title='Apenas grafo UI (contradef.flowGraph.v1)'
+                            >
+                              <FileDown className="mr-2 h-4 w-4" />
+                              Fluxo (.json)
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 border-border text-foreground hover:bg-muted dark:border-white/15"
+                              onClick={handleExportSummaryJson}
+                              title="summaryJson gravado pelo job + envelope"
+                            >
+                              <FileDown className="mr-2 h-4 w-4" />
+                              Resumo (.json)
                             </Button>
                           </div>
                         </div>
