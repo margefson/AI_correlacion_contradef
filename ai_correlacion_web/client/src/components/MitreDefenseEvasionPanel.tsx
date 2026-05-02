@@ -24,7 +24,7 @@ import { ChevronDown, ExternalLink } from "lucide-react";
 type Props = {
   mitre: MitreDefenseEvasion;
   heuristicTags: string[];
-  /** Ao escolher uma ocorrência (ficheiro, linha, nó no grafo). */
+  /** Ao escolher uma ocorrência (ficheiro, linha, nó no grafo — separador Fluxo). */
   onEvidenceTrace?: (occurrence: MitreEvidenceOccurrence) => void;
 };
 
@@ -60,7 +60,7 @@ function EvidencePill({
         variant="outline"
         size="sm"
         className="h-auto min-h-7 max-w-full justify-start gap-1 whitespace-normal rounded-md border border-border py-1 text-left text-xs font-normal text-foreground hover:bg-cyan-500/10 dark:border-white/15 dark:hover:bg-cyan-500/15"
-        title={`${occ.fileName} · linha ${occ.lineNumber} · ${occ.stage}`}
+        title={`Abrir fluxo · ${occ.fileName} linha ${occ.lineNumber} · ${occ.stage}`}
         onClick={() => onSelect(occ)}
       >
         {label}
@@ -87,7 +87,7 @@ function EvidencePill({
           <DropdownMenuItem
             key={`${rowId}-${label}-${occ.fileName}-${occ.lineNumber}`}
             className="flex flex-col items-start gap-0.5 py-2"
-            onSelect={() => onSelect(occ)}
+            onSelect={() => onSelect?.(occ)}
           >
             <span className="font-mono text-xs text-foreground">
               {occ.fileName}:{occ.lineNumber}
@@ -122,7 +122,9 @@ export function MitreDefenseEvasionPanel({ mitre, heuristicTags, onEvidenceTrace
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Táctica TA0005: {parentCount} técnicas (nível MITRE) · {catalogSize} entradas no catálogo (incl. sub-técnicas)
             {observed.length > 0 ? ` · ${observed.length} com evidência assinalada nesta análise` : " · 0 com evidência nesta análise"}.
-            {onEvidenceTrace ? " Clique numa evidência para abrir o fluxo e destacar a fase ou o nó da API." : null}
+            {onEvidenceTrace
+              ? " Clique numa evidência para ir ao separador Fluxo (grafo/nós). Use o ícone de imagem nessa vista para gerar o PNG a partir do log original."
+              : null}
           </p>
         </div>
         <a
@@ -169,12 +171,7 @@ export function MitreDefenseEvasionPanel({ mitre, heuristicTags, onEvidenceTrace
                 <TableCell className="align-top">
                   <div className="flex flex-wrap gap-1.5">
                     {row.heuristicEvidence.map((item) => (
-                      <EvidencePill
-                        key={`${row.id}-${item.label}`}
-                        rowId={row.id}
-                        item={item}
-                        onSelect={onEvidenceTrace}
-                      />
+                      <EvidencePill key={`${row.id}-${item.label}`} rowId={row.id} item={item} onSelect={onEvidenceTrace} />
                     ))}
                   </div>
                 </TableCell>

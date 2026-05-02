@@ -1,7 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
+import readline from "node:readline";
 
 import { LOG_HEURISTIC_STAGE_ORDER, MUST_CHANGE_PASSWORD_ERR_MSG } from "../shared/const";
 import { resolveLocalArtifactPath } from "./artifactLocalStore";
@@ -10,8 +11,115 @@ import type { User } from "../drizzle/schema";
 import { getAnalysisInsight, getAnalysisJobByJobId, listAnalysisArtifacts } from "./db";
 
 const REDUCED_LOGS_RELATIVE_PATH = "reports/reduced-logs.json";
+const SOURCE_LOG_PREFIX = "source/";
 const PRESERVATION_REPORT_SAMPLE_LINES = 45;
 const PRESERVATION_MAX_LINE_CHARS = 240;
+
+type SnippetLine = { lineNumber: number; text: string };
+
+function parsePositiveInt(raw: unknown, fallback: number, max: number): number {
+  const n = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : fallback;
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(Math.floor(n), max);
+}
+
+async function resolveSourceLogLocalPath(jobId: string, fileNameRaw: string): Promise<string | null> {
+  const slashes = fileNameRaw.replace(/\\/g, "/");
+  const base = basename(slashes);
+
+  function addTry(relSegment: string) {
+    const rel = `${SOURCE_LOG_PREFIX}${relSegment.replace(/^\/+/, "").replace(/^\\+/, "")}`;
+    if (!rel.startsWith(SOURCE_LOG_PREFIX) || rel.includes("..")) {
+      return null;
+    }
+    try {
+      return resolveLocalArtifactPath(jobId, rel);
+    } catch {
+      return null;
+    }
+  }
+
+  const directPaths = [addTry(base)];
+  if (slashes && slashes !== base && !slashes.includes("..")) {
+    directPaths.push(addTry(slashes.replace(/^\/+/, "")));
+  }
+
+  for (const p of directPaths) {
+    if (!p) continue;
+    try {
+      await access(p);
+      return p;
+    } catch {
+      /* try artifact list */
+    }
+  }
+
+  const rows = await listAnalysisArtifacts(jobId);
+  const sourceCandidates = rows.filter((r) => r.artifactType === "source-log" && r.relativePath.startsWith(SOURCE_LOG_PREFIX));
+  const matches = sourceCandidates.filter(
+    (r) => basename(r.relativePath) === base || (!!r.sourcePath && basename(r.sourcePath.replace(/\\/g, "/")) === base),
+  );
+  for (const row of [...matches, ...sourceCandidates.filter((r) => !matches.includes(r))]) {
+    try {
+      const abs = resolveLocalArtifactPath(jobId, row.relativePath);
+      await access(abs);
+      return abs;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function readOriginalSnippetFromPath(args: {
+  absPath: string;
+  anchorLine: number;
+  beforeCount: number;
+  afterCount: number;
+}): Promise<{ lines: SnippetLine[]; highlightLine: number }> {
+  const { absPath, anchorLine, beforeCount, afterCount } = args;
+
+  const stream = createReadStream(absPath, { encoding: "utf8" });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  const rollingBefore: SnippetLine[] = [];
+  const lines: SnippetLine[] = [];
+
+  let lineNo = 0;
+
+  try {
+    // streaming por linhas (ficheiros de log grandes)
+    for await (const chunk of rl) {
+      lineNo += 1;
+      const lineText = typeof chunk === "string" ? chunk : String(chunk);
+      const row: SnippetLine = { lineNumber: lineNo, text: lineText };
+
+      if (lineNo < anchorLine) {
+        rollingBefore.push(row);
+        while (rollingBefore.length > beforeCount) rollingBefore.shift();
+        continue;
+      }
+
+      if (lineNo === anchorLine) {
+        lines.push(...rollingBefore.map((x) => ({ lineNumber: x.lineNumber, text: x.text })), row);
+        rollingBefore.length = 0;
+        if (afterCount <= 0) break;
+        continue;
+      }
+
+      lines.push(row);
+      if (lineNo - anchorLine >= afterCount) break;
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+
+  const ok = lines.some((l) => l.lineNumber === anchorLine);
+  return { lines: ok ? lines : [], highlightLine: anchorLine };
+}
+
 
 function formatBytesForReport(n: number): string {
   if (!Number.isFinite(n) || n < 0) {
@@ -254,6 +362,23 @@ export function registerAnalysisArtifactDownloadRoute(app: Express) {
       return;
     }
 
+    const wantsJson = typeof req.query.format === "string" && req.query.format.toLowerCase() === "json";
+
+    if (wantsJson) {
+      const keptLines = entry.keptLines
+        .map((line) =>
+          line && typeof line === "object" && typeof line.text === "string"
+            ? { lineNumber: typeof line.lineNumber === "number" ? line.lineNumber : 0, text: line.text }
+            : null,
+        )
+        .filter(Boolean) as { lineNumber: number; text: string }[];
+      res.status(200);
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ fileName: entry.fileName, keptLines });
+      return;
+    }
+
     const text = entry.keptLines
       .map((line) => (line && typeof line.text === "string" ? line.text : ""))
       .join("\n");
@@ -264,6 +389,81 @@ export function registerAnalysisArtifactDownloadRoute(app: Express) {
     res.setHeader("Content-Disposition", `attachment; filename="${safe}.reduced.txt"`);
     res.setHeader("Cache-Control", "no-store");
     res.send(text);
+  });
+
+  /**
+   * Extrai linhas numeradas do **log original** (artefato `source/…`), em torno de `anchorLine`,
+   * para pré-visualização rasterizada como PNG no cliente autenticado.
+   */
+  app.get("/api/analysis-artifacts/original-log-snippet", async (req: Request, res: Response) => {
+    const user = await getSessionUserFromRequest(req);
+    if (!user) {
+      res.status(401).send("Authentication required");
+      return;
+    }
+    if (user.mustChangePassword) {
+      res.status(403).send(MUST_CHANGE_PASSWORD_ERR_MSG);
+      return;
+    }
+
+    const jobId = typeof req.query.jobId === "string" ? req.query.jobId : "";
+    const fileName = typeof req.query.fileName === "string" ? req.query.fileName : "";
+    const anchorLine = typeof req.query.anchorLine === "string" ? Number(req.query.anchorLine) : NaN;
+
+    const beforeLines = parsePositiveInt(req.query.beforeLines, 2, 80);
+    const afterLines = parsePositiveInt(req.query.afterLines, 22, 120);
+
+    if (!jobId || !fileName || !Number.isFinite(anchorLine) || anchorLine < 1 || !Number.isInteger(anchorLine)) {
+      res.status(400).send("Missing or invalid jobId, fileName, or anchorLine (inteiro ≥ 1)");
+      return;
+    }
+
+    const job = await getAnalysisJobByJobId(jobId);
+    if (!job) {
+      res.status(404).send("Job not found");
+      return;
+    }
+    if (!canAccessJob(user, job)) {
+      res.status(403).send("Forbidden");
+      return;
+    }
+
+    const absPath = await resolveSourceLogLocalPath(jobId, fileName);
+    if (!absPath) {
+      res
+        .status(404)
+        .send("Artefato de log original indisponível localmente neste lote (ou apenas em armazenamento remoto não materializado).");
+      return;
+    }
+
+    try {
+      const { lines } = await readOriginalSnippetFromPath({
+        absPath,
+        anchorLine,
+        beforeCount: beforeLines,
+        afterCount: afterLines,
+      });
+      if (!lines.length || !lines.some((l) => l.lineNumber === anchorLine)) {
+        res.status(404).send("Linha solicitada não encontrada no arquivo original neste servidor.");
+        return;
+      }
+
+      const safeName = basename(fileName).replace(/\0/g, "").slice(0, 256);
+
+      res.status(200);
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        source: "original",
+        fileName: safeName,
+        anchorLine,
+        highlightLine: anchorLine,
+        lines,
+      });
+    } catch (err) {
+      console.warn("[Artifacts] Falha ao ler trecho do log original.", jobId, fileName, err);
+      res.status(500).send("Erro ao ler o arquivo de log original");
+    }
   });
 
   /**

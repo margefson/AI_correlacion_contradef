@@ -2,6 +2,9 @@ import DashboardLayout, { useDashboardShell } from "@/components/DashboardLayout
 import FlowCorrelationGraph from "@/components/FlowCorrelationGraph";
 import FlowJourneyDiagram from "@/components/FlowJourneyDiagram";
 import { MetricCard } from "@/components/MetricCard";
+import { LogEvidenceCorrelatedIcons } from "@/components/LogEvidenceCorrelatedIcons";
+import { LogEvidenceShellContext } from "@/components/LogEvidenceShellContext";
+import { LogEvidenceFileMetricsContext } from "@/components/LogEvidenceFileMetricsContext";
 import { MitreDefenseEvasionPanel } from "@/components/MitreDefenseEvasionPanel";
 import { VirusTotalSampleCard } from "@/components/VirusTotalSampleCard";
 import { Badge } from "@/components/ui/badge";
@@ -33,9 +36,9 @@ import { asRecord } from "@/lib/payload";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import type { MitreEvidenceOccurrence } from "@shared/analysis";
-import { AlertTriangle, ArrowRight, BrainCircuit, FileDown, FileSpreadsheet, Filter, Hash, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BrainCircuit, FileDown, FileSpreadsheet, Filter, Hash, ShieldAlert, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
-import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "wouter";
 import { toast } from "sonner";
 
@@ -45,6 +48,18 @@ function InterpretacaoConsolidadaContent() {
   const [eventSearch, setEventSearch] = useState("");
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
   const [interpretationTab, setInterpretationTab] = useState("overview");
+  const [mitreTraceTarget, setMitreTraceTarget] = useState<{
+    jobId: string;
+    targetNodeId: string;
+    phaseNodeId: string;
+    eventNodeId: string | null;
+    evidenceFileName: string;
+    evidenceLineNumber: number;
+  } | null>(null);
+  const [graphFitViewPulse, setGraphFitViewPulse] = useState(0);
+
+  /** Evita limpar `mitreTraceTarget` quando o próprio rastreio MITRE atualiza o nó. */
+  const skipClearTraceOnGraphSelect = useRef(false);
 
   const selectedJobId = searchParams.get("job");
 
@@ -68,8 +83,18 @@ function InterpretacaoConsolidadaContent() {
   }, [jobsQuery.data, selectedJobId, setSearchParams]);
 
   useEffect(() => {
+    if (skipClearTraceOnGraphSelect.current) {
+      skipClearTraceOnGraphSelect.current = false;
+      return;
+    }
+    setMitreTraceTarget(null);
+  }, [selectedGraphNodeId]);
+
+  useEffect(() => {
     setSelectedGraphNodeId(null);
     setInterpretationTab("overview");
+    setMitreTraceTarget(null);
+    setGraphFitViewPulse(0);
   }, [selectedJobId]);
 
   const detailQuery = trpc.analysis.detail.useQuery(
@@ -103,6 +128,26 @@ function InterpretacaoConsolidadaContent() {
     }
     return nodes[0]!.id;
   }, [selectedDetail?.flowGraph.nodes, selectedGraphNodeId]);
+
+  const logEvidenceShellValue = useMemo(
+    () => ({
+      onBackToSummary: () => setInterpretationTab("overview"),
+    }),
+    [],
+  );
+
+  const focusFlowNode = useCallback((nodeId: string) => {
+    const nodes = selectedDetail?.flowGraph.nodes;
+    if (!nodes?.some((n) => n.id === nodeId)) return;
+    setSelectedGraphNodeId(nodeId);
+    setGraphFitViewPulse((p) => p + 1);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-flow-node-id="${CSS.escape(nodeId)}"]`)?.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+    });
+  }, [selectedDetail?.flowGraph.nodes]);
 
   const selectedGraphNode = useMemo(
     () => selectedDetail?.flowGraph.nodes.find((node) => node.id === effectiveGraphNodeId) ?? null,
@@ -152,16 +197,28 @@ function InterpretacaoConsolidadaContent() {
     }
   }
 
-  const handleMitreTrace = useCallback((occ: MitreEvidenceOccurrence) => {
-    setInterpretationTab("graph");
-    const target = occ.graphNodeId ?? occ.phaseNodeId;
-    setSelectedGraphNodeId(target);
-    toast.info(`${occ.fileName} · linha ${occ.lineNumber} · fase: ${occ.stage}`);
-    requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-flow-node-id="${CSS.escape(target)}"]`);
-      el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-  }, []);
+  const handleMitreTrace = useCallback(
+    (occ: MitreEvidenceOccurrence) => {
+      if (!selectedJobId) {
+        toast.error("Seleccione um lote válido.");
+        return;
+      }
+      setInterpretationTab("graph");
+      const target = occ.graphNodeId ?? occ.phaseNodeId;
+      skipClearTraceOnGraphSelect.current = true;
+      setMitreTraceTarget({
+        jobId: selectedJobId,
+        targetNodeId: target,
+        phaseNodeId: occ.phaseNodeId,
+        eventNodeId: occ.graphNodeId,
+        evidenceFileName: occ.fileName,
+        evidenceLineNumber: occ.lineNumber,
+      });
+      focusFlowNode(target);
+      toast.info(`${occ.fileName} · linha ${occ.lineNumber} · fase: ${occ.stage} — fluxo destacado (ícone âmbar = original; verde = reduzido preservado no grafo/jornada).`);
+    },
+    [selectedJobId, focusFlowNode],
+  );
 
   function handleExportFlowExcel() {
     if (!selectedDetail?.flowGraph.nodes.length) {
@@ -367,6 +424,8 @@ function InterpretacaoConsolidadaContent() {
                     </TabsContent>
 
                     <TabsContent value="graph" className="space-y-4">
+                      <LogEvidenceFileMetricsContext.Provider value={selectedDetail.fileMetrics}>
+                      <LogEvidenceShellContext.Provider value={logEvidenceShellValue}>
                       <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 dark:border-cyan-400/25 dark:bg-cyan-500/[0.07]">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
@@ -377,16 +436,28 @@ function InterpretacaoConsolidadaContent() {
                               Leitura contínua da jornada por fase até ao veredito; útil para relatório ou integrações.
                             </p>
                           </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0 border-cyan-600/40 text-cyan-900 hover:bg-cyan-500/15 dark:border-cyan-400/35 dark:text-cyan-100"
-                            onClick={handleExportFlowExcel}
-                          >
-                            <FileSpreadsheet className="mr-2 h-4 w-4" />
-                            Exportar fluxo (Excel)
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="default"
+                              className="shrink-0 gap-2 border-2 border-cyan-600/50 font-semibold text-cyan-950 shadow-sm hover:bg-cyan-500/25 dark:border-cyan-400/45 dark:text-cyan-50 dark:hover:bg-cyan-500/20"
+                              onClick={() => setInterpretationTab("overview")}
+                            >
+                              <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                              Voltar ao resumo
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 border-cyan-600/40 text-cyan-900 hover:bg-cyan-500/15 dark:border-cyan-400/35 dark:text-cyan-100"
+                              onClick={handleExportFlowExcel}
+                            >
+                              <FileSpreadsheet className="mr-2 h-4 w-4" />
+                              Exportar fluxo (Excel)
+                            </Button>
+                          </div>
                         </div>
                         <p className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                           {flowJourneyNarrativeText || "Sem dados de fluxo para este job."}
@@ -411,7 +482,7 @@ function InterpretacaoConsolidadaContent() {
                                 key={node.id}
                                 type="button"
                                 data-flow-node-id={node.id}
-                                onClick={() => setSelectedGraphNodeId(node.id)}
+                                onClick={() => focusFlowNode(node.id)}
                                 className={`rounded-2xl border px-3 py-2 text-left text-sm transition ${effectiveGraphNodeId === node.id ? "border-cyan-500/50 bg-cyan-500/15 text-foreground dark:border-cyan-400/40 dark:bg-cyan-500/10 dark:text-white" : "border-border bg-muted/50 text-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"}`}
                               >
                                 <span className="font-medium">{node.label}</span>
@@ -422,11 +493,34 @@ function InterpretacaoConsolidadaContent() {
                             )}
                           </div>
                           <div className="mt-4 space-y-3">
+                            {mitreTraceTarget ? (
+                              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                Rastreado desde o resumo MITRE:{" "}
+                                <span className="break-all font-mono text-foreground/90">
+                                  {mitreTraceTarget.evidenceFileName}:{mitreTraceTarget.evidenceLineNumber}
+                                </span>
+                                . Use os ícones: âmbar = trecho do log íntegro; verde = trecho preservado no reduzido (mesma referência de linha do original).
+                              </p>
+                            ) : null}
                             <FlowCorrelationGraph
+                              key={`flow-graph-${selectedJobId ?? "none"}`}
                               graph={selectedDetail.flowGraph}
                               selectedNodeId={effectiveGraphNodeId}
-                              onSelectNode={setSelectedGraphNodeId}
+                              onSelectNode={focusFlowNode}
                               expandedHeight={sidebarCollapsed}
+                              jobId={selectedJobId}
+                              phaseLogPeekOverride={
+                                mitreTraceTarget && !mitreTraceTarget.eventNodeId
+                                  ? {
+                                      phaseNodeId: mitreTraceTarget.phaseNodeId,
+                                      jobId: mitreTraceTarget.jobId,
+                                      fileName: mitreTraceTarget.evidenceFileName,
+                                      lineNumber: mitreTraceTarget.evidenceLineNumber,
+                                    }
+                                  : null
+                              }
+                              focusFitNodeId={effectiveGraphNodeId}
+                              graphFitPulse={graphFitViewPulse}
                             />
                           </div>
                           <div className="mt-4 space-y-3">
@@ -434,7 +528,18 @@ function InterpretacaoConsolidadaContent() {
                             <FlowJourneyDiagram
                               graph={selectedDetail.flowGraph}
                               selectedNodeId={effectiveGraphNodeId}
-                              onSelectNode={setSelectedGraphNodeId}
+                              onSelectNode={focusFlowNode}
+                              jobId={selectedJobId}
+                              phaseLogPeekOverride={
+                                mitreTraceTarget && !mitreTraceTarget.eventNodeId
+                                  ? {
+                                      phaseNodeId: mitreTraceTarget.phaseNodeId,
+                                      jobId: mitreTraceTarget.jobId,
+                                      fileName: mitreTraceTarget.evidenceFileName,
+                                      lineNumber: mitreTraceTarget.evidenceLineNumber,
+                                    }
+                                  : null
+                              }
                             />
                           </div>
                           <details className="mt-4 rounded-2xl border border-border bg-muted/40 px-3 py-2 dark:border-white/10 dark:bg-black/15">
@@ -484,6 +589,27 @@ function InterpretacaoConsolidadaContent() {
                                   </p>
                                 ) : null}
                               </div>
+                              {selectedJobId &&
+                              selectedGraphNode.kind === "api" &&
+                              selectedGraphNodeDetails.sourceFile &&
+                              !selectedGraphNodeDetails.sourceFile.includes("(+") &&
+                              typeof selectedGraphNodeDetails.sourceLineNumber === "number" ? (
+                                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/60 px-3 py-2 dark:border-white/12 dark:bg-slate-950/65">
+                                  <span className="text-xs font-medium text-muted-foreground">
+                                    PNG (âmbar = íntegro · verde = reduzido):
+                                  </span>
+                                  <LogEvidenceCorrelatedIcons
+                                    jobId={selectedJobId}
+                                    fileName={selectedGraphNodeDetails.sourceFile}
+                                    lineNumber={selectedGraphNodeDetails.sourceLineNumber}
+                                    variant="icon"
+                                    caption={selectedGraphNode.label}
+                                    onBeforeOpen={() => {
+                                      if (effectiveGraphNodeId) focusFlowNode(effectiveGraphNodeId);
+                                    }}
+                                  />
+                                </div>
+                              ) : null}
                               <div className="rounded-xl border border-border bg-muted/80 p-3 dark:border-white/10 dark:bg-slate-950/70">
                                 <p className="text-foreground">
                                   <span className="text-muted-foreground">Como foi identificado:</span>{" "}
@@ -505,6 +631,8 @@ function InterpretacaoConsolidadaContent() {
                           ) : null}
                         </div>
                       </div>
+                      </LogEvidenceShellContext.Provider>
+                      </LogEvidenceFileMetricsContext.Provider>
                     </TabsContent>
 
                     <TabsContent value="artifacts" className="space-y-3">
