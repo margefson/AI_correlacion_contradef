@@ -30,7 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
 import { buildFlowJourneyNarrative, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
-import { formatBytes } from "@/lib/format";
+import { formatBytes, formatDateTimeShort } from "@/lib/format";
 import { downloadAnalysisFlowGraphJson, downloadAnalysisSummaryJson } from "@/lib/analysisJsonExport";
 import { downloadReduceLogsAnalysisExcel, downloadReduceLogsFlowExcel } from "@/lib/reduceLogsExcelExport";
 import { asRecord } from "@/lib/payload";
@@ -40,7 +40,7 @@ import type { MitreEvidenceOccurrence } from "@shared/analysis";
 import { AlertTriangle, ArrowLeft, ArrowRight, BrainCircuit, FileDown, FileSpreadsheet, Filter, Hash, ShieldAlert, Sparkles } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "wouter";
+import { useSearchParams } from "wouter";
 import { toast } from "sonner";
 
 function InterpretacaoConsolidadaContent() {
@@ -69,9 +69,23 @@ function InterpretacaoConsolidadaContent() {
     { refetchInterval: 5000 },
   );
 
+  /** Mais recente primeiro (última actividade → início como desempate). */
+  const jobsRecentFirst = useMemo(() => {
+    const rows = jobsQuery.data ?? [];
+    return [...rows].sort((a, b) => {
+      const ub = new Date(b.updatedAt).getTime();
+      const ua = new Date(a.updatedAt).getTime();
+      if (!Number.isFinite(ua) || !Number.isFinite(ub)) return 0;
+      if (ub !== ua) return ub - ua;
+      const cb = new Date(b.createdAt).getTime();
+      const ca = new Date(a.createdAt).getTime();
+      return cb - ca;
+    });
+  }, [jobsQuery.data]);
+
   useEffect(() => {
     if (selectedJobId) return;
-    const first = jobsQuery.data?.[0]?.jobId;
+    const first = jobsRecentFirst[0]?.jobId;
     if (!first) return;
     setSearchParams(
       (prev) => {
@@ -81,7 +95,7 @@ function InterpretacaoConsolidadaContent() {
       },
       { replace: true },
     );
-  }, [jobsQuery.data, selectedJobId, setSearchParams]);
+  }, [jobsRecentFirst, selectedJobId, setSearchParams]);
 
   useEffect(() => {
     if (skipClearTraceOnGraphSelect.current) {
@@ -265,25 +279,13 @@ function InterpretacaoConsolidadaContent() {
         <section>
           <Card className="min-w-0 border-border bg-card text-card-foreground shadow-md dark:border-white/10 dark:bg-slate-950/80 dark:shadow-xl dark:shadow-slate-950/30">
             <CardHeader className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <div className="min-w-0">
-                  <CardTitle>Interpretação consolidada</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Lote vindo do <Link href="/" className="font-medium text-cyan-700 underline-offset-2 hover:underline dark:text-cyan-300">Dashboard</Link>
-                    {selectedDetail?.job.sampleName ? (
-                      <span>
-                        : <span className="text-foreground/90"> {selectedDetail.job.sampleName}</span>
-                      </span>
-                    ) : null}
-                    . Pode trocar o lote no menu abaixo; o URL usa <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground/90 dark:bg-white/10">?job=</code> com o mesmo ID.
-                  </p>
-                </div>
-                {selectedJobId ? (
+              {selectedJobId ? (
+                <div className="flex justify-end">
                   <div
-                    className="flex w-full shrink-0 sm:w-auto sm:max-w-[min(100%,20rem)] sm:justify-end"
+                    className="w-full shrink-0 sm:w-auto sm:max-w-[min(100%,20rem)]"
                     title={`ID do lote: ${selectedJobId}`}
                   >
-                    <div className="flex w-full min-w-0 items-start gap-2.5 rounded-xl border-2 border-cyan-500/50 bg-cyan-500/15 px-3 py-2.5 shadow-sm dark:border-cyan-400/40 dark:bg-cyan-950/40">
+                    <div className="flex min-w-0 items-start gap-2.5 rounded-xl border-2 border-cyan-500/50 bg-cyan-500/15 px-3 py-2.5 shadow-sm dark:border-cyan-400/40 dark:bg-cyan-950/40">
                       <Hash className="mt-0.5 h-4 w-4 shrink-0 text-cyan-500 dark:text-cyan-300" aria-hidden />
                       <div className="min-w-0 text-left sm:text-right">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-900 dark:text-cyan-200/95">
@@ -295,24 +297,29 @@ function InterpretacaoConsolidadaContent() {
                       </div>
                     </div>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="w-full min-w-0 max-w-md space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Trocar lote (job ativo)</p>
                   <Select
                     value={selectedJobId ?? ""}
                     onValueChange={selectJobId}
-                    disabled={!jobsQuery.data?.length}
+                    disabled={jobsRecentFirst.length === 0}
                   >
-                    <SelectTrigger className="border-border bg-background dark:bg-slate-950/80">
+                    <SelectTrigger className="h-auto min-h-11 w-full items-start whitespace-normal border-border bg-background px-3 py-2.5 text-left shadow-xs dark:bg-slate-950/80 [&_svg]:shrink-0 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-start">
                       <SelectValue placeholder="Nenhum job disponível" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {(jobsQuery.data ?? []).map((job) => (
-                        <SelectItem key={job.jobId} value={job.jobId}>
-                          <span className="font-medium">{job.sampleName}</span>
-                          <span className="ml-1 font-mono text-xs text-muted-foreground"> {job.jobId}</span>
+                    <SelectContent className="max-w-[min(100vw-2rem,32rem)]">
+                      {jobsRecentFirst.map((job) => (
+                        <SelectItem key={job.jobId} value={job.jobId} className="py-3">
+                          <span className="flex flex-col gap-1">
+                            <span className="font-medium leading-tight">{job.sampleName}</span>
+                            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs text-muted-foreground">
+                              <span className="tabular-nums">{formatDateTimeShort(job.createdAt)}</span>
+                              <span className="break-all font-mono">{job.jobId}</span>
+                            </span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

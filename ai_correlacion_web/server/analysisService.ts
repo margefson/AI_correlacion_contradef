@@ -25,6 +25,7 @@ import {
   upsertAnalysisInsight,
 } from "./db";
 import { copyTempFileToLocalArtifact, localArtifactExists, persistJobArtifactBuffer } from "./artifactLocalStore";
+import { renderMalwareFlowMapMarkdown } from "./flowGraphMindMapMarkdown";
 import { invokeLLM } from "./_core/llm";
 import { getServerProcessDebugSnapshot } from "./_core/serverProcessDebug";
 import { storageGetBuffer, storagePut } from "./storage";
@@ -122,6 +123,7 @@ const suspiciousApis = [
   "IsDebuggerPresent",
   "CheckRemoteDebuggerPresent",
   "NtQueryInformationProcess",
+  "ZwQueryInformationProcess",
   "VirtualProtect",
   "VirtualAlloc",
   "WriteProcessMemory",
@@ -604,7 +606,7 @@ function normalizeWhitespace(value: string) {
 
 function determineStage(line: string, apis: string[]): string {
   const lowered = line.toLowerCase();
-  if (apis.some((api) => ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "Sleep", "EnumSystemFirmwareTables", "GetTickCount", "RtlQueryPerformanceCounter"].includes(api)) || lowered.includes("sandbox") || lowered.includes("debug")) {
+  if (apis.some((api) => ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "ZwQueryInformationProcess", "Sleep", "EnumSystemFirmwareTables", "GetTickCount", "RtlQueryPerformanceCounter"].includes(api)) || lowered.includes("sandbox") || lowered.includes("debug")) {
     return "Evasão";
   }
   if (apis.some((api) => ["VirtualProtect", "VirtualAlloc", "WriteProcessMemory", "CreateRemoteThread"].includes(api)) || lowered.includes("rw") && lowered.includes("rx") || lowered.includes("execute_read")) {
@@ -626,7 +628,7 @@ function detectTechniqueTags(line: string, apis: string[]) {
   const lowered = line.toLowerCase();
   const tags = new Set<string>();
 
-  if (apis.some((api) => ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"].includes(api)) || lowered.includes("debugger")) {
+  if (apis.some((api) => ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "ZwQueryInformationProcess"].includes(api)) || lowered.includes("debugger")) {
     tags.add("Anti-debug");
   }
   if (apis.includes("EnumSystemFirmwareTables") || lowered.includes("waet") || lowered.includes("hpet") || lowered.includes("virtualbox") || lowered.includes("vmware") || lowered.includes("hypervisor")) {
@@ -674,7 +676,7 @@ function isTriggerLine(line: string, apis: string[]) {
 function inferTransitionRelation(event: NormalizedEvent) {
   const apis = new Set(event.suspiciousApis);
   const lowered = event.message.toLowerCase();
-  if (["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"].some((api) => apis.has(api))) {
+  if (["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "ZwQueryInformationProcess"].some((api) => apis.has(api))) {
     return "checagem anti-debug";
   }
   if (apis.has("EnumSystemFirmwareTables") || lowered.includes("wmi") || lowered.includes("vm")) {
@@ -2088,6 +2090,23 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     storageKey: graphArtifact.storageKey,
     mimeType: "application/json",
     sizeBytes: graphArtifact.sizeBytes,
+  });
+
+  const malwareFlowMapMd = renderMalwareFlowMapMarkdown({
+    flowGraph,
+    classification,
+    sampleName: input.analysisName ?? null,
+  });
+  const flowMapArtifact = await uploadArtifactOptional(jobId, "reports/malware-flow-map.md", malwareFlowMapMd, "text/markdown");
+  artifacts.push({
+    artifactType: "flow-map",
+    label: "Mapa mental do fluxo (Mermaid)",
+    relativePath: flowMapArtifact.relativePath,
+    sourcePath: null,
+    storageUrl: flowMapArtifact.storageUrl,
+    storageKey: flowMapArtifact.storageKey,
+    mimeType: "text/markdown",
+    sizeBytes: flowMapArtifact.sizeBytes,
   });
 
   return {
