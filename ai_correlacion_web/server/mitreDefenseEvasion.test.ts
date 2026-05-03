@@ -24,6 +24,13 @@ describe("buildMitreDefenseEvasion", () => {
     expect(result.techniques.some((t) => t.id === "T1027")).toBe(true);
   });
 
+  it("mapeia ZwQueryInformationProcess para T1622 (paridade com NtQueryInformationProcess)", () => {
+    const result = buildMitreDefenseEvasion([], ["ZwQueryInformationProcess"]);
+    const t1622 = result.techniques.find((t) => t.id === "T1622");
+    expect(t1622).toBeDefined();
+    expect(t1622!.heuristicEvidence.some((e) => e.label.includes("ZwQueryInformationProcess"))).toBe(true);
+  });
+
   it("preenche ocorrências quando eventos e mapa ficheiro+linha → nó coincidem", () => {
     const fileLineKey = `Log.txt\0${String(12)}`;
     const fileLineToNodeId = new Map<string, string>([[fileLineKey, "event:0:VirtualProtect"]]);

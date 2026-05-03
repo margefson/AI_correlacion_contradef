@@ -51,6 +51,9 @@ vi.mock("./storage", () => ({
 
 import { registerReduceLogsUploadRoute } from "./_core/reduceLogsUpload";
 
+/** SHA-256 hex fictício apenas para payloads de teste (64 caracteres). */
+const SAMPLE_SHA256_FIXTURE = `${"ab".repeat(32)}`;
+
 type StartedJobInput = {
   logFiles: Array<{
     fileName: string;
@@ -242,6 +245,7 @@ describe("reduce logs upload route", () => {
         focusTerms: "VirtualProtect, Sleep",
         focusRegexes: "VirtualProtect.*RW.*RX",
         origin: "https://example.com",
+        sampleSha256: SAMPLE_SHA256_FIXTURE,
         files: [
           {
             fileId: firstRemoteFile.fileId,
@@ -281,6 +285,7 @@ describe("reduce logs upload route", () => {
       focusTerms: ["VirtualProtect", "Sleep"],
       focusRegexes: ["VirtualProtect.*RW.*RX"],
       origin: "https://example.com",
+      sampleSha256: SAMPLE_SHA256_FIXTURE.toLowerCase(),
     }));
 
     const startedInput = mockStartAnalysisJob.mock.calls[0][0] as StartedJobInput;
@@ -466,6 +471,7 @@ describe("reduce logs upload route", () => {
       body: JSON.stringify({
         sessionId: initPayload.sessionId,
         analysisName: "Muitos chunks",
+        sampleSha256: SAMPLE_SHA256_FIXTURE,
         files: [
           {
             fileId: remoteFile.fileId,
@@ -494,6 +500,65 @@ describe("reduce logs upload route", () => {
       uploadChunkCount: chunks.length,
       uploadedByUserId: 7,
     }));
+  });
+
+  it("recusa completar upload sem SHA-256 da amostra e não arranca job", async () => {
+    mockStartAnalysisJob.mockResolvedValue({
+      job: { jobId: "should-not-run", status: "queued" },
+    });
+
+    const fileContent = "line\n";
+
+    const initResponse = await fetch(`${baseUrl}/api/reduce-logs/upload/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        analysisName: "Sem hash amostra",
+        files: [
+          {
+            fileName: "TraceInstructions.log",
+            sizeBytes: Buffer.byteLength(fileContent),
+            logType: "TraceInstructions",
+          },
+        ],
+      }),
+    });
+
+    const initPayload = await initResponse.json();
+    expect(initResponse.status).toBe(200);
+    const remoteFile = initPayload.files[0] as { fileId: string };
+
+    await fetch(
+      `${baseUrl}/api/reduce-logs/upload/chunk?sessionId=${encodeURIComponent(initPayload.sessionId)}&fileId=${encodeURIComponent(remoteFile.fileId)}&chunkIndex=0`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: Buffer.from(fileContent, "utf-8"),
+      },
+    );
+
+    const completeResponse = await fetch(`${baseUrl}/api/reduce-logs/upload/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: initPayload.sessionId,
+        analysisName: "Sem hash amostra",
+        files: [
+          {
+            fileId: remoteFile.fileId,
+            fileName: "TraceInstructions.log",
+            sizeBytes: Buffer.byteLength(fileContent),
+            logType: "TraceInstructions",
+            chunkCount: 1,
+          },
+        ],
+      }),
+    });
+
+    const completePayload = await completeResponse.json();
+    expect(completeResponse.status).toBe(400);
+    expect(String(completePayload.message)).toMatch(/SHA-256|obrigat[oó]/i);
+    expect(mockStartAnalysisJob).not.toHaveBeenCalled();
   });
 
   it("mantém compatibilidade com chunk por PUT para sessões já iniciadas", async () => {

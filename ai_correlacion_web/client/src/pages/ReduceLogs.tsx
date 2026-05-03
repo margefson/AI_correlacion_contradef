@@ -35,6 +35,7 @@ import {
   uploadReduceLogsChunk,
   uploadReduceLogsLegacyWithProgress,
 } from "@/services/analysisService";
+import { normalizeOptionalSampleSha256 } from "@shared/virusTotal";
 import {
   buildMonitoredFiles,
   getFileReductionDisplayPercent,
@@ -388,6 +389,8 @@ export default function ReduceLogs() {
   const utils = trpc.useUtils();
   const logFilesInputRef = useRef<HTMLInputElement>(null);
   const [analysisName, setAnalysisName] = useState(ANALYSIS_NAME_PREFIX);
+  /** SHA-256 do executável/amostra (não dos logs); obrigatório para enviar o lote ao servidor. */
+  const [sampleSha256Input, setSampleSha256Input] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [trackedJobIds, setTrackedJobIds] = useState<string[]>(() => (
     typeof window !== "undefined" ? readTrackedJobIds() : []
@@ -428,6 +431,13 @@ export default function ReduceLogs() {
     }
   });
   const activityLogRef = useRef<HTMLPreElement | null>(null);
+
+  const normalizedSampleSha256ForUi = useMemo(
+    () => normalizeOptionalSampleSha256(sampleSha256Input.trim() || undefined),
+    [sampleSha256Input],
+  );
+  /** Texto opcional só para UX (utilizador a escrever e ainda incompleto). */
+  const sampleSha256InvalidHint = sampleSha256Input.trim().length > 0 && !normalizedSampleSha256ForUi;
 
   const resumeActiveSync = trpc.analysis.resumeActiveSync.useMutation({
     onSuccess: (data) => {
@@ -1011,6 +1021,12 @@ export default function ReduceLogs() {
   }
 
   async function handleReductionSubmit() {
+    const submissionHash = normalizeOptionalSampleSha256(sampleSha256Input.trim() || undefined);
+    if (!submissionHash) {
+      toast.error("Indique o SHA-256 da amostra em hexadecimal (64 caracteres — hash do ficheiro binário executado, não dos logs).");
+      return;
+    }
+
     if (!selectedFiles.length) {
       toast.error("Selecione ao menos um arquivo de log da Contradef.");
       return;
@@ -1049,6 +1065,7 @@ export default function ReduceLogs() {
         focusTerms: "",
         focusRegexes: "",
         origin: window.location.origin,
+        sampleSha256: submissionHash,
       };
 
       const runLegacyMultipart = async () => {
@@ -1321,8 +1338,35 @@ export default function ReduceLogs() {
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Use o texto fixo <span className="font-medium text-foreground">{ANALYSIS_NAME_PREFIX.trimEnd()}</span> e acrescente o SHA-256 da amostra em hexadecimal (64 caracteres), sem espaços — por exemplo{" "}
                     <span className="font-mono text-muted-foreground">{ANALYSIS_NAME_PREFIX}36685efcf34c7a7a6f6dd2e48199e4700b5ab8fe3945a50297703dd8daced74f</span>
-                    . O hash de ficheiros já reduzidos para comparar no fim do fluxo será tratado noutro ecrã.
+                    . O hash indicado em baixo deve corresponder ao da amostra; o hash de ficheiros já reduzidos para comparar no fim do fluxo é tratado noutro ecrã.
                   </p>
+                </div>
+
+                <div className="space-y-2 lg:col-span-2">
+                  <label className="text-sm font-medium text-foreground" htmlFor="reduce-logs-sample-sha256">
+                    SHA-256 da amostra (obrigatório)
+                  </label>
+                  <Input
+                    id="reduce-logs-sample-sha256"
+                    value={sampleSha256Input}
+                    onChange={(event) => setSampleSha256Input(event.target.value)}
+                    spellCheck={false}
+                    autoComplete="off"
+                    placeholder="64 caracteres hex do binário da amostra executada — ex.: 36685efc…"
+                    disabled={isUploading}
+                    className={`border-border bg-background font-mono text-sm dark:bg-slate-950/80 ${
+                      sampleSha256InvalidHint ? "border-amber-600/65 focus-visible:ring-amber-500/50 dark:border-amber-400/50" : ""
+                    }`}
+                    aria-invalid={sampleSha256InvalidHint}
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Quem gere os logs sabe qual amostra correu nesta validação. Sem este digest o envio está bloqueado; é o mesmo hash usado no Virus Total e nos relatórios de ficheiros, não um digest dos artefactos .log.
+                  </p>
+                  {sampleSha256InvalidHint ? (
+                    <p className="text-xs text-amber-800 dark:text-amber-300/95" role="alert">
+                      O valor não parece um SHA-256 válido (deve ter exatamente 64 caracteres hexadecimais).
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -1414,7 +1458,16 @@ export default function ReduceLogs() {
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleReductionSubmit} disabled={isUploading} className="transition duration-200 hover:-translate-y-0.5">
+                <Button
+                  onClick={handleReductionSubmit}
+                  disabled={
+                    isUploading
+                    || selectedFiles.length === 0
+                    || !normalizedSampleSha256ForUi
+                    || !analysisName.trim()
+                  }
+                  className="transition duration-200 hover:-translate-y-0.5"
+                >
                   {isUploading ? "Enviando lote e iniciando redução..." : "Executar redução com upload"}
                 </Button>
               </div>

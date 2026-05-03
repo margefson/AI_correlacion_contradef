@@ -9,6 +9,7 @@ import Busboy from "busboy";
 import { nanoid } from "nanoid";
 
 import type { SupportedLogType } from "../../shared/analysis";
+import { normalizeOptionalSampleSha256 } from "../../shared/virusTotal";
 import { startAnalysisJob } from "../analysisService";
 import { storageGetBuffer, storagePutExact } from "../storage";
 import { createContext } from "./context";
@@ -85,6 +86,17 @@ type PreparedUploadFile = {
 
 function parseTextInput(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** SHA-256 da amostra (binário executado) obrigatório em todo o envio para redução/análise de logs. */
+function resolveRequiredReduceLogsSampleSha256(raw: string | null | undefined): string {
+  const normalized = normalizeOptionalSampleSha256(raw);
+  if (!normalized) {
+    throw new Error(
+      "É obrigatório indicar o SHA-256 da amostra executada (64 caracteres hexadecimais, minúsculos ou maiúsculos, sem espaços — hash do ficheiro da amostra, não dos logs).",
+    );
+  }
+  return normalized;
 }
 
 function parseCsvInput(value: unknown): string[] {
@@ -463,7 +475,7 @@ async function startJobFromPreparedFiles(input: {
   createdByUserId: number;
   preparedFiles: PreparedUploadFile[];
   sessionId: string;
-  sampleSha256?: string | null;
+  sampleSha256: string;
 }) {
   for (const file of input.preparedFiles) {
     if (!file.chunkCount) {
@@ -477,7 +489,7 @@ async function startJobFromPreparedFiles(input: {
     focusRegexes: input.focusRegexes,
     origin: input.origin,
     createdByUserId: input.createdByUserId,
-    sampleSha256: input.sampleSha256 ?? null,
+    sampleSha256: input.sampleSha256,
     logFiles: input.preparedFiles.map((file) => ({
       fileName: file.fileName,
       logType: file.logType,
@@ -609,13 +621,15 @@ async function handleLegacyMultipartUpload(req: Request, res: Response, userId: 
       throw new Error("Envie ao menos um arquivo de log para iniciar a redução.");
     }
 
+    const sampleSha256 = resolveRequiredReduceLogsSampleSha256(fields.sampleSha256);
+
     const result = await startAnalysisJob({
       analysisName: fields.analysisName,
       focusTerms: parseCsvInput(fields.focusTerms),
       focusRegexes: parseCsvInput(fields.focusRegexes),
       origin: fields.origin || undefined,
       createdByUserId: userId,
-      sampleSha256: fields.sampleSha256.trim() || null,
+      sampleSha256,
       logFiles: uploadedLogs.map((file) => ({
         fileName: file.fileName,
         logType: file.logType,
@@ -833,13 +847,15 @@ export function registerReduceLogsUploadRoute(app: Express) {
 
       await Promise.all(requestedFiles.map((file) => persistCachedManifest(Number(user.id), file)));
 
+      const sampleSha256 = resolveRequiredReduceLogsSampleSha256(parseTextInput(body?.sampleSha256));
+
       const result = await startJobFromPreparedFiles({
         sessionId,
         analysisName: parseTextInput(body?.analysisName) || "Redução Contradef",
         focusTerms: parseCsvInput(body?.focusTerms),
         focusRegexes: parseCsvInput(body?.focusRegexes),
         origin: parseTextInput(body?.origin) || undefined,
-        sampleSha256: parseTextInput(body?.sampleSha256) || null,
+        sampleSha256,
         createdByUserId: Number(user.id),
         preparedFiles: requestedFiles,
       });

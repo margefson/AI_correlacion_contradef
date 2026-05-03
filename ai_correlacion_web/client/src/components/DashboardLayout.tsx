@@ -35,6 +35,7 @@ import {
   LogOut,
   User,
   Users,
+  Workflow,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createContext, CSSProperties, useContext, useEffect, useRef, useState } from "react";
@@ -46,6 +47,7 @@ const mainMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: BrainCircuit, label: "Interpretação consolidada", path: "/interpretacao-consolidada" },
   { icon: FileArchive, label: "Reduzir logs", path: "/reduce-logs" },
+  { icon: Workflow, label: "Funções mapeadas", path: "/funcoes-mapeadas" },
 ];
 
 const accountMenuItem = { icon: User, label: "Meu perfil", path: "/perfil" as const };

@@ -1,3 +1,6 @@
+import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from "date-fns-tz";
+
 /** Human-readable bytes (B–TB). */
 export function formatBytes(value?: number | null): string {
   if (!value || value <= 0) return "—";
@@ -41,9 +44,16 @@ export function formatDateTimeShort(
   });
 }
 
-/** Alias para relatórios e listagens no fuso de Manaus (UTC−4). */
+/** Alias para relatórios e listagens no fuso de Manaus (UTC−4). Usa date-fns-tz (consistente entre browsers). */
 export function formatDateTimeManaus(value?: Date | string | number | null): string {
-  return formatDateTimeShort(value, { timeZone: TIME_ZONE_MANAUS });
+  if (!value && value !== 0) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  try {
+    return formatInTimeZone(date, TIME_ZONE_MANAUS, "dd/MM/yyyy, HH:mm", { locale: ptBR });
+  } catch {
+    return formatDateTimeShort(value, { timeZone: TIME_ZONE_MANAUS });
+  }
 }
 
 /** `toLocaleString("pt-BR")` completo (eventos de job). */

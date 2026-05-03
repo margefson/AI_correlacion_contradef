@@ -104,9 +104,6 @@ export function MitreDefenseEvasionPanel({ mitre, heuristicTags, onEvidenceTrace
   const outsideTa0005 = listHeuristicsOutsideTa0005(heuristicTags);
   const [showUnobserved, setShowUnobserved] = useState(false);
 
-  const parentCount =
-    mitre.tacticParentTechniqueCount ?? mitre.tacticTechniqueCount;
-  const catalogSize = mitre.tacticCatalogEntryCount ?? MITRE_TA0005_CATALOG.techniques.length;
   const observed = mitre.techniques;
 
   const unobservedRows = useMemo(() => {
@@ -116,22 +113,13 @@ export function MitreDefenseEvasionPanel({ mitre, heuristicTags, onEvidenceTrace
 
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-muted/50 p-4 dark:border-white/10 dark:bg-slate-950/60">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium text-foreground">MITRE ATT&CK — evasão de defesas</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Táctica TA0005: {parentCount} técnicas (nível MITRE) · {catalogSize} entradas no catálogo (incl. sub-técnicas)
-            {observed.length > 0 ? ` · ${observed.length} com evidência assinalada nesta análise` : " · 0 com evidência nesta análise"}.
-            {onEvidenceTrace
-              ? " Clique numa evidência para ir ao separador Fluxo (grafo/nós). Use o ícone de imagem nessa vista para gerar o PNG a partir do log original."
-              : null}
-          </p>
-        </div>
+      <div className="flex min-w-0 flex-row items-center justify-between gap-3">
+        <p className="min-w-0 text-sm font-medium text-foreground">MITRE ATT&CK — evasão de defesas</p>
         <a
           href={mitre.tacticUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
         >
           Abrir TA0005
           <ExternalLink className="h-3 w-3" />

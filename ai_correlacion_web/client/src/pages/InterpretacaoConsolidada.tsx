@@ -6,10 +6,10 @@ import { LogEvidenceCorrelatedIcons } from "@/components/LogEvidenceCorrelatedIc
 import { LogEvidenceShellContext } from "@/components/LogEvidenceShellContext";
 import { LogEvidenceFileMetricsContext } from "@/components/LogEvidenceFileMetricsContext";
 import { MitreDefenseEvasionPanel } from "@/components/MitreDefenseEvasionPanel";
-import { VirusTotalSampleCard } from "@/components/VirusTotalSampleCard";
+import { VirusTotalIntegratedPanel } from "@/components/VirusTotalIntegratedPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
 import { buildFlowJourneyNarrative, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
 import { formatBytes, formatDateTimeManaus } from "@/lib/format";
 import { downloadAnalysisFlowGraphJson, downloadAnalysisSummaryJson } from "@/lib/analysisJsonExport";
@@ -37,11 +36,25 @@ import { asRecord } from "@/lib/payload";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import type { MitreEvidenceOccurrence } from "@shared/analysis";
-import { AlertTriangle, ArrowLeft, ArrowRight, BrainCircuit, FileDown, FileSpreadsheet, Filter, Hash, ShieldAlert, Sparkles } from "lucide-react";
+import { buildContradefFlowchartMermaid, buildContradefMindmapMermaid } from "@shared/flowGraphMermaidDiagrams";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  BrainCircuit,
+  ExternalLink,
+  FileDown,
+  FileSpreadsheet,
+  Filter,
+  Hash,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import { Streamdown } from "streamdown";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "wouter";
 import { toast } from "sonner";
+import { buildMermaidAiLiveViewUrl } from "@/lib/mermaidLiveLink";
 
 function InterpretacaoConsolidadaContent() {
   const { sidebarCollapsed } = useDashboardShell();
@@ -49,6 +62,7 @@ function InterpretacaoConsolidadaContent() {
   const [eventSearch, setEventSearch] = useState("");
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
   const [interpretationTab, setInterpretationTab] = useState("overview");
+  const [overviewIntelTab, setOverviewIntelTab] = useState("mitre");
   const [mitreTraceTarget, setMitreTraceTarget] = useState<{
     jobId: string;
     targetNodeId: string;
@@ -83,6 +97,11 @@ function InterpretacaoConsolidadaContent() {
     });
   }, [jobsQuery.data]);
 
+  const selectedJobFromList = useMemo(
+    () => (selectedJobId ? (jobsRecentFirst.find((j) => j.jobId === selectedJobId) ?? null) : null),
+    [jobsRecentFirst, selectedJobId],
+  );
+
   useEffect(() => {
     if (selectedJobId) return;
     const first = jobsRecentFirst[0]?.jobId;
@@ -108,6 +127,7 @@ function InterpretacaoConsolidadaContent() {
   useEffect(() => {
     setSelectedGraphNodeId(null);
     setInterpretationTab("overview");
+    setOverviewIntelTab("mitre");
     setMitreTraceTarget(null);
     setGraphFitViewPulse(0);
   }, [selectedJobId]);
@@ -190,6 +210,20 @@ function InterpretacaoConsolidadaContent() {
       currentPhase: selectedDetail.currentPhase,
     });
   }, [selectedDetail]);
+
+  const hasFlowGraphDiagram = Boolean(selectedDetail?.flowGraph.nodes.length);
+
+  const mermaidDirectedDiagramHref = useMemo(() => {
+    if (!selectedDetail || !hasFlowGraphDiagram) return null;
+    return buildMermaidAiLiveViewUrl(buildContradefFlowchartMermaid(selectedDetail.flowGraph));
+  }, [selectedDetail, hasFlowGraphDiagram]);
+
+  const mermaidMindmapHref = useMemo(() => {
+    if (!selectedDetail || !hasFlowGraphDiagram) return null;
+    return buildMermaidAiLiveViewUrl(
+      buildContradefMindmapMermaid(selectedDetail.flowGraph, selectedDetail.classification),
+    );
+  }, [selectedDetail, hasFlowGraphDiagram]);
 
   function selectJobId(jobId: string) {
     setSearchParams((prev) => {
@@ -278,44 +312,99 @@ function InterpretacaoConsolidadaContent() {
     <div className="w-full min-w-0 space-y-6 text-foreground">
         <section>
           <Card className="min-w-0 border-border bg-card text-card-foreground shadow-md dark:border-white/10 dark:bg-slate-950/80 dark:shadow-xl dark:shadow-slate-950/30">
-            <CardHeader className="space-y-4">
-              {selectedJobId ? (
-                <div className="flex justify-end">
-                  <div
-                    className="w-full shrink-0 sm:w-auto sm:max-w-[min(100%,20rem)]"
-                    title={`ID do lote: ${selectedJobId}`}
-                  >
-                    <div className="flex min-w-0 items-start gap-2.5 rounded-xl border-2 border-cyan-500/50 bg-cyan-500/15 px-3 py-2.5 shadow-sm dark:border-cyan-400/40 dark:bg-cyan-950/40">
-                      <Hash className="mt-0.5 h-4 w-4 shrink-0 text-cyan-500 dark:text-cyan-300" aria-hidden />
-                      <div className="min-w-0 text-left sm:text-right">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-900 dark:text-cyan-200/95">
-                          ID do lote
-                        </p>
-                        <p className="mt-0.5 break-all font-mono text-sm font-semibold leading-snug text-foreground sm:text-right">
-                          {selectedJobId}
-                        </p>
+            <CardHeader className="space-y-0">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+                <div className="flex min-w-0 flex-1 flex-col gap-3">
+                  {selectedDetail ? (
+                    <>
+                      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Exportações e visualização</p>
+                      <div className="flex min-h-11 flex-nowrap gap-2 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 border-cyan-600/40 text-cyan-900 hover:bg-cyan-500/15 dark:border-cyan-400/35 dark:text-cyan-100"
+                          onClick={handleExportAnalysisExcel}
+                        >
+                          <FileSpreadsheet className="mr-2 h-4 w-4" />
+                          Exportar análise (Excel)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 border-border text-foreground hover:bg-muted dark:border-white/15"
+                          onClick={handleExportFlowGraphJson}
+                          title='Apenas nós e arestas do grafo (schema contradef.flowGraph.v1)'
+                        >
+                          <FileDown className="mr-2 h-4 w-4" />
+                          Fluxo (.json)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 border-border text-foreground hover:bg-muted dark:border-white/15"
+                          onClick={handleExportSummaryJson}
+                          title="Resumo do servidor insight.summaryJson; se faltar, campos sintetizados no detail"
+                        >
+                          <FileDown className="mr-2 h-4 w-4 shrink-0" />
+                          Resumo (.json)
+                        </Button>
+                        {mermaidDirectedDiagramHref ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            asChild
+                            title="Diagrama dirigido — parágrafo 1 do relatório malware-flow-map.md"
+                          >
+                            <a href={mermaidDirectedDiagramHref} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Mermaid: diagrama
+                            </a>
+                          </Button>
+                        ) : null}
+                        {mermaidMindmapHref ? (
+                          <Button variant="outline" size="sm" className="shrink-0" asChild title="Mapa mental (fases e APIs) — parágrafo 2 do relatório malware-flow-map.md">
+                            <a href={mermaidMindmapHref} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Mermaid: mapa mental
+                            </a>
+                          </Button>
+                        ) : null}
                       </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div className="w-full min-w-0 max-w-md space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Trocar lote (job ativo)
-                    <span className="ml-1 font-normal opacity-85"> · horário de Manaus (UTC−4)</span>
-                  </p>
+                    </>
+                  ) : null}
                   <Select
                     value={selectedJobId ?? ""}
                     onValueChange={selectJobId}
                     disabled={jobsRecentFirst.length === 0}
                   >
-                    <SelectTrigger className="h-auto min-h-11 w-full items-start whitespace-normal border-border bg-background px-3 py-2.5 text-left shadow-xs dark:bg-slate-950/80 [&_svg]:shrink-0 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-start">
-                      <SelectValue placeholder="Nenhum job disponível" />
+                    <SelectTrigger
+                      className="h-auto min-h-11 w-full max-w-xl items-start whitespace-normal border-border bg-background px-3 py-2.5 text-left shadow-xs dark:bg-slate-950/80 [&_svg]:shrink-0 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-start"
+                      aria-label="Selecionar lote de análise (job)"
+                    >
+                      <SelectValue placeholder="Nenhum job disponível">
+                        {selectedJobFromList ? (
+                          <span className="flex flex-col gap-1 text-left">
+                            <span className="font-medium leading-tight">{selectedJobFromList.sampleName}</span>
+                            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs text-muted-foreground">
+                              <span className="tabular-nums">{formatDateTimeManaus(selectedJobFromList.createdAt)}</span>
+                              <span className="break-all font-mono">{selectedJobFromList.jobId}</span>
+                            </span>
+                          </span>
+                        ) : undefined}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="max-w-[min(100vw-2rem,32rem)]">
                       {jobsRecentFirst.map((job) => (
-                        <SelectItem key={job.jobId} value={job.jobId} className="py-3">
+                        <SelectItem
+                          key={job.jobId}
+                          value={job.jobId}
+                          className="py-3"
+                          textValue={`${job.sampleName} ${formatDateTimeManaus(job.createdAt)} ${job.jobId}`}
+                        >
                           <span className="flex flex-col gap-1">
                             <span className="font-medium leading-tight">{job.sampleName}</span>
                             <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs text-muted-foreground">
@@ -328,43 +417,29 @@ function InterpretacaoConsolidadaContent() {
                     </SelectContent>
                   </Select>
                 </div>
-                {selectedDetail ? (
-                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-cyan-600/40 text-cyan-900 hover:bg-cyan-500/15 dark:border-cyan-400/35 dark:text-cyan-100"
-                      onClick={handleExportAnalysisExcel}
-                    >
-                      <FileSpreadsheet className="mr-2 h-4 w-4" />
-                      Exportar análise (Excel)
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-border text-foreground hover:bg-muted dark:border-white/15"
-                      onClick={handleExportFlowGraphJson}
-                      title='Apenas nós e arestas do grafo (schema contradef.flowGraph.v1)'
-                    >
-                      <FileDown className="mr-2 h-4 w-4" />
-                      Fluxo (.json)
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-border text-foreground hover:bg-muted dark:border-white/15"
-                      onClick={handleExportSummaryJson}
-                      title="Resumo do servidor insight.summaryJson; se faltar, campos sintetizados no detail"
-                    >
-                      <FileDown className="mr-2 h-4 w-4 shrink-0" />
-                      Resumo (.json)
-                    </Button>
-                    <Badge className={jobStatusBadgeClass(selectedDetail.job.status)}>{selectedDetail.job.status}</Badge>
-                    <Badge className={riskLevelBadgeClass(selectedDetail.riskLevel)}>{selectedDetail.riskLevel}</Badge>
-                    <Badge variant="outline" className="border-border text-foreground dark:border-white/10">{selectedDetail.classification}</Badge>
+                {selectedJobId ? (
+                  <div
+                    className="w-full shrink-0 lg:w-auto lg:max-w-[min(100%,23rem)] lg:self-start"
+                    title={`ID do lote: ${selectedJobId}`}
+                  >
+                    <div className="rounded-xl border-2 border-cyan-500/50 bg-cyan-500/15 px-3 py-2.5 shadow-sm dark:border-cyan-400/40 dark:bg-cyan-950/40">
+                      <div className="flex items-start gap-2.5">
+                        <Hash className="mt-0.5 h-4 w-4 shrink-0 text-cyan-500 dark:text-cyan-300" aria-hidden />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-900 dark:text-cyan-200/95">
+                              ID do lote
+                            </p>
+                            {selectedDetail ? (
+                              <Badge variant="outline" className="shrink-0 border-border text-[11px] text-foreground dark:border-white/20">
+                                {selectedDetail.classification}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 break-all font-mono text-sm font-semibold leading-snug text-foreground">{selectedJobId}</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -415,15 +490,10 @@ function InterpretacaoConsolidadaContent() {
                     </div>
 
                     <TabsContent value="overview" className="space-y-4">
-                      <VirusTotalSampleCard sampleSha256={selectedDetail.job.sampleSha256} />
                       <div className="grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
                         <Card className="border-border bg-card text-card-foreground shadow-sm dark:border-white/10 dark:bg-white/5">
-                          <CardHeader>
-                            <CardTitle className="text-lg">Resumo interpretativo</CardTitle>
-                            <CardDescription>{selectedDetail.insight?.title ?? "Resumo automático"}</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="prose mt-3 max-w-none text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground dark:prose-headings:text-white dark:prose-p:text-muted-foreground">
+                          <CardContent className="pt-5 pb-6">
+                            <div className="prose max-w-none text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground dark:prose-headings:text-white dark:prose-p:text-muted-foreground">
                               <Streamdown>{selectedDetail.insight?.summaryMarkdown ?? "Resumo ainda não disponível."}</Streamdown>
                             </div>
                           </CardContent>
@@ -452,11 +522,35 @@ function InterpretacaoConsolidadaContent() {
                               </div>
                             </div>
                             <Separator />
-                            <MitreDefenseEvasionPanel
-                              mitre={selectedDetail.mitreDefenseEvasion}
-                              heuristicTags={selectedDetail.techniques}
-                              onEvidenceTrace={handleMitreTrace}
-                            />
+                            <Tabs value={overviewIntelTab} onValueChange={setOverviewIntelTab} className="space-y-3">
+                              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 rounded-xl border border-border bg-muted p-1.5 dark:border-white/12 dark:bg-slate-950/85">
+                                <TabsTrigger
+                                  value="mitre"
+                                  className="rounded-lg border border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground data-[state=active]:border-cyan-500/45 data-[state=active]:bg-cyan-500/20 data-[state=active]:font-medium data-[state=active]:text-cyan-900 dark:data-[state=active]:border-cyan-400/45 dark:data-[state=active]:text-cyan-50"
+                                >
+                                  MITRE ATT&CK
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="virustotal"
+                                  className="rounded-lg border border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground data-[state=active]:border-cyan-500/45 data-[state=active]:bg-cyan-500/20 data-[state=active]:font-medium data-[state=active]:text-cyan-900 dark:data-[state=active]:border-cyan-400/45 dark:data-[state=active]:text-cyan-50"
+                                >
+                                  VirusTotal
+                                </TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="mitre" className="mt-2 space-y-0 outline-none focus-visible:outline-none">
+                                <MitreDefenseEvasionPanel
+                                  mitre={selectedDetail.mitreDefenseEvasion}
+                                  heuristicTags={selectedDetail.techniques}
+                                  onEvidenceTrace={handleMitreTrace}
+                                />
+                              </TabsContent>
+                              <TabsContent value="virustotal" className="mt-2 space-y-3 outline-none focus-visible:outline-none">
+                                <VirusTotalIntegratedPanel
+                                  jobId={selectedDetail.job.jobId}
+                                  sampleSha256={selectedDetail.job.sampleSha256}
+                                />
+                              </TabsContent>
+                            </Tabs>
                             <div className="space-y-2">
                               <p className="text-sm font-medium text-foreground">Heurísticas destacadas nos logs</p>
                               <div className="flex flex-wrap gap-2">

@@ -29,7 +29,8 @@ import { renderMalwareFlowMapMarkdown } from "./flowGraphMindMapMarkdown";
 import { invokeLLM } from "./_core/llm";
 import { getServerProcessDebugSnapshot } from "./_core/serverProcessDebug";
 import { storageGetBuffer, storagePut } from "./storage";
-import { normalizeOptionalSampleSha256 } from "../shared/virusTotal";
+import { harvestSha256FromNormalizedCorrelation, harvestSha256FromStoredEvents } from "./sampleSha256Harvest";
+import { extractBestNormalizedSha256FromBodies, normalizeOptionalSampleSha256 } from "../shared/virusTotal";
 import {
   type AnalysisArtifactDto,
   type AnalysisInsightDto,
@@ -362,6 +363,8 @@ type NormalizedEvent = {
 
 type AnalysisComputationResult = {
   events: NormalizedEvent[];
+  /** SHA-256 deduzido de eventos correlacionados + linhas dos logs reduzidos (prioridade antes do texto do relatório LLM). */
+  derivedSampleSha256: string | null;
   artifacts: AnalysisArtifactDto[];
   insight: AnalysisInsightDto;
   summaryJson: Record<string, unknown>;
@@ -2109,8 +2112,13 @@ async function analyzeLogs(input: StartAnalysisJobInput, jobId: string): Promise
     sizeBytes: flowMapArtifact.sizeBytes,
   });
 
+  const derivedSampleSha256 = harvestSha256FromNormalizedCorrelation(normalizedEvents, reducedLogEntries, {
+    analysisName: input.analysisName,
+  });
+
   return {
     events: sortedEvents,
+    derivedSampleSha256,
     artifacts,
     insight,
     summaryJson,
@@ -2176,6 +2184,27 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, s
       summaryJson: result.summaryJson,
     });
 
+    const jobRow = await getAnalysisJobByJobId(jobId);
+    const parsedFromReport = extractBestNormalizedSha256FromBodies(
+      [
+        result.insight.summaryMarkdown,
+        (() => {
+          try {
+            return JSON.stringify(result.summaryJson);
+          } catch {
+            return undefined;
+          }
+        })(),
+      ],
+      { analysisName: input.analysisName },
+    );
+    const inferredFromCorrelationOrReport =
+      normalizeOptionalSampleSha256(result.derivedSampleSha256) ?? parsedFromReport ?? null;
+    const sampleSha256Backfill =
+      jobRow && !normalizeOptionalSampleSha256(jobRow.sampleSha256) && inferredFromCorrelationOrReport
+        ? inferredFromCorrelationOrReport
+        : undefined;
+
     const failedNames = result.fileMetrics.filter((m) => m.status === "failed").map((m) => m.fileName);
     const summaryLine = `Classificação sugerida: ${result.classification}. Risco ${result.riskLevel}.`;
     await updateAnalysisJob(jobId, {
@@ -2188,6 +2217,7 @@ async function processAnalysisJob(jobId: string, input: StartAnalysisJobInput, s
       llmSummaryStatus: "completed",
       completedAt: new Date(),
       stdoutTail: null,
+      ...(sampleSha256Backfill ? { sampleSha256: sampleSha256Backfill } : {}),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha inesperada durante a análise.";
@@ -2305,6 +2335,29 @@ export async function getAnalysisJobDetail(
   ]);
   const artifacts = await enrichArtifactsWithDownloadUrl(jobId, artifactRows);
 
+  let resolvedJob = job;
+  try {
+    if (!normalizeOptionalSampleSha256(job.sampleSha256)) {
+      let jsonStr: string | null = null;
+      try {
+        if (insight?.summaryJson != null) {
+          jsonStr = JSON.stringify(insight.summaryJson as object);
+        }
+      } catch {
+        jsonStr = null;
+      }
+      const gleaned =
+        harvestSha256FromStoredEvents(events, { analysisName: job.sampleName }) ??
+        extractBestNormalizedSha256FromBodies([insight?.summaryMarkdown, jsonStr], { analysisName: job.sampleName });
+      if (gleaned) {
+        await updateAnalysisJob(jobId, { sampleSha256: gleaned });
+        resolvedJob = { ...job, sampleSha256: gleaned };
+      }
+    }
+  } catch {
+    /* backfill opcional: não impedir o detalhe */
+  }
+
   const summaryJson = insight?.summaryJson && !Array.isArray(insight.summaryJson) ? insight.summaryJson as Record<string, unknown> : {};
   const metrics = (summaryJson.metrics as ReductionMetrics | undefined) ?? {
     originalLineCount: 0,
@@ -2319,7 +2372,7 @@ export async function getAnalysisJobDetail(
   const flowGraph = (summaryJson.flowGraph as FlowGraph | undefined) ?? { nodes: [], edges: [] };
 
   const base: AnalysisJobDetail = {
-    job,
+    job: resolvedJob,
     events: events.slice().reverse().map((event) => ({
       eventType: event.eventType,
       stage: event.stage,

@@ -16,6 +16,19 @@ import {
   getAnalysisJobByJobId,
   listAnalysisJobs,
 } from "./db";
+import { normalizeOptionalSampleSha256 } from "../shared/virusTotal";
+import type {
+  VirusTotalDomainLookupResult,
+  VirusTotalIpLookupResult,
+  VirusTotalJobLookupResult,
+  VirusTotalUrlLookupResult,
+} from "../shared/virusTotalReport";
+import {
+  virusTotalLookupDomain,
+  virusTotalLookupFile,
+  virusTotalLookupIp,
+  virusTotalLookupPublicUrl,
+} from "./virusTotalLookup";
 import { protectedProcedure, router } from "./_core/trpc";
 
 const listJobsInputSchema = z.object({
@@ -76,6 +89,103 @@ export const analysisRouter = router({
       ...(listOwnOnly ? { createdByUserId: user.id } : {}),
     });
   }),
+
+  /**
+   * Relatório agregado VirusTotal (`/api/v3/files/{sha256}`) para o hash registado no lote.
+   * Requer `VIRUSTOTAL_API_KEY` no servidor — a chave nunca é enviada ao cliente.
+   */
+  virusTotalJobReport: protectedProcedure.input(jobIdInputSchema).query(async ({ ctx, input }): Promise<VirusTotalJobLookupResult> => {
+    const user = ctx.user!;
+    const job = await getAnalysisJobByJobId(input.jobId);
+    if (!job) {
+      return { ok: false, code: "bad_request", message: "Lote não encontrado." };
+    }
+    if (!canAccessJob(user, job)) {
+      return { ok: false, code: "bad_request", message: "Sem permissão para consultar VirusTotal neste lote." };
+    }
+
+    const apiKey = process.env.VIRUSTOTAL_API_KEY?.trim();
+    if (!apiKey) {
+      return {
+        ok: false,
+        code: "unconfigured",
+        message:
+          "VIRUSTOTAL_API_KEY não configurada no servidor. Defina a variável ambiente para activar relatórios automáticos (API VT v3).",
+      };
+    }
+
+    const sha256 = normalizeOptionalSampleSha256(job.sampleSha256);
+    if (!sha256) {
+      return {
+        ok: false,
+        code: "no_hash",
+        message:
+          "Este job não inclui SHA-256 válido (64 caracteres hex) da amostra; não há consulta directa VirusTotal pela API.",
+      };
+    }
+
+    return virusTotalLookupFile({ sha256Lowercase: sha256, apiKey });
+  }),
+
+  /**
+   * Relatório VT para um URL (`GET /urls/{url_id}`) — independente do job; entrada manual típica
+   * (domínios/URLs vistos em logs antes de corrê-los pela amostra completa na VT).
+   * Usa `VIRUSTOTAL_API_KEY` apenas no servidor.
+   */
+  virusTotalUrlReport: protectedProcedure
+    .input(z.object({ url: z.string().trim().url().max(4096, "URL demasiado longo.") }))
+    .query(async ({ input }): Promise<VirusTotalUrlLookupResult> => {
+      const apiKey = process.env.VIRUSTOTAL_API_KEY?.trim();
+      if (!apiKey) {
+        return {
+          ok: false,
+          code: "unconfigured",
+          message:
+            "VIRUSTOTAL_API_KEY não configurada no servidor. Defina a variável ambiente para activar relatórios automáticos (API VT v3).",
+        };
+      }
+
+      return virusTotalLookupPublicUrl({ canonicalUrl: input.url.trim(), apiKey });
+    }),
+
+  /**
+   * GET `/domains/{domain}` ([docs VT](https://developers.virustotal.com/reference/domain-info)) —
+   * hostname apenas ou URL completa (servidor extrai hostname). Consulta manual, mesma API key só no servidor.
+   */
+  virusTotalDomainReport: protectedProcedure
+    .input(z.object({ domain: z.string().trim().min(2).max(2048) }))
+    .query(async ({ input }): Promise<VirusTotalDomainLookupResult> => {
+      const apiKey = process.env.VIRUSTOTAL_API_KEY?.trim();
+      if (!apiKey) {
+        return {
+          ok: false,
+          code: "unconfigured",
+          message:
+            "VIRUSTOTAL_API_KEY não configurada no servidor. Defina a variável ambiente para activar relatórios automáticos (API VT v3).",
+        };
+      }
+
+      return virusTotalLookupDomain({ rawInput: input.domain, apiKey });
+    }),
+
+  /**
+   * GET `/ip_addresses/{ip}` ([docs VT](https://developers.virustotal.com/reference/ip-info)) — IPv4/IPv6. Consulta manual.
+   */
+  virusTotalIpReport: protectedProcedure
+    .input(z.object({ ip: z.string().trim().min(3).max(128) }))
+    .query(async ({ input }): Promise<VirusTotalIpLookupResult> => {
+      const apiKey = process.env.VIRUSTOTAL_API_KEY?.trim();
+      if (!apiKey) {
+        return {
+          ok: false,
+          code: "unconfigured",
+          message:
+            "VIRUSTOTAL_API_KEY não configurada no servidor. Defina a variável ambiente para activar relatórios automáticos (API VT v3).",
+        };
+      }
+
+      return virusTotalLookupIp({ rawInput: input.ip, apiKey });
+    }),
 
   detail: protectedProcedure.input(jobIdInputSchema).query(async ({ ctx, input }) => {
     const user = ctx.user!;

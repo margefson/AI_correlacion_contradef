@@ -215,8 +215,8 @@ export function buildMitreDefenseEvasionFromEvidence(input: BuildInput): MitreDe
   if (apiSet.has("RtlQueryPerformanceCounter")) {
     addEvidence(map, T1497_003, "API:RtlQueryPerformanceCounter");
   }
-  if (["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"].some((a) => apiSet.has(a))) {
-    const hit = ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"].filter((a) => apiSet.has(a));
+  if (["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "ZwQueryInformationProcess"].some((a) => apiSet.has(a))) {
+    const hit = ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess", "ZwQueryInformationProcess"].filter((a) => apiSet.has(a));
     addEvidence(map, T1622, hit.map((a) => `API:${a}`).join(", "));
   }
   if (apiSet.has("Sleep") || apiSet.has("NtDelayExecution")) {
