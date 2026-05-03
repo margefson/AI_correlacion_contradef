@@ -30,7 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { jobStatusBadgeClass, riskLevelBadgeClass } from "@/lib/analysisUi";
 import { buildFlowJourneyNarrative, getFlowNodeDetailsWithFallback } from "@/lib/flowGraph";
-import { formatBytes, formatDateTimeShort } from "@/lib/format";
+import { formatBytes, formatDateTimeManaus } from "@/lib/format";
 import { downloadAnalysisFlowGraphJson, downloadAnalysisSummaryJson } from "@/lib/analysisJsonExport";
 import { downloadReduceLogsAnalysisExcel, downloadReduceLogsFlowExcel } from "@/lib/reduceLogsExcelExport";
 import { asRecord } from "@/lib/payload";
@@ -301,7 +301,10 @@ function InterpretacaoConsolidadaContent() {
               ) : null}
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div className="w-full min-w-0 max-w-md space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Trocar lote (job ativo)</p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Trocar lote (job ativo)
+                    <span className="ml-1 font-normal opacity-85"> · horário de Manaus (UTC−4)</span>
+                  </p>
                   <Select
                     value={selectedJobId ?? ""}
                     onValueChange={selectJobId}
@@ -316,7 +319,7 @@ function InterpretacaoConsolidadaContent() {
                           <span className="flex flex-col gap-1">
                             <span className="font-medium leading-tight">{job.sampleName}</span>
                             <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0 text-xs text-muted-foreground">
-                              <span className="tabular-nums">{formatDateTimeShort(job.createdAt)}</span>
+                              <span className="tabular-nums">{formatDateTimeManaus(job.createdAt)}</span>
                               <span className="break-all font-mono">{job.jobId}</span>
                             </span>
                           </span>

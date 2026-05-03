@@ -23,11 +23,27 @@ export function formatPercentFine(value?: number | null): string {
   return `${Math.max(0, Math.min(100, value)).toFixed(value >= 10 ? 1 : 2)}%`;
 }
 
-export function formatDateTimeShort(value?: Date | string | number | null): string {
+/** Fuso de Manaus (Amazonas); instantes vindos do servidor (UTC ISO) aparecem na hora local da região. */
+export const TIME_ZONE_MANAUS = "America/Manaus";
+
+/** Data/hora compacta pt-BR. Passe `timeZone` para forçar um fuso (ex.: `TIME_ZONE_MANAUS`). */
+export function formatDateTimeShort(
+  value?: Date | string | number | null,
+  options?: Pick<Intl.DateTimeFormatOptions, "timeZone" | "timeZoneName">,
+): string {
   if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return date.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    ...options,
+  });
+}
+
+/** Alias para relatórios e listagens no fuso de Manaus (UTC−4). */
+export function formatDateTimeManaus(value?: Date | string | number | null): string {
+  return formatDateTimeShort(value, { timeZone: TIME_ZONE_MANAUS });
 }
 
 /** `toLocaleString("pt-BR")` completo (eventos de job). */
